@@ -1,0 +1,6 @@
+version: v1
+plugins:
+  - plugin: ts
+    out: src/gen
+    opt: esModuleInterop=true
+    path: node_modules/ts-proto/protoc-gen-ts_proto

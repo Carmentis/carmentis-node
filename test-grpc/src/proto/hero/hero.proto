@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package hero;
+
+import 'cometbft/abci/v1/service.proto';
+import 'cometbft/abci/v1/types.proto';
+
+service HeroesService {
+  rpc FindOne (HeroById) returns (Hero) {}
+  rpc Echo (Message) returns (Message) {}
+  rpc Echo2 (cometbft.abci.v1.EchoRequest) returns (cometbft.abci.v1.EchoResponse) {}
+}
+
+message Message {
+  string message = 1;
+}
+message HeroById {
+  int32 id = 1;
+}
+
+message Hero {
+  int32 id = 1;
+  string name = 2;
+}
