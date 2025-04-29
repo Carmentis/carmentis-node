@@ -1,8 +1,0 @@
-version: v2
-modules:
-  - path: .
-    excludes:
-      - node_modules
-      - dist
-deps:
-  - buf.build/cometbft/cometbft   # Exemple avec CometBFT
