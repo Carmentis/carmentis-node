@@ -1,11 +1,12 @@
 syntax = "proto3";
-package cometbft.abci.v1;
 
 import "cometbft/crypto/v1/proof.proto";
 import "cometbft/types/v1/params.proto";
 import "cometbft/types/v1/validator.proto";
 import "gogoproto/gogo.proto";
 import "google/protobuf/timestamp.proto";
+
+package cometbft.abci.v1;
 
 option go_package = "github.com/cometbft/cometbft/api/cometbft/abci/v1";
 
