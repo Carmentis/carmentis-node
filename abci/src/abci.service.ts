@@ -1,4 +1,4 @@
-import {ABCIService} from "./cometbft/abci/v1/service";
+import {ABCIService} from "./proto-ts/cometbft/abci/v1/service";
 import {
     ApplySnapshotChunkRequest,
     ApplySnapshotChunkResponse,
@@ -28,7 +28,7 @@ import {
     PrepareProposalResponse,
     ProcessProposalRequest,
     ProcessProposalResponse, QueryRequest, QueryResponse, VerifyVoteExtensionRequest, VerifyVoteExtensionResponse
-} from "./cometbft/abci/v1/types";
+} from "./proto-ts/cometbft/abci/v1/types";
 import {Injectable} from "@nestjs/common";
 
 @Injectable()
@@ -64,7 +64,13 @@ export class AbciService implements ABCIService {
     }
 
     Info(request: InfoRequest): Promise<InfoResponse> {
-        return Promise.resolve(undefined);
+        return Promise.resolve({
+            version: '1',
+            data: "hello",
+            appVersion: 1,
+            lastBlockHeight: 0,
+            lastBlockAppHash: new Uint8Array()
+        });
     }
 
     InitChain(request: InitChainRequest): Promise<InitChainResponse> {

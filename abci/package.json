@@ -32,10 +32,12 @@
     "@nestjs/platform-express": "^10.4.17",
     "@nestjs/platform-socket.io": "^11.1.0",
     "@nestjs/websockets": "^11.1.0",
+    "@nestjs/platform-ws": "^11.1.0",
     "grpc": "^1.24.11",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "ts-proto": "^2.7.0"
+    "ts-proto": "^2.7.0",
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.53.0",

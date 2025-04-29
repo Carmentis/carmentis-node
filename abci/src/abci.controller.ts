@@ -29,8 +29,7 @@ import {
     PrepareProposalResponse,
     ProcessProposalRequest,
     ProcessProposalResponse, QueryRequest, QueryResponse, VerifyVoteExtensionRequest, VerifyVoteExtensionResponse
-} from "./cometbft/abci/v1/types";
-import {ABCIService} from "./cometbft/abci/v1/service";
+} from "./proto-ts/cometbft/abci/v1/types";
 
 @Controller()
 export class AbciController {
