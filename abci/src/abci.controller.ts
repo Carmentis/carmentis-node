@@ -1,5 +1,5 @@
 import {GrpcMethod} from "@nestjs/microservices";
-import {Controller} from "@nestjs/common";
+import {Controller, Logger} from "@nestjs/common";
 import {
     ApplySnapshotChunkRequest,
     ApplySnapshotChunkResponse,
@@ -28,19 +28,29 @@ import {
     PrepareProposalRequest,
     PrepareProposalResponse,
     ProcessProposalRequest,
-    ProcessProposalResponse, QueryRequest, QueryResponse, VerifyVoteExtensionRequest, VerifyVoteExtensionResponse
+    ProcessProposalResponse,
+    QueryRequest,
+    QueryResponse,
+    VerifyVoteExtensionRequest,
+    VerifyVoteExtensionResponse,
+    VerifyVoteExtensionStatus
 } from "./proto-ts/cometbft/abci/v1/types";
+import {AbciService} from "./abci.service";
+import {ProofOps} from "./proto-ts/cometbft/crypto/v1/proof";
 
 @Controller()
 export class AbciController {
 
-    constructor() {
+    private logger = new Logger('AbciController');
+
+    constructor(private readonly abciService: AbciService) {
+        this.logger.debug('AbciController initialized');
     }
 
     @GrpcMethod('ABCIService', 'Echo')
-    Echo(request: EchoRequest): EchoResponse {
-        console.log(`Handling echo request with message: ${request.message}`)
-        return { message: `Echo: ${request.message}` };
+    Echo(request: EchoRequest): Promise<EchoResponse> {
+        this.logger.debug('Called Echo');
+        return this.abciService.Echo(request);
     }
 
     ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
@@ -55,25 +65,40 @@ export class AbciController {
         return Promise.resolve(undefined);
     }
 
-
+    @GrpcMethod('ABCIService', 'ExtendVote')
     ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called ExtendVote');
+        return Promise.resolve({
+            voteExtension: new Uint8Array([])
+        });
     }
 
+    @GrpcMethod('ABCIService', 'FinalizeBlock')
     FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called FinalizeBlock');
+        return Promise.resolve({
+            events: [],
+            txResults: [],
+            validatorUpdates: [],
+            consensusParamUpdates: undefined,
+            appHash: new Uint8Array()
+        });
     }
 
     Flush(request: FlushRequest): Promise<FlushResponse> {
         return Promise.resolve(undefined);
     }
 
+    @GrpcMethod('ABCIService', 'Info')
     Info(request: InfoRequest): Promise<InfoResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called Info');
+        return this.abciService.Info(request);
     }
 
+    @GrpcMethod('ABCIService', 'InitChain')
     InitChain(request: InitChainRequest): Promise<InitChainResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called InitChain');
+        return this.abciService.InitChain(request);
     }
 
     ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
@@ -88,19 +113,40 @@ export class AbciController {
         return Promise.resolve(undefined);
     }
 
+    @GrpcMethod('ABCIService', 'PrepareProposal')
     PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called PrepareProposal');
+        return this.abciService.PrepareProposal(request);
     }
 
+    @GrpcMethod('ABCIService', 'ProcessProposal')
     ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called ProcessProposal');
+        return this.abciService.ProcessProposal(request);
     }
 
+    @GrpcMethod('ABCIService', 'Query')
     Query(request: QueryRequest): Promise<QueryResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called Query');
+        return Promise.resolve({
+            code: 2,
+            /** bytes data = 2; // use "value" instead. */
+            log: "",
+            info: "",
+            index: 0,
+            key: new Uint8Array,
+            value: new Uint8Array,
+            proofOps: undefined,
+            height: 0,
+            codespace: "abci"
+        });
     }
 
+    @GrpcMethod('ABCIService', 'VerifyVoteExtension')
     VerifyVoteExtension(request: VerifyVoteExtensionRequest): Promise<VerifyVoteExtensionResponse> {
-        return Promise.resolve(undefined);
+        this.logger.debug('Called VerifyVoteExtension');
+        return Promise.resolve({
+            status: VerifyVoteExtensionStatus.VERIFY_VOTE_EXTENSION_STATUS_ACCEPT
+        });
     }
 }

@@ -10,11 +10,20 @@ import {
     QueryResponse
 } from "./proto-ts/cometbft/abci/v1/types";
 import {Socket} from "ws";
+import { BinaryReader } from "@bufbuild/protobuf/wire";
 
-@WebSocketGateway(26658, {path: "/"})
+
+interface Rpc {
+    request(service: string, method: string, data: Uint8Array): Promise<Uint8Array>;
+}
+
+@WebSocketGateway(26659)
 export class AbciGateway implements OnGatewayInit, OnGatewayConnection {
 
     private readonly logger: Logger = new Logger("AbciGateway");
+
+    private readonly rpc: Rpc;
+    private readonly service: string = "cometbft.abci.v1.ABCIService";
 
     constructor(private abciService: AbciService) {}
 
@@ -23,38 +32,32 @@ export class AbciGateway implements OnGatewayInit, OnGatewayConnection {
     }
 
     handleConnection(client: Socket): any {
+        console.log(client)
         this.logger.log("Someone connected to the abci server");
     }
 
     @SubscribeMessage('query')
-    onQuery(request: QueryRequest): QueryResponse {
-        return {
-            code: 0,
-            /** bytes data = 2, // use "value" instead. */
-            log: "hey",
-            /** nondeterministic */
-            info: "oui",
-            index: 0,
-            key: new Uint8Array(),
-            value: new Uint8Array(),
-            proofOps: undefined,
-            height: 0,
-            codespace: "abci",
-        }
+    onQuery(request: QueryRequest): Promise<QueryResponse> {
+        this.logger.log("coucou");
+        const data = QueryRequest.encode(request).finish();
+        const promise = this.rpc.request(this.service, "Query", data);
+        return promise.then((data) => QueryResponse.decode(new BinaryReader(data)));
     }
 
     @SubscribeMessage('echo')
-    onEcho(@MessageBody() data: EchoRequest): Promise<EchoResponse> {
-        this.logger.log(`Received ${data}`);
-
-        return this.abciService.Echo(data);
+    onEcho(@MessageBody() request: EchoRequest): Promise<EchoResponse> {
+        this.logger.log("coucou");
+        const data = EchoRequest.encode(request).finish();
+        const promise = this.rpc.request(this.service, "Echo", data);
+        return promise.then((data) => EchoResponse.decode(new BinaryReader(data)));
     }
 
     @SubscribeMessage('Info')
-    onInfo(@MessageBody() data: InfoRequest): Promise<InfoResponse> {
-        this.logger.log(`Received ${data}`);
-
-        return this.abciService.Info(data);
+    onInfo(@MessageBody() request: InfoRequest): Promise<InfoResponse> {
+        this.logger.log("coucou");
+        const data = InfoRequest.encode(request).finish();
+        const promise = this.rpc.request(this.service, "Info", data);
+        return promise.then((data) => InfoResponse.decode(new BinaryReader(data)));
     }
 
     @SubscribeMessage('*')

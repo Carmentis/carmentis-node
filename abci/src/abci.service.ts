@@ -27,7 +27,12 @@ import {
     PrepareProposalRequest,
     PrepareProposalResponse,
     ProcessProposalRequest,
-    ProcessProposalResponse, QueryRequest, QueryResponse, VerifyVoteExtensionRequest, VerifyVoteExtensionResponse
+    ProcessProposalResponse,
+    ProcessProposalStatus,
+    QueryRequest,
+    QueryResponse,
+    VerifyVoteExtensionRequest,
+    VerifyVoteExtensionResponse
 } from "./proto-ts/cometbft/abci/v1/types";
 import {Injectable} from "@nestjs/common";
 
@@ -74,7 +79,45 @@ export class AbciService implements ABCIService {
     }
 
     InitChain(request: InitChainRequest): Promise<InitChainResponse> {
-        return Promise.resolve(undefined);
+        return Promise.resolve({
+            consensusParams: {
+                feature: {
+                    voteExtensionsEnableHeight: 2,
+                    pbtsEnableHeight: undefined
+                },
+                block: {
+                    maxBytes: 2202009,
+                    maxGas: -1,
+                },
+                evidence: {
+                    maxAgeDuration: {
+                        seconds: 172800,
+                        nanos: 0
+                    },
+                    maxBytes: 2202009,
+                    maxAgeNumBlocks: 100000
+                },
+                validator: {
+                    pubKeyTypes: ['ed25519']
+                },
+                version: {
+                    app: 1
+                },
+                abci: undefined,
+                synchrony: {
+                    precision: {
+                        seconds: 172800,
+                        nanos: 0
+                    },
+                    messageDelay: {
+                        seconds: 172800,
+                        nanos: 0
+                    }
+                }
+            },
+            validators: [],
+            appHash: new Uint8Array()
+        });
     }
 
     ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
@@ -90,11 +133,15 @@ export class AbciService implements ABCIService {
     }
 
     PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        return Promise.resolve(undefined);
+        return Promise.resolve({
+            txs: request.txs
+        });
     }
 
     ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
-        return Promise.resolve(undefined);
+        return Promise.resolve({
+            status: ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT
+        });
     }
 
     Query(request: QueryRequest): Promise<QueryResponse> {
