@@ -53,15 +53,48 @@ export class AbciController {
         return this.abciService.Echo(request);
     }
 
+    @GrpcMethod('ABCIService', 'Info')
+    Info(request: InfoRequest): Promise<InfoResponse> {
+        this.logger.debug('Called Info');
+        return this.abciService.Info(request);
+    }
+
+    @GrpcMethod('ABCIService', 'InitChain')
+    InitChain(request: InitChainRequest): Promise<InitChainResponse> {
+        this.logger.debug('Called InitChain');
+        return this.abciService.InitChain(request);
+    }
+
+    @GrpcMethod('ABCIService', 'PrepareProposal')
+    PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
+        this.logger.debug('Called PrepareProposal', request);
+        return this.abciService.PrepareProposal(request);
+    }
+
+
+    @GrpcMethod('ABCIService', 'ProcessProposal')
+    ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
+        this.logger.debug('Called ProcessProposal');
+        return this.abciService.ProcessProposal(request);
+    }
+
+    @GrpcMethod('ABCIService', 'Commit')
+    Commit(request: CommitRequest): Promise<CommitResponse> {
+        return this.abciService.Commit(request);
+    }
+
+
+
+
+
+
+
+
     ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
         return Promise.resolve(undefined);
     }
 
     CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    Commit(request: CommitRequest): Promise<CommitResponse> {
         return Promise.resolve(undefined);
     }
 
@@ -85,20 +118,9 @@ export class AbciController {
         });
     }
 
+    @GrpcMethod('ABCIService', 'Flush')
     Flush(request: FlushRequest): Promise<FlushResponse> {
         return Promise.resolve(undefined);
-    }
-
-    @GrpcMethod('ABCIService', 'Info')
-    Info(request: InfoRequest): Promise<InfoResponse> {
-        this.logger.debug('Called Info');
-        return this.abciService.Info(request);
-    }
-
-    @GrpcMethod('ABCIService', 'InitChain')
-    InitChain(request: InitChainRequest): Promise<InitChainResponse> {
-        this.logger.debug('Called InitChain');
-        return this.abciService.InitChain(request);
     }
 
     ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
@@ -111,18 +133,6 @@ export class AbciController {
 
     OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
         return Promise.resolve(undefined);
-    }
-
-    @GrpcMethod('ABCIService', 'PrepareProposal')
-    PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        this.logger.debug('Called PrepareProposal');
-        return this.abciService.PrepareProposal(request);
-    }
-
-    @GrpcMethod('ABCIService', 'ProcessProposal')
-    ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
-        this.logger.debug('Called ProcessProposal');
-        return this.abciService.ProcessProposal(request);
     }
 
     @GrpcMethod('ABCIService', 'Query')

@@ -38,34 +38,11 @@ import {Injectable} from "@nestjs/common";
 
 @Injectable()
 export class AbciService implements ABCIService {
-    ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    Commit(request: CommitRequest): Promise<CommitResponse> {
-        return Promise.resolve(undefined);
-    }
 
     Echo(request: EchoRequest): Promise<EchoResponse> {
         return Promise.resolve({
             message: `Echo: ${request.message}`,
         });
-    }
-
-    ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    Flush(request: FlushRequest): Promise<FlushResponse> {
-        return Promise.resolve(undefined);
     }
 
     Info(request: InfoRequest): Promise<InfoResponse> {
@@ -120,6 +97,41 @@ export class AbciService implements ABCIService {
         });
     }
 
+    PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
+        console.log('PrepareProposal', request.txs);
+        return Promise.resolve({
+            txs: request.txs
+        });
+    }
+
+    ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
+        return Promise.resolve(undefined);
+    }
+
+    CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
+        return Promise.resolve(undefined);
+    }
+
+    Commit(request: CommitRequest): Promise<CommitResponse> {
+        return Promise.resolve({
+            retainHeight: 0,
+        });
+    }
+
+    ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
+        return Promise.resolve(undefined);
+    }
+
+    FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
+        return Promise.resolve(undefined);
+    }
+
+    Flush(request: FlushRequest): Promise<FlushResponse> {
+        return Promise.resolve(undefined);
+    }
+
+
+
     ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
         return Promise.resolve(undefined);
     }
@@ -130,12 +142,6 @@ export class AbciService implements ABCIService {
 
     OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
         return Promise.resolve(undefined);
-    }
-
-    PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        return Promise.resolve({
-            txs: request.txs
-        });
     }
 
     ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
