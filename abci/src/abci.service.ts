@@ -1,4 +1,5 @@
 import {ABCIService} from "./proto-ts/cometbft/abci/v1/service";
+import { createHash } from "crypto";
 import {
     ApplySnapshotChunkRequest,
     ApplySnapshotChunkResponse,
@@ -7,7 +8,7 @@ import {
     CommitRequest,
     CommitResponse,
     EchoRequest,
-    EchoResponse,
+    EchoResponse, ExecTxResult,
     ExtendVoteRequest,
     ExtendVoteResponse,
     FinalizeBlockRequest,
@@ -98,9 +99,14 @@ export class AbciService implements ABCIService {
     }
 
     PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        console.log('PrepareProposal', request.txs);
+        const txs = [];
+
+        for (let i=0; i<request.txs.length; i++) {
+            txs.push(new Uint8Array(request.txs[i]));
+        }
+
         return Promise.resolve({
-            txs: request.txs
+            txs: txs
         });
     }
 
@@ -109,7 +115,17 @@ export class AbciService implements ABCIService {
     }
 
     CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
-        return Promise.resolve(undefined);
+        console.log('tx', request.tx, new Uint8Array(request.tx));
+        return Promise.resolve({
+            code: 0,
+            log: "test",
+            data: new Uint8Array(request.tx),
+            gasWanted: 0,
+            gasUsed: 0,
+            info: "test",
+            events: [],
+            codespace: "app"
+        });
     }
 
     Commit(request: CommitRequest): Promise<CommitResponse> {
@@ -123,7 +139,39 @@ export class AbciService implements ABCIService {
     }
 
     FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
-        return Promise.resolve(undefined);
+        console.log("FinalizeBlock request.txs.length:", request.txs.length);
+        console.log("FinalizeBlock received transactions:", request.txs);
+
+        const txResults: ExecTxResult[] = [];
+        for (let i = 0; i < request.txs.length; i++) {
+            console.log(`Processing transaction at index ${i}:`, request.txs[i], new Uint8Array(request.txs[i]));
+
+            txResults.push({
+                code: 0,
+                data: request.txs[i],
+                log: "",
+                info: "",
+                gasWanted: 0,
+                gasUsed: 0,
+                events: [],
+                codespace: "app",
+            });
+        }
+
+        console.log("Generated txResults length:", txResults.length);
+
+        const finalizedBlock: FinalizeBlockResponse = {
+            events: txResults.flatMap(txResult => txResult.events),
+        // @ts-ignore
+            tx_results: txResults,
+            validatorUpdates: [],
+            appHash: Uint8Array.from(request.txs),
+            consensusParamUpdates: undefined
+        };
+
+        console.log('FinalizeBlock', finalizedBlock);
+
+        return Promise.resolve(finalizedBlock);
     }
 
     Flush(request: FlushRequest): Promise<FlushResponse> {

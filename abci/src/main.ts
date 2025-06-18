@@ -9,6 +9,13 @@ const grpc = true;
 
 async function bootstrap() {
 
+  const buffer: Buffer = Buffer.from("Hello, World!", "utf-8");
+
+// Conversion en Uint8Array
+  const uint8Array: Uint8Array = new Uint8Array(buffer);
+
+  console.log(buffer, uint8Array);
+
   let app;
 
   if(grpc) {

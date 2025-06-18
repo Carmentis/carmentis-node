@@ -36,7 +36,6 @@ import {
     VerifyVoteExtensionStatus
 } from "./proto-ts/cometbft/abci/v1/types";
 import {AbciService} from "./abci.service";
-import {ProofOps} from "./proto-ts/cometbft/crypto/v1/proof";
 
 @Controller()
 export class AbciController {
@@ -67,7 +66,7 @@ export class AbciController {
 
     @GrpcMethod('ABCIService', 'PrepareProposal')
     PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        this.logger.debug('Called PrepareProposal', request);
+        this.logger.debug('Called PrepareProposal');
         return this.abciService.PrepareProposal(request);
     }
 
@@ -94,8 +93,9 @@ export class AbciController {
         return Promise.resolve(undefined);
     }
 
+    @GrpcMethod('ABCIService', 'CheckTx')
     CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
-        return Promise.resolve(undefined);
+        return this.abciService.CheckTx(request);
     }
 
     @GrpcMethod('ABCIService', 'ExtendVote')
@@ -109,13 +109,7 @@ export class AbciController {
     @GrpcMethod('ABCIService', 'FinalizeBlock')
     FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
         this.logger.debug('Called FinalizeBlock');
-        return Promise.resolve({
-            events: [],
-            txResults: [],
-            validatorUpdates: [],
-            consensusParamUpdates: undefined,
-            appHash: new Uint8Array()
-        });
+        return this.abciService.FinalizeBlock(request);
     }
 
     @GrpcMethod('ABCIService', 'Flush')
