@@ -139,9 +139,6 @@ export class AbciService implements ABCIService {
     }
 
     FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
-        console.log("FinalizeBlock request.txs.length:", request.txs.length);
-        console.log("FinalizeBlock received transactions:", request.txs);
-
         const txResults: ExecTxResult[] = [];
         for (let i = 0; i < request.txs.length; i++) {
             console.log(`Processing transaction at index ${i}:`, request.txs[i], new Uint8Array(request.txs[i]));
@@ -158,8 +155,6 @@ export class AbciService implements ABCIService {
             });
         }
 
-        console.log("Generated txResults length:", txResults.length);
-
         const finalizedBlock: FinalizeBlockResponse = {
             events: txResults.flatMap(txResult => txResult.events),
         // @ts-ignore
@@ -169,16 +164,12 @@ export class AbciService implements ABCIService {
             consensusParamUpdates: undefined
         };
 
-        console.log('FinalizeBlock', finalizedBlock);
-
         return Promise.resolve(finalizedBlock);
     }
 
     Flush(request: FlushRequest): Promise<FlushResponse> {
         return Promise.resolve(undefined);
     }
-
-
 
     ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
         return Promise.resolve(undefined);
