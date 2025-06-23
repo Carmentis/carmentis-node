@@ -1,5 +1,4 @@
 import {ABCIService} from "./proto-ts/cometbft/abci/v1/service";
-import { createHash } from "crypto";
 import {
     ApplySnapshotChunkRequest,
     ApplySnapshotChunkResponse,
@@ -35,10 +34,13 @@ import {
     VerifyVoteExtensionRequest,
     VerifyVoteExtensionResponse
 } from "./proto-ts/cometbft/abci/v1/types";
-import {Injectable} from "@nestjs/common";
+import {Injectable, OnModuleInit} from "@nestjs/common";
+import { NodeCore } from "./carmentis/carmentis";
 
 @Injectable()
 export class AbciService implements ABCIService {
+
+    private nodeCore: NodeCore;
 
     Echo(request: EchoRequest): Promise<EchoResponse> {
         return Promise.resolve({
@@ -57,6 +59,10 @@ export class AbciService implements ABCIService {
     }
 
     InitChain(request: InitChainRequest): Promise<InitChainResponse> {
+        this.nodeCore = new NodeCore({
+            dbPath: '../../.carmentis',
+        });
+
         return Promise.resolve({
             consensusParams: {
                 feature: {
@@ -98,15 +104,15 @@ export class AbciService implements ABCIService {
         });
     }
 
-    PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        const txs = [];
-
-        for (let i=0; i<request.txs.length; i++) {
-            txs.push(new Uint8Array(request.txs[i]));
-        }
-
+    async PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
         return Promise.resolve({
-            txs: txs
+            txs: await this.nodeCore.prepareProposal(request)
+        });
+    }
+
+    async ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
+        return Promise.resolve({
+            status: await this.nodeCore.processProposal(request)
         });
     }
 
@@ -114,15 +120,18 @@ export class AbciService implements ABCIService {
         return Promise.resolve(undefined);
     }
 
-    CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
+    async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
         console.log('tx', request.tx, new Uint8Array(request.tx));
+
+        const resultCheck = await this.nodeCore.checkTx(request)
+
         return Promise.resolve({
-            code: 0,
-            log: "test",
+            code: resultCheck.success ? 0 : 1,
+            log: "",
             data: new Uint8Array(request.tx),
             gasWanted: 0,
             gasUsed: 0,
-            info: "test",
+            info: !resultCheck.success ? resultCheck.error : "",
             events: [],
             codespace: "app"
         });
@@ -138,33 +147,17 @@ export class AbciService implements ABCIService {
         return Promise.resolve(undefined);
     }
 
-    FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
-        const txResults: ExecTxResult[] = [];
-        for (let i = 0; i < request.txs.length; i++) {
-            console.log(`Processing transaction at index ${i}:`, request.txs[i], new Uint8Array(request.txs[i]));
+    async FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
 
-            txResults.push({
-                code: 0,
-                data: request.txs[i],
-                log: "",
-                info: "",
-                gasWanted: 0,
-                gasUsed: 0,
-                events: [],
-                codespace: "app",
-            });
-        }
+        const { txResults, appHash } = await this.nodeCore.finalizeBlock(request);
 
-        const finalizedBlock: FinalizeBlockResponse = {
-            events: txResults.flatMap(txResult => txResult.events),
-        // @ts-ignore
-            tx_results: txResults,
-            validatorUpdates: [],
-            appHash: Uint8Array.from(request.txs),
-            consensusParamUpdates: undefined
-        };
-
-        return Promise.resolve(finalizedBlock);
+        return Promise.resolve({
+            txResults,
+            appHash,
+            events: [],
+            validatorUpdates: undefined,
+            consensusParamUpdates: undefined,
+        });
     }
 
     Flush(request: FlushRequest): Promise<FlushResponse> {
@@ -181,12 +174,6 @@ export class AbciService implements ABCIService {
 
     OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
         return Promise.resolve(undefined);
-    }
-
-    ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
-        return Promise.resolve({
-            status: ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT
-        });
     }
 
     Query(request: QueryRequest): Promise<QueryResponse> {
