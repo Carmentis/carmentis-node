@@ -1,6 +1,4 @@
-import * as sdk from "../index.mjs";
-
-const { CHAIN, DATA, ECO, SCHEMAS } = sdk.constants;
+import { CHAIN, DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
 
 export const DB_CHAIN                    = 0x00;
 export const DB_VB_RADIX                 = 0x01;
@@ -19,13 +17,19 @@ export const DB_VALIDATOR_NODES          = 0x0D;
 export const DB_ORGANIZATIONS            = 0x0E;
 export const DB_APPLICATIONS             = 0x0F;
 
-export const DB = {
+export const DB: { [key: number]: SCHEMAS.SchemaItem[] } = {
   // chain information
   [ DB_CHAIN ] : [
     { name: "height",         type: DATA.TYPE_UINT48 },
     { name: "lastBlockTs",    type: DATA.TYPE_UINT48 },
     { name: "nMicroblock",    type: DATA.TYPE_UINT48 },
     { name: "objectCounters", type: DATA.TYPE_ARRAY_OF | DATA.TYPE_UINT48, size: CHAIN.N_VIRTUAL_BLOCKCHAINS }
+  ],
+
+  [ DB_VB_RADIX ] : [
+  ],
+
+  [ DB_TOKEN_RADIX ] : [
   ],
 
   // validator: Comet address -> Carmentis ID
@@ -79,23 +83,11 @@ export const DB = {
   // current state of an account
   // the hash of this record is stored in the account radix tree
   // key: accountHash
-  [ DB_ACCOUNT_STATE ] : [
-    { name: "height",          type: DATA.TYPE_UINT48 },
-    { name: "balance",         type: DATA.TYPE_UINT48 },
-    { name: "lastHistoryHash", type: DATA.TYPE_BIN256 }
-  ],
+  [ DB_ACCOUNT_STATE ] : SCHEMAS.ACCOUNT_STATE,
 
   // each transaction that occurred on an account
   // key: HASH(accountHash + entryHash)
-  [ DB_ACCOUNT_HISTORY ] : [
-    { name: "height",              type: DATA.TYPE_UINT48 },
-    { name: "previousHistoryHash", type: DATA.TYPE_BIN256 },
-    { name: "type",                type: DATA.TYPE_UINT8 },
-    { name: "timestamp",           type: DATA.TYPE_UINT48 },
-    { name: "linkedAccount",       type: DATA.TYPE_BIN256 },
-    { name: "amount",              type: DATA.TYPE_UINT48 },
-    { name: "chainReference",      type: DATA.TYPE_BINARY }
-  ],
+  [ DB_ACCOUNT_HISTORY ] : SCHEMAS.ACCOUNT_HISTORY,
 
   // account public key hash -> account VB hash
   // key: public key hash
@@ -129,7 +121,7 @@ const ACCOUNT_SECTION_REFERENCE = [
   { name: "sectionIndex", type: DATA.TYPE_UINT16 }
 ];
 
-export const ACCOUNT_REF_SCHEMAS = {
+export const ACCOUNT_REF_SCHEMAS: { [key: number]: Array<object> } = {
   [ ECO.BK_REF_BLOCK ]: ACCOUNT_BLOCK_REFERENCE,
   [ ECO.BK_REF_MICROBLOCK ]: ACCOUNT_MB_REFERENCE,
   [ ECO.BK_REF_SECTION ]: ACCOUNT_SECTION_REFERENCE

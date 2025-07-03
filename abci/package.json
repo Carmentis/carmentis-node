@@ -1,7 +1,6 @@
 {
   "name": "abci",
   "version": "0.0.1",
-  "type": "commonjs",
   "description": "",
   "author": "",
   "private": true,
@@ -25,9 +24,11 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",
+    "@cmts-dev/carmentis-sdk": "link:../../../Users/arnau/AppData/Local/pnpm/global/5/node_modules/@cmts-dev/carmentis-sdk",
     "@grpc/grpc-js": "^1.13.3",
     "@grpc/proto-loader": "^0.7.15",
     "@grpc/reflection": "^1.0.4",
+    "@nestjs/axios": "^4.0.0",
     "@nestjs/common": "^10.4.17",
     "@nestjs/core": "^10.4.17",
     "@nestjs/microservices": "^11.1.0",
@@ -35,9 +36,9 @@
     "@nestjs/platform-socket.io": "^11.1.0",
     "@nestjs/platform-ws": "^11.1.0",
     "@nestjs/websockets": "^11.1.0",
-    "@nestjs/axios": "^4.0.0",
     "@noble/secp256k1": "^2.3.0",
     "grpc": "^1.24.11",
+    "level": "^10.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "ts-proto": "^2.7.0",
@@ -71,7 +72,7 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.8.3"
   },
-  "packageManager": "pnpm@10.2.0",
+  "packageManager": "pnpm@10.12.4",
   "jest": {
     "moduleFileExtensions": [
       "js",

@@ -1,13 +1,16 @@
-import { Level } from "level";
-import { NODE_SCHEMAS } from "./constants/constants.js";
-import * as sdk from "./index.mjs";
-
-const { SchemaSerializer, SchemaUnserializer } = sdk.schemaSerializer;
+import {Level} from "level";
+import {NODE_SCHEMAS} from "./constants/constants";
+import {SchemaSerializer, SchemaUnserializer, Utils} from "@cmts-dev/carmentis-sdk/server";
 
 const SUB_PREFIX = "SUB";
 
 export class LevelDb {
-  constructor(path, tableSchemas) {
+  db: any;
+  path: string;
+  sub: any;
+  tableSchemas: any;
+
+  constructor(path: string, tableSchemas: any) {
     this.path = path;
     this.tableSchemas = tableSchemas;
   }
@@ -21,11 +24,15 @@ export class LevelDb {
     this.db = new Level(this.path, encoding);
     this.sub = [];
 
-    const nTables = Object.keys(this.tableSchemas).length;
+    const nTables = this.getTableCount();
 
     for(let n = 0; n < nTables; n++) {
       this.sub[n] = this.db.sublevel(SUB_PREFIX + n.toString().padStart(2, "0"), encoding);
     }
+  }
+
+  getTableCount() {
+    return Object.keys(this.tableSchemas).length;
   }
 
   async open() {
@@ -40,9 +47,10 @@ export class LevelDb {
     await this.db.clear();
   }
 
-  async getRaw(tableId, key) {
+  async getRaw(tableId: number, key: Uint8Array) {
     try {
       const b = await this.sub[tableId].get(key);
+
       if(b === undefined) {
         return b;
       }
@@ -54,18 +62,16 @@ export class LevelDb {
     }
   }
 
-  async getObject(tableId, key) {
+  async getObject(tableId: number, key: Uint8Array) {
     const data = await this.getRaw(tableId, key);
 
     if(data === undefined) {
       return data;
     }
-
-    const unserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[tableId]);
-    return unserializer.unserialize(data);
+    return this.unserialize(tableId, data);
   }
 
-  async putRaw(tableId, key, data) {
+  async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
     try {
       await this.sub[tableId].put(key, data);
       return true;
@@ -76,18 +82,22 @@ export class LevelDb {
     }
   }
 
-  serialize(tableId, object) {
-    const serializer = new SchemaSerializer(NODE_SCHEMAS.DB[tableId]);
-    const data = serializer.serialize(object);
-    return data;
-  }
-
-  async putObject(tableId, key, object) {
+  async putObject(tableId: number, key: Uint8Array, object: any) {
     const data = this.serialize(tableId, object);
     return await this.putRaw(tableId, key, data);
   }
 
-  async query(tableId, query) {
+  async getKeys(tableId: number) {
+    const table = this.sub[tableId];
+    const keys = [];
+
+    for await (const [key] of table.iterator()) {
+      keys.push(key);
+    }
+    return keys;
+  }
+
+  async query(tableId: number, query: any) {
     try {
       return this.sub[tableId].iterator(query);
     }
@@ -97,9 +107,9 @@ export class LevelDb {
     }
   }
 
-  async del(tableId, key) {
+  async del(tableId: number, key: Uint8Array) {
     try {
-      await this.db.sub[tableId].del(key);
+      await this.sub[tableId].del(key);
       return true;
     }
     catch(e) {
@@ -113,7 +123,7 @@ export class LevelDb {
     const sub = this.sub;
 
     const obj = {
-      del: function(tableId, list) {
+      del: function(tableId: number, list: any) {
         const options = { sublevel: sub[tableId] };
 
         for(const key of list) {
@@ -121,7 +131,7 @@ export class LevelDb {
         }
         return obj;
       },
-      put: function(tableId, list) {
+      put: function(tableId: number, list: any) {
         const options = { sublevel: sub[tableId] };
 
         for(const [ key, value ] of list) {
@@ -142,5 +152,16 @@ export class LevelDb {
     };
 
     return obj;
+  }
+
+  serialize(tableId: number, object: any) {
+    const serializer = new SchemaSerializer(NODE_SCHEMAS.DB[tableId]);
+    const data = serializer.serialize(object);
+    return data;
+  }
+
+  unserialize(tableId: number, data: Uint8Array) {
+    const unserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[tableId]);
+    return unserializer.unserialize(data);
   }
 }

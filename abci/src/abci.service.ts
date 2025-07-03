@@ -35,7 +35,7 @@ import {
     VerifyVoteExtensionResponse
 } from "./proto-ts/cometbft/abci/v1/types";
 import {Injectable, OnModuleInit} from "@nestjs/common";
-import { NodeCore } from "./carmentis/carmentis";
+import { NodeCore } from "./carmentis/node-core";
 
 @Injectable()
 export class AbciService implements ABCIService {

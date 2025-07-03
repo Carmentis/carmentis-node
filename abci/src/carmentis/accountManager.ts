@@ -1,18 +1,20 @@
-import * as sdk from "./index.mjs";
-import { NODE_SCHEMAS } from "./constants/constants.js";
+import { NODE_SCHEMAS } from "./constants/constants";
+import { ECO, Utils, SchemaSerializer, SchemaUnserializer, Crypto } from '@cmts-dev/carmentis-sdk/server';
 
-const { DATA, ECO } = sdk.constants;
-const { SchemaSerializer } = sdk.schemaSerializer;
-const { Crypto } = sdk.crypto;
-const { Utils } = sdk.utils;
-//import { accountError } from "../errors/error.js";
+interface Transfer {
+  type: number;
+  payerAccount: Uint8Array|null;
+  payeeAccount: Uint8Array|null;
+  amount: number;
+}
 
 export class AccountManager {
-  constructor(db) {
+  db: any;
+  constructor(db: any) {
     this.db = db;
   }
 
-  async tokenTransfer(transfer, chainReference, timestamp, apply) {
+  async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: any) {
     const accountCreation = transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
     let payeeBalance;
     let payerBalance;
@@ -26,7 +28,6 @@ export class AccountManager {
       payerBalance = payerState.balance;
 
       if(payerBalance < transfer.amount) {
-//      throw new accountError(ERRORS.ACCOUNT_INSUFFICIENT_FUNDS, transfer.payerAccount);
         throw `insufficient funds`;
       }
     }
@@ -39,13 +40,11 @@ export class AccountManager {
 
       if(accountCreation){
         if(payeeState.height != 0) {
-//        throw new accountError(ERRORS.ACCOUNT_ALREADY_EXISTS, transfer.payeeAccount);
           throw `account already exists`;
         }
       }
       else {
         if(payeeState.height == 0) {
-//        throw new accountError(ERRORS.ACCOUNT_INVALID_PAYEE, transfer.payeeAccount);
           throw `invalid payee`;
         }
       }
@@ -53,20 +52,21 @@ export class AccountManager {
       payeeBalance = payeeState.balance;
     }
 
-    console.log("transfer", transfer.type, transfer.payerAccount, transfer.payeeAccount, transfer.amount, chainReference, timestamp);
+    const payerAccountId = transfer.payerAccount === null ? "NULL" : Utils.truncateStringMiddle(Utils.binaryToHexa(transfer.payerAccount), 8, 4);
+    const payeeAccountId = transfer.payeeAccount === null ? "NULL" : Utils.truncateStringMiddle(Utils.binaryToHexa(transfer.payeeAccount), 8, 4);
 
-    if(apply) {
-      if(payerBalance !== null) {
-        await this.update(transfer.type, transfer.payerAccount, transfer.payeeAccount, transfer.amount, chainReference, timestamp);
-      }
+    console.log(`${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${payerAccountId} to ${payeeAccountId} (${ECO.BK_NAMES[transfer.type]})`);
 
-      if(payeeBalance !== null) {
-        await this.update(transfer.type ^ 1, transfer.payeeAccount, transfer.payerAccount, transfer.amount, chainReference, timestamp);
-      }
+    if(payerBalance !== null) {
+      await this.update(transfer.type, transfer.payerAccount, transfer.payeeAccount, transfer.amount, chainReference, timestamp);
+    }
+
+    if(payeeBalance !== null) {
+      await this.update(transfer.type ^ 1, transfer.payeeAccount, transfer.payerAccount, transfer.amount, chainReference, timestamp);
     }
   }
 
-  async loadState(accountHash) {
+  async loadState(accountHash: any) {
     const state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash);
 
     return state || {
@@ -76,15 +76,12 @@ export class AccountManager {
     };
   }
 
-  async update(type, accountHash, linkedAccountHash, amount, chainReference, timestamp) {
-console.log("update()", type, accountHash, linkedAccountHash, amount, chainReference, timestamp);
+  async update(type: any, accountHash: any, linkedAccountHash: any, amount: any, chainReference: any, timestamp: any) {
     const state = await this.loadState(accountHash);
 
     state.height++;
     state.balance += type & ECO.BK_PLUS ? amount : -amount;
-    state.lastHistoryHash = Utils.binaryFromHexa(await this.addHistoryEntry(state, type, accountHash, linkedAccountHash, amount, chainReference, timestamp));
-
-console.log("update() state =", state);
+    state.lastHistoryHash = await this.addHistoryEntry(state, type, accountHash, linkedAccountHash, amount, chainReference, timestamp);
 
     await this.db.putObject(
       NODE_SCHEMAS.DB_ACCOUNT_STATE,
@@ -93,8 +90,8 @@ console.log("update() state =", state);
     );
   }
 
-  async loadHistory(accountHash, lastHistoryHash, maxRecords) {
-    const historyHash = lastHistoryHash;
+  async loadHistory(accountHash: any, lastHistoryHash: any, maxRecords: any) {
+    let historyHash = lastHistoryHash;
     const list = [];
 
     while(maxRecords-- && !Utils.binaryIsEqual(historyHash, Utils.getNullHash())) {
@@ -107,7 +104,7 @@ console.log("update() state =", state);
     return { list };
   }
 
-  async loadHistoryEntry(accountHash, historyHash) {
+  async loadHistoryEntry(accountHash: any, historyHash: any) {
     const entry = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, historyHash);
 
     if(!entry) {
@@ -117,7 +114,7 @@ console.log("update() state =", state);
     return entry
   }
 
-  async addHistoryEntry(state, type, accountHash, linkedAccountHash, amount, chainReference, timestamp) {
+  async addHistoryEntry(state: any, type: number, accountHash: any, linkedAccountHash: any, amount: any, chainReference: any, timestamp: any) {
     const serializer = new SchemaSerializer(NODE_SCHEMAS.ACCOUNT_REF_SCHEMAS[ECO.BK_REFERENCES[type]]);
     const chainReferenceBinary = serializer.serialize(chainReference);
 
@@ -132,7 +129,7 @@ console.log("update() state =", state);
     };
 
     const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, entry);
-    const hash = this.getHistoryEntryHash(Utils.binaryFromHexa(accountHash), Crypto.Hashes.sha256AsBinary(record));
+    const hash = this.getHistoryEntryHash(accountHash, Crypto.Hashes.sha256AsBinary(record));
 
     await this.db.putRaw(
       NODE_SCHEMAS.DB_ACCOUNT_HISTORY,
@@ -143,12 +140,12 @@ console.log("update() state =", state);
     return hash;
   }
 
-  getHistoryEntryHash(accountHash, recordHash) {
-    return Crypto.Hashes.sha256(Utils.binaryFrom(accountHash, recordHash));
+  getHistoryEntryHash(accountHash: any, recordHash: any) {
+    return Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(accountHash, recordHash));
   }
 
-  async testPublicKeyAvailability(publicKey) {
-    const keyHash = Crypto.Hashes.sha256(Utils.binaryFromHexa(publicKey));
+  async testPublicKeyAvailability(publicKey: Uint8Array) {
+    const keyHash = Crypto.Hashes.sha256AsBinary(publicKey);
 
     const accountHash = await this.db.getRaw(
       NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY,
@@ -156,13 +153,12 @@ console.log("update() state =", state);
     );
 
     if(accountHash) {
-//    throw new accountError(ERRORS.ACCOUNT_KEY_ALREADY_IN_USE, publicKey);
-      throw `key already in use`;
+      throw `public key already in use`;
     }
   }
 
-  async saveAccountByPublicKey(accountHash, publicKey) {
-    const keyHash = Crypto.Hashes.sha256(Utils.binaryFromHexa(publicKey));
+  async saveAccountByPublicKey(accountHash: Uint8Array, publicKey: Uint8Array) {
+    const keyHash = Crypto.Hashes.sha256AsBinary(publicKey);
 
     await this.db.putRaw(
       NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY,
@@ -171,17 +167,14 @@ console.log("update() state =", state);
     );
   }
 
-  async loadAccountByPublicKey(publicKey) {
-    const keyHash = Crypto.Hashes.sha256(Utils.binaryFromHexa(publicKey));
-
+  async loadAccountByPublicKeyHash(keyHash: Uint8Array) {
     const accountHash = await this.db.getRaw(
       NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY,
       keyHash
     );
 
     if(!accountHash) {
-//    throw new accountError(ERRORS.ACCOUNT_KEY_UNKNOWN, publicKey);
-      throw `unknown account key`;
+      throw `unknown account key hash`;
     }
 
     return accountHash;
