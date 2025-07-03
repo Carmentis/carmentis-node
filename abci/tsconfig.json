@@ -20,4 +20,9 @@
     "noFallthroughCasesInSwitch": false,
     "allowJs": true,
   },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+  ]
 }
