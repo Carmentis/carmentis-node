@@ -44,11 +44,14 @@ export class RandomNumberService {
             }, 5000);
 
         } catch (error) {
+/*
             this.logger.error(`Error sending random number: ${randomNumber}`);
             this.logger.error(`Status: ${error.response?.status}`);
             this.logger.error(`Status Text: ${error.response?.statusText}`);
             this.logger.error(`Response Body:`, error.response?.data);
             this.logger.error(`Headers:`, error.response?.headers);
+*/
+            console.error(error);
         }
     }
 

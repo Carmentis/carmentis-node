@@ -10,6 +10,7 @@ interface Transfer {
 
 export class AccountManager {
   db: any;
+
   constructor(db: any) {
     this.db = db;
   }
@@ -52,10 +53,10 @@ export class AccountManager {
       payeeBalance = payeeState.balance;
     }
 
-    const payerAccountId = transfer.payerAccount === null ? "NULL" : Utils.truncateStringMiddle(Utils.binaryToHexa(transfer.payerAccount), 8, 4);
-    const payeeAccountId = transfer.payeeAccount === null ? "NULL" : Utils.truncateStringMiddle(Utils.binaryToHexa(transfer.payeeAccount), 8, 4);
+    const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
+    const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
 
-    console.log(`${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${payerAccountId} to ${payeeAccountId} (${ECO.BK_NAMES[transfer.type]})`);
+    console.log(`${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`);
 
     if(payerBalance !== null) {
       await this.update(transfer.type, transfer.payerAccount, transfer.payeeAccount, transfer.amount, chainReference, timestamp);
@@ -178,5 +179,9 @@ export class AccountManager {
     }
 
     return accountHash;
+  }
+
+  getShortAccountString(account: Uint8Array | null): string {
+    return account === null ? "NULL" : Utils.truncateStringMiddle(Utils.binaryToHexa(account), 8, 4);
   }
 }

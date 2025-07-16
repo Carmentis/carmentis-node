@@ -44,6 +44,7 @@ export class AbciController {
 
     constructor(private readonly abciService: AbciService) {
         this.logger.debug('AbciController initialized');
+        this.logger.debug('AbciService: ' + JSON.stringify(this.abciService));
     }
 
     @GrpcMethod('ABCIService', 'Echo')
@@ -70,7 +71,6 @@ export class AbciController {
         return this.abciService.PrepareProposal(request);
     }
 
-
     @GrpcMethod('ABCIService', 'ProcessProposal')
     ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
         this.logger.debug('Called ProcessProposal');
@@ -82,19 +82,13 @@ export class AbciController {
         return this.abciService.Commit(request);
     }
 
-
-
-
-
-
-
-
     ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
         return Promise.resolve(undefined);
     }
 
     @GrpcMethod('ABCIService', 'CheckTx')
     CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
+        this.logger.debug('Called CheckTx');
         return this.abciService.CheckTx(request);
     }
 
@@ -107,9 +101,9 @@ export class AbciController {
     }
 
     @GrpcMethod('ABCIService', 'FinalizeBlock')
-    FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
+    async FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
         this.logger.debug('Called FinalizeBlock');
-        return this.abciService.FinalizeBlock(request);
+        return FinalizeBlockResponse.fromPartial(await this.abciService.FinalizeBlock(request));
     }
 
     @GrpcMethod('ABCIService', 'Flush')

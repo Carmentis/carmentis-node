@@ -28,18 +28,19 @@ import {
     PrepareProposalResponse,
     ProcessProposalRequest,
     ProcessProposalResponse,
-    ProcessProposalStatus,
+//  ProcessProposalStatus,
     QueryRequest,
     QueryResponse,
     VerifyVoteExtensionRequest,
     VerifyVoteExtensionResponse
 } from "./proto-ts/cometbft/abci/v1/types";
-import {Injectable, OnModuleInit} from "@nestjs/common";
+import {Injectable, Logger, OnModuleInit} from "@nestjs/common";
 import { NodeCore } from "./carmentis/node-core";
 
 @Injectable()
 export class AbciService implements ABCIService {
 
+    private logger = new Logger('AbciService');
     private nodeCore: NodeCore;
 
     Echo(request: EchoRequest): Promise<EchoResponse> {
@@ -48,20 +49,24 @@ export class AbciService implements ABCIService {
         });
     }
 
-    Info(request: InfoRequest): Promise<InfoResponse> {
+//  Info(request: InfoRequest): Promise<InfoResponse> {
+    Info(request: InfoRequest): Promise<any> {
         return Promise.resolve({
-            version: '1',
-            data: "hello",
-            appVersion: 1,
-            lastBlockHeight: 0,
-            lastBlockAppHash: new Uint8Array()
+            version: '123',
+            data: "Carmentis ABCI application",
+            app_version: 456,
+            last_block_height: 0,
+            last_block_app_hash: new Uint8Array(32)
         });
     }
 
     InitChain(request: InitChainRequest): Promise<InitChainResponse> {
-        this.nodeCore = new NodeCore({
-            dbPath: '../../.carmentis',
-        });
+        this.nodeCore = new NodeCore(
+            this.logger,
+            {
+              dbPath: '../../.carmentis',
+            }
+        );
 
         return Promise.resolve({
             consensusParams: {
@@ -100,7 +105,7 @@ export class AbciService implements ABCIService {
                 }
             },
             validators: [],
-            appHash: new Uint8Array()
+            appHash: new Uint8Array(32)
         });
     }
 
@@ -121,7 +126,7 @@ export class AbciService implements ABCIService {
     }
 
     async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
-        console.log('tx', request.tx, new Uint8Array(request.tx));
+        this.logger.debug(`CheckTx: ${request.tx.length} bytes`);
 
         const resultCheck = await this.nodeCore.checkTx(request)
 
@@ -137,10 +142,10 @@ export class AbciService implements ABCIService {
         });
     }
 
-    Commit(request: CommitRequest): Promise<CommitResponse> {
-        return Promise.resolve({
-            retainHeight: 0,
-        });
+    async Commit(request: CommitRequest): Promise<CommitResponse> {
+        const response = await this.nodeCore.commit();
+
+        return Promise.resolve(response);
     }
 
     ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
@@ -148,16 +153,15 @@ export class AbciService implements ABCIService {
     }
 
     async FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
+        const response = await this.nodeCore.finalizeBlock(request);
 
-        const { txResults, appHash } = await this.nodeCore.finalizeBlock(request);
+//      this.logger.debug(`txResults: ${response.txResults.length} entries`);
+//      const encoded = FinalizeBlockResponse.encode(response).finish();
+//      this.logger.debug('Encoded FinalizeBlockResponse:', [...encoded].map(v => v.toString(16).padStart(2, "0")).join(" "));
+//      const decoded = FinalizeBlockResponse.decode(encoded);
+//      this.logger.debug('Decoded:', decoded);
 
-        return Promise.resolve({
-            txResults,
-            appHash,
-            events: [],
-            validatorUpdates: undefined,
-            consensusParamUpdates: undefined,
-        });
+        return Promise.resolve(response);
     }
 
     Flush(request: FlushRequest): Promise<FlushResponse> {

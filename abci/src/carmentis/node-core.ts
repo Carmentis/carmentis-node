@@ -5,9 +5,15 @@ import {RadixTree} from "./radixTree";
 import {CachedLevelDb} from "./cachedLevelDb";
 import {LevelDbProvider} from "./providers/levelDbProvider";
 
+const PROPOSAL_UNKNOWN = 0;
+const PROPOSAL_ACCEPT  = 1;
+const PROPOSAL_REJECT  = 2;
+
 import {
   CheckTxRequest,
   CheckTxResponse,
+  CommitResponse,
+  ExecTxResult,
   PrepareProposalRequest,
   PrepareProposalResponse,
   ProcessProposalRequest,
@@ -18,7 +24,7 @@ import {
   VerifyVoteExtensionResponse,
   FinalizeBlockRequest,
   FinalizeBlockResponse
-} from "./types";
+} from "../proto-ts/cometbft/abci/v1/types";
 
 import {
   CHAIN,
@@ -28,6 +34,7 @@ import {
   Base64,
   Utils,
   Blockchain,
+  Economics,
   MemoryProvider,
   NullNetworkProvider,
   Provider,
@@ -35,44 +42,50 @@ import {
   MessageUnserializer
 } from '@cmts-dev/carmentis-sdk/server';
 
+interface Cache {
+  db: CachedLevelDb;
+  blockchain: Blockchain;
+  accountManager: AccountManager;
+  vbRadix: RadixTree;
+  tokenRadix: RadixTree;
+};
+
+type SectionCallback = (arg: any) => Promise<void>;
+type QueryCallback = (arg: any) => Promise<Uint8Array>;
+
 export class NodeCore {
+  logger: any;
   accountManager: AccountManager;
   blockchain: Blockchain;
-  cachedBlockchain: Blockchain;
   db: LevelDb;
-  cachedDb: CachedLevelDb;
   messageSerializer: MessageSerializer;
   messageUnserializer: MessageUnserializer;
-  tokenRadix: RadixTree;
   vbRadix: RadixTree;
-  cachedTokenRadix: RadixTree;
-  cachedVbRadix: RadixTree;
-  sectionCallbacks: any;
-  queryCallbacks: any;
+  tokenRadix: RadixTree;
+  sectionCallbacks: Map<number, SectionCallback>;
+  queryCallbacks: Map<number, QueryCallback>;
+  finalizedBlockCache: Cache | null;
 
-  constructor(options: any) {
+  constructor(logger: any, options: any) {
+    this.logger = logger;
+
     this.db = new LevelDb(options.dbPath, NODE_SCHEMAS.DB);
     this.db.initialize();
-    this.cachedDb = new CachedLevelDb(this.db);
 
     const levelDbProvider = new LevelDbProvider(this.db);
     const provider = new Provider(levelDbProvider, new NullNetworkProvider());
     this.blockchain = new Blockchain(provider);
 
-    const cachedLevelDbProvider = new LevelDbProvider(this.cachedDb);
-    const cachedProvider = new Provider(cachedLevelDbProvider, new NullNetworkProvider());
-    this.cachedBlockchain = new Blockchain(cachedProvider);
-
     this.messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
     this.messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
     this.sectionCallbacks = new Map;
     this.queryCallbacks = new Map;
-    this.accountManager = new AccountManager(this.cachedDb);
+    this.accountManager = new AccountManager(this.db);
 
     this.vbRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_VB_RADIX);
     this.tokenRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_TOKEN_RADIX);
-    this.cachedVbRadix = new RadixTree(this.cachedDb, NODE_SCHEMAS.DB_VB_RADIX);
-    this.cachedTokenRadix = new RadixTree(this.cachedDb, NODE_SCHEMAS.DB_TOKEN_RADIX);
+
+    this.finalizedBlockCache = null;
 
     this.registerSectionCallbacks(
       CHAIN.VB_ACCOUNT,
@@ -94,22 +107,26 @@ export class NodeCore {
     this.registerQueryCallback(SCHEMAS.MSG_GET_OBJECT_LIST, this.getObjectList);
   }
 
-  registerSectionCallbacks(objectType: any, callbackList: any) {
+  registerSectionCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
     for(const [ sectionType, callback ] of callbackList) {
       const key = sectionType << 4 | objectType;
       this.sectionCallbacks.set(key, callback.bind(this));
     }
   }
 
-  registerQueryCallback(messageId: any, callback: any) {
+  registerQueryCallback(messageId: any, callback: QueryCallback) {
     this.queryCallbacks.set(messageId, callback.bind(this));
   }
 
-  async invokeSectionCallback(vbType: any, sectionType: any, context: any) {
+  async invokeSectionCallback(vbType: number, sectionType: number, context: any) {
     const key = sectionType << 4 | vbType;
 
     if(this.sectionCallbacks.has(key)) {
       const callback = this.sectionCallbacks.get(key);
+
+      if(!callback) {
+        throw `callback unexpectedly undefined`;
+      }
       await callback(context);
     }
   }
@@ -118,21 +135,22 @@ export class NodeCore {
     Incoming transaction
   */
   async checkTx(request: CheckTxRequest) {
-    console.log(`checkTx`);
+    this.logger.log(`checkTx`);
 
-    const importer = this.cachedBlockchain.getMicroblockImporter(request.tx);
-    const success = await this.checkMicroblock(importer);
+    const cache = this.getCacheInstance();
+    const importer = cache.blockchain.getMicroblockImporter(new Uint8Array(request.tx));
+    const success = await this.checkMicroblock(cache, importer);
 
-    console.log(`Type: ${CHAIN.VB_NAME[importer.vb.type]}`);
-    console.log(`Total size: ${request.tx.length} bytes`);
+    if(success) {
+      this.logger.log(`Type: ${CHAIN.VB_NAME[importer.vb.type]}`);
+      this.logger.log(`Total size: ${request.tx.length} bytes`);
 
-    const vb: any = await importer.getVirtualBlockchain();
+      const vb: any = await importer.getVirtualBlockchain();
 
-    for(const section of vb.currentMicroblock.sections) {
-      console.log(`${(SECTIONS.DEF[importer.vb.type][section.type].label + " ").padEnd(36, ".")} ${section.data.length} byte(s)`);
+      for(const section of vb.currentMicroblock.sections) {
+        this.logger.log(`${(SECTIONS.DEF[importer.vb.type][section.type].label + " ").padEnd(36, ".")} ${section.data.length} byte(s)`);
+      }
     }
-
-    this.cachedDb.resetCache();
 
     return {
       success,
@@ -145,7 +163,7 @@ export class NodeCore {
     request.txs
   */
   async prepareProposal(request: PrepareProposalRequest) {
-    console.log(`prepareProposal: ${request.txs.length} txs`);
+    this.logger.log(`prepareProposal: ${request.txs.length} txs`);
     const proposedTxs = [];
 
     for(const tx of request.txs) {
@@ -160,13 +178,32 @@ export class NodeCore {
     request.txs
     request.proposed_last_commit
     answer:
-      UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
-      ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
-      REJECT  = 2; // Status that signals that the application finds the proposal invalid.
+      PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
+      PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
+      PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
   */
   async processProposal(request: ProcessProposalRequest) {
-    console.log(`processProposal: ${request.txs.length} txs`);
-    return 1;
+    this.logger.log(`processProposal: ${request.txs.length} txs`);
+
+    let fees = 0;
+
+    const cache = this.getCacheInstance();
+
+    for(const tx of request.txs) {
+      const importer = cache.blockchain.getMicroblockImporter(new Uint8Array(tx));
+      const success = await this.checkMicroblock(cache, importer);
+      const vb: any = await importer.getVirtualBlockchain();
+
+      await importer.store();
+
+      fees += vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice;
+    }
+
+    fees /= ECO.GAS_UNIT;
+
+    this.logger.log(`processProposal / total block fees: ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
+
+    return PROPOSAL_ACCEPT;
   }
 
   async extendVote(request: ExtendVoteRequest) {
@@ -176,52 +213,102 @@ export class NodeCore {
   }
 
   async finalizeBlock(request: FinalizeBlockRequest) {
-    console.log(`finalizeBlock: ${request.txs.length} txs`);
+    this.logger.log(`finalizeBlock: ${request.txs.length} txs`);
     const txResults = [];
+    let totalFees = 0;
+
+    if(this.finalizedBlockCache !== null) {
+      this.logger.warn(`finalizeBlock() called before the previous commit()`);
+    }
+
+    this.finalizedBlockCache = this.getCacheInstance();
 
     for(const tx of request.txs) {
-      const importer = this.blockchain.getMicroblockImporter(tx);
-      const success = await this.checkMicroblock(importer);
+      const importer = this.finalizedBlockCache.blockchain.getMicroblockImporter(new Uint8Array(tx));
+      const success = await this.checkMicroblock(this.finalizedBlockCache, importer);
       const vb: any = await importer.getVirtualBlockchain();
+      const fees = Math.floor(vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice / ECO.GAS_UNIT);
+      const feesPayerAccount = vb.currentMicroblock.getFeesPayerAccount();
 
-      console.log(`Storing microblock ${Utils.binaryToHexa(vb.currentMicroblock.hash)}`);
+      totalFees += fees;
+
+      this.logger.log(`Storing microblock ${Utils.binaryToHexa(vb.currentMicroblock.hash)}`);
+      this.logger.log(`Fees: ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}, paid by ${this.finalizedBlockCache.accountManager.getShortAccountString(feesPayerAccount)}`);
 
       await importer.store();
 
-      txResults.push({
-        code: 0,
-        data: new Uint8Array(),
-        log: "",
-        info: "",
-        gasWanted: 0,
-        gasUsed: 0,
-        events: [],
-        codespace: "app"
-      });
+      if(feesPayerAccount !== null) {
+/*
+        this.finalizedBlockCache.accountManager.tokenTransfer(
+          {
+            type        : ECO.BK_PAID_FEES,
+            payerAccount: feesPayerAccount,
+            payeeAccount: Economics.specialAccountTypeToIdentifier(ECO.ACCOUNT_BLOCK_FEES),
+            amount      : fees
+          },
+          {
+            mbHash: vb.currentMicroblock.hash
+          },
+          importer.currentTimestamp
+        );
+*/
+      }
+
+      txResults.push(
+        ExecTxResult.create({
+          code: 0,
+          data: new Uint8Array(),
+          log: "",
+          info: "",
+          gasWanted: 0,
+          gasUsed: 0,
+          events: [],
+          codespace: "app"
+        })
+      );
     }
 
-    const appHash = new Uint8Array(32);
+    this.logger.log(`Total block fees: ${totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
 
-    return {
+    const appHash = new Uint8Array(32);
+    appHash[30] = request.height >> 8 & 0xFF;
+    appHash[31] = request.height & 0xFF;
+
+    return FinalizeBlockResponse.create({
       txResults,
-      appHash
-    };
+      appHash,
+      events: [],
+      validatorUpdates: [],
+      consensusParamUpdates: undefined
+    });
   }
 
   async commit() {
-    await this.cachedDb.commit();
+    if(this.finalizedBlockCache === null) {
+      throw `nothing to commit`;
+    }
+
+    await this.finalizedBlockCache.db.commit();
+
+    this.finalizedBlockCache = null;
+
+    this.logger.log(`Commit done`);
+
+    return CommitResponse.create({
+      retainHeight: 0
+    });
   }
 
   /**
     Checks a microblock and invokes the section callbacks of the node.
   */
-  async checkMicroblock(importer: any) {
-    console.log(`Checking microblock ${Utils.binaryToHexa(importer.hash)}`);
+  async checkMicroblock(cache: Cache, importer: any) {
+    this.logger.log(`Checking microblock ${Utils.binaryToHexa(importer.hash)}`);
 
     const status = await importer.check();
 
     if(status) {
-      console.error(`Rejected with status ${status}: ${importer.error}`);
+      this.logger.error(`Rejected with status ${status}: ${importer.error}`);
       return false;
     }
 
@@ -230,19 +317,20 @@ export class NodeCore {
         vb: importer.vb,
         mb: importer.vb.currentMicroblock,
         section,
-        timestamp: importer.currentTimestamp
+        timestamp: importer.currentTimestamp,
+        accountManager: cache.accountManager
       };
       await this.invokeSectionCallback(importer.vb.type, section.type, context);
     }
 
     switch(importer.vb.type) {
-      case CHAIN.VB_ACCOUNT: { await this.cachedDb.putObject(NODE_SCHEMAS.DB_ACCOUNTS, importer.vb.identifier, {}); break; }
-      case CHAIN.VB_VALIDATOR_NODE: { await this.cachedDb.putObject(NODE_SCHEMAS.DB_VALIDATOR_NODES, importer.vb.identifier, {}); break; }
-      case CHAIN.VB_ORGANIZATION: { await this.cachedDb.putObject(NODE_SCHEMAS.DB_ORGANIZATIONS, importer.vb.identifier, {}); break; }
-      case CHAIN.VB_APPLICATION: { await this.cachedDb.putObject(NODE_SCHEMAS.DB_APPLICATIONS, importer.vb.identifier, {}); break; }
+      case CHAIN.VB_ACCOUNT: { await cache.db.putObject(NODE_SCHEMAS.DB_ACCOUNTS, importer.vb.identifier, {}); break; }
+      case CHAIN.VB_VALIDATOR_NODE: { await cache.db.putObject(NODE_SCHEMAS.DB_VALIDATOR_NODES, importer.vb.identifier, {}); break; }
+      case CHAIN.VB_ORGANIZATION: { await cache.db.putObject(NODE_SCHEMAS.DB_ORGANIZATIONS, importer.vb.identifier, {}); break; }
+      case CHAIN.VB_APPLICATION: { await cache.db.putObject(NODE_SCHEMAS.DB_APPLICATIONS, importer.vb.identifier, {}); break; }
     }
 
-    console.log(`Accepted`);
+    this.logger.log(`Accepted`);
     return true;
   }
 
@@ -251,9 +339,9 @@ export class NodeCore {
   */
   async accountTokenIssuanceCallback(context: any) {
     const rawPublicKey = await context.vb.getPublicKey();
-    await this.accountManager.testPublicKeyAvailability(rawPublicKey);
+    await context.accountManager.testPublicKeyAvailability(rawPublicKey);
 
-    await this.accountManager.tokenTransfer(
+    await context.accountManager.tokenTransfer(
       {
         type        : ECO.BK_SENT_ISSUANCE,
         payerAccount: null,
@@ -267,14 +355,14 @@ export class NodeCore {
       context.timestamp
     );
 
-    await this.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
+    await context.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
   }
 
   async accountCreationCallback(context: any) {
     const rawPublicKey = await context.vb.getPublicKey();
-    await this.accountManager.testPublicKeyAvailability(rawPublicKey);
+    await context.accountManager.testPublicKeyAvailability(rawPublicKey);
 
-    await this.accountManager.tokenTransfer(
+    await context.accountManager.tokenTransfer(
       {
         type        : ECO.BK_SALE,
         payerAccount: context.section.object.sellerAccount,
@@ -288,11 +376,11 @@ export class NodeCore {
       context.timestamp
     );
 
-    await this.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
+    await context.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
   }
 
   async accountTokenTransferCallback(context: any) {
-    await this.accountManager.tokenTransfer(
+    await context.accountManager.tokenTransfer(
       {
         type        : ECO.BK_SENT_PAYMENT,
         payerAccount: context.vb.identifier,
@@ -313,13 +401,13 @@ export class NodeCore {
   async query(data: any) {
     const { type, object } = this.messageUnserializer.unserialize(data);
 
-    console.log(`Received query ${type} (${SCHEMAS.NODE_MESSAGE_NAMES[type]})`);
-
-    if(!this.queryCallbacks.has(type)) {
-      throw `unsupported query type`;
-    }
+    this.logger.log(`Received query ${SCHEMAS.NODE_MESSAGES[type].label} (${type})`);
 
     const callback = this.queryCallbacks.get(type);
+
+    if(!callback) {
+      throw `unsupported query type`;
+    }
 
     try {
       return await callback(object);
@@ -327,7 +415,7 @@ export class NodeCore {
     catch(error) {
       let errorMsg = "error";
 
-      console.error(error);
+      this.logger.error(error);
 
       if(error instanceof Error) {
         errorMsg = error.toString();
@@ -388,17 +476,16 @@ export class NodeCore {
     );
   }
 
-  async awaitMicroblockAnchoring(object:any) {
-    const self = this;
+  async awaitMicroblockAnchoring(object:any): Promise<Uint8Array> {
     let remaingingAttempts = 1000;
 
-    return new Promise(function(resolve, reject) {
-      async function test() {
-        const microblockInfo = await self.blockchain.provider.getMicroblockInformation(object.hash);
+    return new Promise((resolve, reject) => {
+      const test = async () => {
+        const microblockInfo = await this.blockchain.provider.getMicroblockInformation(object.hash);
 
         if(microblockInfo) {
           resolve(
-            self.messageSerializer.serialize(
+            this.messageSerializer.serialize(
               SCHEMAS.MSG_MICROBLOCK_ANCHORING,
               microblockInfo
             )
@@ -412,7 +499,7 @@ export class NodeCore {
             reject();
           }
         }
-      }
+      };
       test();
     });
   }
@@ -476,6 +563,18 @@ export class NodeCore {
       }
     );
   }
+
+  getCacheInstance(): Cache {
+    const db = new CachedLevelDb(this.db);
+    const cachedLevelDbProvider = new LevelDbProvider(db);
+    const cachedProvider = new Provider(cachedLevelDbProvider, new NullNetworkProvider());
+    const blockchain = new Blockchain(cachedProvider);
+    const accountManager = new AccountManager(db);
+    const vbRadix = new RadixTree(db, NODE_SCHEMAS.DB_VB_RADIX);
+    const tokenRadix = new RadixTree(db, NODE_SCHEMAS.DB_TOKEN_RADIX);
+
+    return { db, blockchain, accountManager, vbRadix, tokenRadix };
+  };
 
   /**
     Static helper functions

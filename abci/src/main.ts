@@ -5,6 +5,8 @@ import {ReflectionService} from "@grpc/reflection";
 import {MicroserviceOptions, Transport} from "@nestjs/microservices";
 import {join} from 'path';
 
+import {Logger} from "@nestjs/common";
+
 const grpc = true;
 
 async function bootstrap() {
@@ -34,6 +36,7 @@ async function bootstrap() {
           defaults: true,
           oneofs: true,
         },
+
         url: '0.0.0.0:26658',
         onLoadPackageDefinition: (pkg, server) => {
           new ReflectionService(pkg).addToServer(server);

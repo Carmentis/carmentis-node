@@ -1,15 +1,11 @@
 import {NODE_SCHEMAS} from "../constants/constants";
-import {Utils} from '@cmts-dev/carmentis-sdk/server';
+import {AccountManager} from "../accountManager";
 
 export class LevelDbProvider {
   db: any;
-  microblockBodyStore: any;
 
   constructor(db: any) {
     this.db = db;
-    // NB: a microblock body must be retrieved from Comet
-    // this Map is for the dev node only
-    this.microblockBodyStore = new Map;
   }
 
   async getMicroblockInformation(hash: Uint8Array): Promise<Uint8Array> {
@@ -17,16 +13,16 @@ export class LevelDbProvider {
   }
 
   async getMicroblockBody(identifier: Uint8Array) {
-    const key = Utils.binaryToHexa(identifier);
-
-    if(!this.microblockBodyStore.has(key)) {
-      return null;
-    }
-    return this.microblockBodyStore.get(key);
+    return await this.get(NODE_SCHEMAS.DB_MICROBLOCK_BODY, identifier);
   }
 
   async getVirtualBlockchainState(identifier: Uint8Array) {
     return await this.get(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, identifier);
+  }
+
+  async getAccountByPublicKeyHash(publicKeyHash: Uint8Array) {
+    const accountManager = new AccountManager(this.db);
+    return await accountManager.loadAccountByPublicKeyHash(publicKeyHash);
   }
 
   async setMicroblockInformation(identifier: Uint8Array, data: Uint8Array) {
@@ -34,9 +30,7 @@ export class LevelDbProvider {
   }
 
   async setMicroblockBody(identifier: Uint8Array, data: Uint8Array) {
-    const key = Utils.binaryToHexa(identifier);
-
-    this.microblockBodyStore.set(key, data);
+    return await this.set(NODE_SCHEMAS.DB_MICROBLOCK_BODY, identifier, data);
   }
 
   async setVirtualBlockchainState(identifier: Uint8Array, data: Uint8Array) {

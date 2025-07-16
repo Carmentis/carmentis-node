@@ -1,4 +1,7 @@
 ./cometbft/*
-.idea
 /cometbft/
+.cometbft*
+.idea
 abci/package-lock.json
+*.bat
+log.txt
