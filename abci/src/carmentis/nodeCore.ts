@@ -635,7 +635,7 @@ export class NodeCore {
     const headers = exists ? await this.blockchain.provider.getVirtualBlockchainHeaders(object.virtualBlockchainId, object.knownHeight) : [];
     const changed = headers.length > 0;
 
-    stateData = stateData || new Uint8Array();
+    //stateData = stateData || new Uint8Array();
 
     return this.messageSerializer.serialize(
       SCHEMAS.MSG_VIRTUAL_BLOCKCHAIN_UPDATE,

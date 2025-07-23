@@ -9,6 +9,7 @@ import {Logger} from "@nestjs/common";
 
 const grpc = true;
 
+const logger = new Logger('Carmentis Node/ABCI')
 async function bootstrap() {
   let app;
 
