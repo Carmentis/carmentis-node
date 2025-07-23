@@ -61,10 +61,11 @@ export class AbciService {
     }
 
     async InitChain(request: InitChainRequest): Promise<InitChainResponse> {
-        this.nodeCore = new NodeCore(this.logger, CometNodeProvider, {
-            dbPath: '../../.carmentis',
-        });
-
+        if(!this.nodeCore) {
+          this.nodeCore = new NodeCore(this.logger, CometNodeProvider, {
+              dbPath: '../../.carmentis',
+          });
+        }
         return Promise.resolve(await this.nodeCore.initChain(request));
     }
 
