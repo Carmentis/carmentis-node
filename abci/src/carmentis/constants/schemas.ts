@@ -1,23 +1,22 @@
 import { CHAIN, DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
 
-export const DB_CHAIN                    = 0x00;
-export const DB_VB_RADIX                 = 0x01;
-export const DB_TOKEN_RADIX              = 0x02;
-export const DB_VALIDATOR                = 0x03;
-export const DB_BLOCK_INFORMATION        = 0x04;
-export const DB_BLOCK_CONTENT            = 0x05;
-export const DB_MICROBLOCK_VERIFICATION  = 0x06;
-export const DB_MICROBLOCK_INFORMATION   = 0x07;
-export const DB_VIRTUAL_BLOCKCHAIN_STATE = 0x08;
-export const DB_ACCOUNT_STATE            = 0x09;
-export const DB_ACCOUNT_HISTORY          = 0x0A;
-export const DB_ACCOUNT_BY_PUBLIC_KEY    = 0x0B;
-export const DB_ACCOUNTS                 = 0x0C;
-export const DB_VALIDATOR_NODES          = 0x0D;
-export const DB_ORGANIZATIONS            = 0x0E;
-export const DB_APPLICATIONS             = 0x0F;
-
-export const DB_MICROBLOCK_BODY          = 0x10; // FIXME: this data should come from Comet
+export const DB_CHAIN                     = 0x00;
+export const DB_VB_RADIX                  = 0x01;
+export const DB_TOKEN_RADIX               = 0x02;
+export const DB_BLOCK_INFORMATION         = 0x03;
+export const DB_BLOCK_CONTENT             = 0x04;
+export const DB_MICROBLOCK_VERIFICATION   = 0x05;
+export const DB_MICROBLOCK_TX_HASH        = 0x06;
+export const DB_MICROBLOCK_INFORMATION    = 0x07;
+export const DB_VIRTUAL_BLOCKCHAIN_STATE  = 0x08;
+export const DB_ACCOUNT_STATE             = 0x09;
+export const DB_ACCOUNT_HISTORY           = 0x0A;
+export const DB_ACCOUNT_BY_PUBLIC_KEY     = 0x0B;
+export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0C;
+export const DB_ACCOUNTS                  = 0x0D;
+export const DB_VALIDATOR_NODES           = 0x0E;
+export const DB_ORGANIZATIONS             = 0x0F;
+export const DB_APPLICATIONS              = 0x10;
 
 export const DB: SCHEMAS.Schema[] = [];
 
@@ -40,14 +39,6 @@ DB[DB_VB_RADIX] = {
 DB[DB_TOKEN_RADIX] = {
   label: "TokenRadix",
   definition: []
-};
-
-// validator: Comet address -> Carmentis ID
-DB[DB_VALIDATOR] = {
-  label: "Validator",
-  definition: [
-    { name: "validatorNodeId", type: DATA.TYPE_BIN256 }
-  ]
 };
 
 // block meta information
@@ -94,6 +85,13 @@ DB[DB_MICROBLOCK_VERIFICATION] = {
   ]
 };
 
+// stores the transaction hash
+// key: microblock hash
+DB[DB_MICROBLOCK_TX_HASH] = {
+  label: "MicroblockTxHash",
+  definition: []
+};
+
 // microblock information
 // key: microblock hash
 DB[DB_MICROBLOCK_INFORMATION] = SCHEMAS.MICROBLOCK_INFORMATION;
@@ -120,6 +118,15 @@ DB[DB_ACCOUNT_BY_PUBLIC_KEY] = {
   ]
 };
 
+// Comet address -> validator node VB hash
+// key: Comet address
+DB[DB_VALIDATOR_NODE_BY_ADDRESS] = {
+  label: "ValidatorNodeByAddress",
+  definition: [
+    { name: "validatorNodeHash", type: DATA.TYPE_BIN256 }
+  ]
+};
+
 // tables used as indexes
 DB[DB_ACCOUNTS] = {
   label: "Accounts",
@@ -135,12 +142,6 @@ DB[DB_ORGANIZATIONS] = {
 };
 DB[DB_APPLICATIONS] = {
   label: "Applications",
-  definition: []
-};
-
-// FIXME: dummy definition (the body is always stored as raw data)
-DB[DB_MICROBLOCK_BODY] = {
-  label: "MicroblockBody",
   definition: []
 };
 

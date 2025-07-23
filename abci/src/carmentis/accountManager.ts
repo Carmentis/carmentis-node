@@ -1,5 +1,5 @@
 import { NODE_SCHEMAS } from "./constants/constants";
-import { ECO, Utils, SchemaSerializer, SchemaUnserializer, Crypto } from '@cmts-dev/carmentis-sdk/server';
+import { ECO, Economics, Utils, SchemaSerializer, SchemaUnserializer, Crypto } from '@cmts-dev/carmentis-sdk/server';
 
 interface Transfer {
   type: number;
@@ -10,12 +10,14 @@ interface Transfer {
 
 export class AccountManager {
   db: any;
+  radix: any;
 
-  constructor(db: any) {
+  constructor(db: any, radix: any) {
     this.db = db;
+    this.radix = radix;
   }
 
-  async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: any) {
+  async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: any, logger: any) {
     const accountCreation = transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
     let payeeBalance;
     let payerBalance;
@@ -24,9 +26,13 @@ export class AccountManager {
       payerBalance = null;
     }
     else {
-      const payerState = await this.loadState(transfer.payerAccount);
+      const payerInfo = await this.loadInformation(transfer.payerAccount);
 
-      payerBalance = payerState.balance;
+      if(!Economics.isAllowedTransfer(payerInfo.type, transfer.type)) {
+        throw `account of type '${ECO.ACCOUNT_NAMES[payerInfo.type]}' not allowed for transfer of type '${ECO.BK_NAMES[transfer.type]}'`;
+      }
+
+      payerBalance = payerInfo.state.balance;
 
       if(payerBalance < transfer.amount) {
         throw `insufficient funds`;
@@ -37,26 +43,28 @@ export class AccountManager {
       payeeBalance = null;
     }
     else {
-      const payeeState = await this.loadState(transfer.payeeAccount);
+      const payeeInfo = await this.loadInformation(transfer.payeeAccount);
+
+      if(!Economics.isAllowedTransfer(payeeInfo.type, transfer.type ^ ECO.BK_PLUS)) {
+        throw `account of type ${ECO.ACCOUNT_NAMES[payeeInfo.type]} not allowed for transfer of type '${ECO.BK_NAMES[transfer.type ^ ECO.BK_PLUS]}'`;
+      }
 
       if(accountCreation){
-        if(payeeState.height != 0) {
+        if(payeeInfo.exists) {
           throw `account already exists`;
         }
       }
       else {
-        if(payeeState.height == 0) {
+        if(!payeeInfo.exists) {
           throw `invalid payee`;
         }
       }
 
-      payeeBalance = payeeState.balance;
+      payeeBalance = payeeInfo.state.balance;
     }
 
     const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
     const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
-
-    console.log(`${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`);
 
     if(payerBalance !== null) {
       await this.update(transfer.type, transfer.payerAccount, transfer.payeeAccount, transfer.amount, chainReference, timestamp);
@@ -65,29 +73,46 @@ export class AccountManager {
     if(payeeBalance !== null) {
       await this.update(transfer.type ^ 1, transfer.payeeAccount, transfer.payerAccount, transfer.amount, chainReference, timestamp);
     }
+
+    logger.log(`${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`);
   }
 
-  async loadState(accountHash: any) {
-    const state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash);
+  async loadInformation(accountHash: any) {
+    const type = Economics.getAccountTypeFromIdentifier(accountHash);
+    let state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash);
+    const exists = !!state;
 
-    return state || {
-      height: 0,
-      balance: 0,
-      lastHistoryHash: Utils.getNullHash()
-    };
+    if(!exists) {
+      state = {
+        height: 0,
+        balance: 0,
+        lastHistoryHash: Utils.getNullHash()
+      };
+    }
+
+    return {
+      exists: exists || type != ECO.ACCOUNT_STANDARD,
+      type,
+      state
+    }
   }
 
   async update(type: any, accountHash: any, linkedAccountHash: any, amount: any, chainReference: any, timestamp: any) {
-    const state = await this.loadState(accountHash);
+    const state = (await this.loadInformation(accountHash)).state;
 
     state.height++;
     state.balance += type & ECO.BK_PLUS ? amount : -amount;
     state.lastHistoryHash = await this.addHistoryEntry(state, type, accountHash, linkedAccountHash, amount, chainReference, timestamp);
 
-    await this.db.putObject(
+    const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, state);
+    const stateHash = Crypto.Hashes.sha256AsBinary(record);
+
+    await this.radix.set(accountHash, stateHash);
+
+    await this.db.putRaw(
       NODE_SCHEMAS.DB_ACCOUNT_STATE,
       accountHash,
-      state
+      record
     );
   }
 

@@ -80,6 +80,16 @@ export class CachedLevelDb {
     return await this.putRaw(tableId, key, data);
   }
 
+  async getKeys(tableId: number) {
+    // TODO: should also use the cache
+    return this.db.getKeys(tableId);
+  }
+
+  async query(tableId: number, query: any) {
+    // TODO: should also use the cache
+    return this.db.query(tableId, query);
+  }
+
   async del(tableId: number, key: Uint8Array) {
     const keyStr = Utils.binaryToHexa(key);
 

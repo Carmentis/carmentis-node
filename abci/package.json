@@ -19,8 +19,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "gen": "protoc --proto_path=./proto --ts_proto_out=src $(find src/proto -name '*.proto')",
-    "generate": "protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/gen --ts_proto_opt=esModuleInterop=true,useOptionals=messages,outputServices=grpc-js --proto_path=./proto $(find src/proto -name '*.proto')"
+    "gen:proto": "node scripts/gen-proto.js"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",

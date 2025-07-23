@@ -1,15 +1,17 @@
 import {NODE_SCHEMAS} from "./constants/constants";
+import {NodeProvider} from "./nodeProvider";
 import {AccountManager} from "./accountManager";
 import {LevelDb} from "./levelDb";
 import {RadixTree} from "./radixTree";
 import {CachedLevelDb} from "./cachedLevelDb";
-import {LevelDbProvider} from "./providers/levelDbProvider";
 
 const PROPOSAL_UNKNOWN = 0;
 const PROPOSAL_ACCEPT  = 1;
 const PROPOSAL_REJECT  = 2;
 
 import {
+  InitChainRequest,
+  InitChainResponse,
   CheckTxRequest,
   CheckTxResponse,
   CommitResponse,
@@ -31,11 +33,12 @@ import {
   ECO,
   SCHEMAS,
   SECTIONS,
-  Base64,
+  Crypto,
+  Hash,
   Utils,
+  Base64,
   Blockchain,
   Economics,
-  MemoryProvider,
   NullNetworkProvider,
   Provider,
   MessageSerializer,
@@ -48,6 +51,7 @@ interface Cache {
   accountManager: AccountManager;
   vbRadix: RadixTree;
   tokenRadix: RadixTree;
+  validatorSetUpdate: any[];
 };
 
 type SectionCallback = (arg: any) => Promise<void>;
@@ -58,6 +62,7 @@ export class NodeCore {
   accountManager: AccountManager;
   blockchain: Blockchain;
   db: LevelDb;
+  internalProviderClass: typeof NodeProvider;
   messageSerializer: MessageSerializer;
   messageUnserializer: MessageUnserializer;
   vbRadix: RadixTree;
@@ -66,24 +71,26 @@ export class NodeCore {
   queryCallbacks: Map<number, QueryCallback>;
   finalizedBlockCache: Cache | null;
 
-  constructor(logger: any, options: any) {
+  constructor(logger: any, internalProviderClass: typeof NodeProvider, options: any) {
     this.logger = logger;
+    this.internalProviderClass = internalProviderClass;
 
     this.db = new LevelDb(options.dbPath, NODE_SCHEMAS.DB);
     this.db.initialize();
 
-    const levelDbProvider = new LevelDbProvider(this.db);
-    const provider = new Provider(levelDbProvider, new NullNetworkProvider());
+    const internalProvider = new internalProviderClass(this.db);
+    const provider = new Provider(internalProvider, new NullNetworkProvider());
     this.blockchain = new Blockchain(provider);
 
     this.messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
     this.messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
     this.sectionCallbacks = new Map;
     this.queryCallbacks = new Map;
-    this.accountManager = new AccountManager(this.db);
 
     this.vbRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_VB_RADIX);
     this.tokenRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_TOKEN_RADIX);
+
+    this.accountManager = new AccountManager(this.db, this.tokenRadix);
 
     this.finalizedBlockCache = null;
 
@@ -93,6 +100,13 @@ export class NodeCore {
         [ SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback ],
         [ SECTIONS.ACCOUNT_CREATION, this.accountCreationCallback ],
         [ SECTIONS.ACCOUNT_TRANSFER, this.accountTokenTransferCallback ]
+      ]
+    );
+
+    this.registerSectionCallbacks(
+      CHAIN.VB_VALIDATOR_NODE,
+      [
+        [ SECTIONS.VN_DESCRIPTION, this.validatorNodeDescriptionCallback ]
       ]
     );
 
@@ -131,6 +145,61 @@ export class NodeCore {
     }
   }
 
+  async initChain(request: InitChainRequest) {
+    for(const validator of request.validators) {
+      const address = this.cometPublicKeyToAddress(Utils.bufferToUint8Array(validator.pub_key_bytes));
+      const record = await this.db.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address);
+
+      if(!record) {
+        this.logger.log(`Adding unknown validator address: ${Utils.binaryToHexa(address)}`);
+        await this.db.putRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address, Utils.getNullHash());
+      }
+    }
+
+    return {
+      consensus_params: undefined,
+/*
+      consensusParams: {
+        feature: {
+          voteExtensionsEnableHeight: 2,
+          pbtsEnableHeight: undefined
+        },
+        block: {
+          maxBytes: 2202009,
+          maxGas: -1,
+        },
+        evidence: {
+          maxAgeDuration: {
+            seconds: 172800,
+            nanos: 0
+          },
+          maxBytes: 2202009,
+          maxAgeNumBlocks: 100000
+        },
+        validator: {
+          pubKeyTypes: ['ed25519']
+        },
+        version: {
+          app: 1
+        },
+        abci: undefined,
+        synchrony: {
+          precision: {
+            seconds: 172800,
+            nanos: 0
+          },
+          messageDelay: {
+            seconds: 172800,
+            nanos: 0
+          }
+        }
+      },
+*/
+      validators: [],
+      app_hash: new Uint8Array(32)
+    };
+  }
+
   /**
     Incoming transaction
   */
@@ -138,7 +207,7 @@ export class NodeCore {
     this.logger.log(`checkTx`);
 
     const cache = this.getCacheInstance();
-    const importer = cache.blockchain.getMicroblockImporter(new Uint8Array(request.tx));
+    const importer = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(request.tx));
     const success = await this.checkMicroblock(cache, importer);
 
     if(success) {
@@ -185,23 +254,11 @@ export class NodeCore {
   async processProposal(request: ProcessProposalRequest) {
     this.logger.log(`processProposal: ${request.txs.length} txs`);
 
-    let fees = 0;
-
     const cache = this.getCacheInstance();
+    const blockHeight = +request.height;
+    const result = await this.processBlock(cache, blockHeight, request.txs);
 
-    for(const tx of request.txs) {
-      const importer = cache.blockchain.getMicroblockImporter(new Uint8Array(tx));
-      const success = await this.checkMicroblock(cache, importer);
-      const vb: any = await importer.getVirtualBlockchain();
-
-      await importer.store();
-
-      fees += vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice;
-    }
-
-    fees /= ECO.GAS_UNIT;
-
-    this.logger.log(`processProposal / total block fees: ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
+    this.logger.log(`processProposal / total block fees: ${result.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
 
     return PROPOSAL_ACCEPT;
   }
@@ -214,8 +271,6 @@ export class NodeCore {
 
   async finalizeBlock(request: FinalizeBlockRequest) {
     this.logger.log(`finalizeBlock: ${request.txs.length} txs`);
-    const txResults = [];
-    let totalFees = 0;
 
     if(this.finalizedBlockCache !== null) {
       this.logger.warn(`finalizeBlock() called before the previous commit()`);
@@ -223,9 +278,107 @@ export class NodeCore {
 
     this.finalizedBlockCache = this.getCacheInstance();
 
-    for(const tx of request.txs) {
-      const importer = this.finalizedBlockCache.blockchain.getMicroblockImporter(new Uint8Array(tx));
-      const success = await this.checkMicroblock(this.finalizedBlockCache, importer);
+    const blockHeight = +request.height;
+    const blockTimestamp = +(request.time?.seconds ?? 0);
+    const votes = request.decided_last_commit?.votes || [];
+
+    await this.payValidators(this.finalizedBlockCache, votes, blockHeight, blockTimestamp);
+
+    const result = await this.processBlock(this.finalizedBlockCache, blockHeight, request.txs);
+
+    this.logger.log(`Total block fees: ${result.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
+
+    return FinalizeBlockResponse.create({
+      tx_results: result.txResults,
+      app_hash: result.appHash,
+      events: [],
+      validator_updates: [],
+      consensus_param_updates: undefined
+    });
+  }
+
+  async payValidators(cache: any, votes: any, blockHeight: number, blockTimestamp: number) {
+    /**
+      get the pending fees from the fees account
+    */
+    const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(ECO.ACCOUNT_BLOCK_FEES);
+    const feesAccountInfo = await cache.accountManager.loadInformation(feesAccountIdentifier);
+    const pendingFees = feesAccountInfo.state.balance;
+
+    if(!pendingFees) {
+      return;
+    }
+
+    /**
+      get the validator accounts from decided_last_commit.votes sent by Comet
+    */
+    const validatorAccounts = [];
+
+    for(const vote of votes) {
+      if(vote.block_id_flag == "BLOCK_ID_FLAG_COMMIT") {
+        const address = Utils.bufferToUint8Array(vote.validator.address);
+        const validatorNodeHash = await cache.db.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address);
+
+        if(!validatorNodeHash) {
+          this.logger.error(`unknown validator address ${Utils.binaryToHexa(address)}`);
+        }
+        else if(Utils.binaryIsEqual(validatorNodeHash, Utils.getNullHash())) {
+          this.logger.warn(`validator address ${Utils.binaryToHexa(address)} is not yet linked to a validator node VB`);
+        }
+        else {
+          const validatorNode = await cache.blockchain.loadValidatorNode(new Hash(validatorNodeHash));
+/*
+          TODO: debug in progress
+
+          const validatorPublicKey = await validatorNode.getOrganizationPublicKey();
+          const account = await cache.accountManager.loadAccountByPublicKeyHash(Crypto.Hashes.sha256AsBinary(validatorPublicKey));
+
+          validatorAccounts.push(account);
+*/
+          validatorAccounts.push(null);
+        }
+      }
+    }
+
+    const nValidators = validatorAccounts.length;
+
+    if(!nValidators) {
+      this.logger.warn("empty list of validator accounts: fees payment is delayed");
+      return;
+    }
+
+    /**
+      split the fees among the validators
+    */
+    const feesQuotient = Math.floor(pendingFees / nValidators);
+    const feesRest = pendingFees % nValidators;
+
+    for(const n in validatorAccounts) {
+      const paidFees = (+n + blockHeight) % nValidators < feesRest ? feesQuotient + 1 : feesQuotient;
+
+      await cache.accountManager.tokenTransfer(
+        {
+          type        : ECO.BK_PAID_BLOCK_FEES,
+          payerAccount: feesAccountIdentifier,
+          payeeAccount: validatorAccounts[n],
+          amount      : paidFees
+        },
+        {
+          height: blockHeight - 1
+        },
+        blockTimestamp,
+        this.logger
+      );
+    }
+  }
+
+  async processBlock(cache: any, blockHeight: number, txs: any) {
+    const txResults = [];
+    let totalFees = 0;
+
+    for(const tx of txs) {
+      const importer = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(tx));
+      const success = await this.checkMicroblock(cache, importer);
       const vb: any = await importer.getVirtualBlockchain();
       const fees = Math.floor(vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice / ECO.GAS_UNIT);
       const feesPayerAccount = vb.currentMicroblock.getFeesPayerAccount();
@@ -233,25 +386,28 @@ export class NodeCore {
       totalFees += fees;
 
       this.logger.log(`Storing microblock ${Utils.binaryToHexa(vb.currentMicroblock.hash)}`);
-      this.logger.log(`Fees: ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}, paid by ${this.finalizedBlockCache.accountManager.getShortAccountString(feesPayerAccount)}`);
+      this.logger.log(`Fees: ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}, paid by ${cache.accountManager.getShortAccountString(feesPayerAccount)}`);
 
       await importer.store();
 
+      const stateData = await cache.blockchain.provider.getVirtualBlockchainStateInternal(importer.vb.identifier);
+      const stateHash = Crypto.Hashes.sha256AsBinary(stateData);
+      await cache.vbRadix.set(importer.vb.identifier, stateHash);
+
       if(feesPayerAccount !== null) {
-/*
-        this.finalizedBlockCache.accountManager.tokenTransfer(
+        await cache.accountManager.tokenTransfer(
           {
-            type        : ECO.BK_PAID_FEES,
+            type        : ECO.BK_PAID_TX_FEES,
             payerAccount: feesPayerAccount,
-            payeeAccount: Economics.specialAccountTypeToIdentifier(ECO.ACCOUNT_BLOCK_FEES),
+            payeeAccount: Economics.getSpecialAccountTypeIdentifier(ECO.ACCOUNT_BLOCK_FEES),
             amount      : fees
           },
           {
             mbHash: vb.currentMicroblock.hash
           },
-          importer.currentTimestamp
+          importer.currentTimestamp,
+          this.logger
         );
-*/
       }
 
       txResults.push(
@@ -260,27 +416,27 @@ export class NodeCore {
           data: new Uint8Array(),
           log: "",
           info: "",
-          gasWanted: 0,
-          gasUsed: 0,
+          gas_wanted: 0,
+          gas_used: 0,
           events: [],
           codespace: "app"
         })
       );
     }
 
-    this.logger.log(`Total block fees: ${totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
+    const tokenRadixHash = await cache.tokenRadix.getRootHash();
+    const vbRadixHash = await cache.vbRadix.getRootHash();
+    const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(vbRadixHash, tokenRadixHash));
 
-    const appHash = new Uint8Array(32);
-    appHash[30] = request.height >> 8 & 0xFF;
-    appHash[31] = request.height & 0xFF;
+    this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
+    this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
+    this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
-    return FinalizeBlockResponse.create({
+    return {
       txResults,
-      appHash,
-      events: [],
-      validatorUpdates: [],
-      consensusParamUpdates: undefined
-    });
+      totalFees,
+      appHash
+    };
   }
 
   async commit() {
@@ -295,7 +451,7 @@ export class NodeCore {
     this.logger.log(`Commit done`);
 
     return CommitResponse.create({
-      retainHeight: 0
+      retain_height: 0
     });
   }
 
@@ -314,11 +470,11 @@ export class NodeCore {
 
     for(const section of importer.vb.currentMicroblock.sections) {
       const context = {
+        cache,
         vb: importer.vb,
         mb: importer.vb.currentMicroblock,
         section,
-        timestamp: importer.currentTimestamp,
-        accountManager: cache.accountManager
+        timestamp: importer.currentTimestamp
       };
       await this.invokeSectionCallback(importer.vb.type, section.type, context);
     }
@@ -339,9 +495,9 @@ export class NodeCore {
   */
   async accountTokenIssuanceCallback(context: any) {
     const rawPublicKey = await context.vb.getPublicKey();
-    await context.accountManager.testPublicKeyAvailability(rawPublicKey);
+    await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
 
-    await context.accountManager.tokenTransfer(
+    await context.cache.accountManager.tokenTransfer(
       {
         type        : ECO.BK_SENT_ISSUANCE,
         payerAccount: null,
@@ -352,17 +508,18 @@ export class NodeCore {
         mbHash: context.mb.hash,
         sectionIndex: context.section.index
       },
-      context.timestamp
+      context.timestamp,
+      this.logger
     );
 
-    await context.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
+    await context.cache.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
   }
 
   async accountCreationCallback(context: any) {
     const rawPublicKey = await context.vb.getPublicKey();
-    await context.accountManager.testPublicKeyAvailability(rawPublicKey);
+    await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
 
-    await context.accountManager.tokenTransfer(
+    await context.cache.accountManager.tokenTransfer(
       {
         type        : ECO.BK_SALE,
         payerAccount: context.section.object.sellerAccount,
@@ -373,14 +530,15 @@ export class NodeCore {
         mbHash: context.mb.hash,
         sectionIndex: context.section.index
       },
-      context.timestamp
+      context.timestamp,
+      this.logger
     );
 
-    await context.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
+    await context.cache.accountManager.saveAccountByPublicKey(context.vb.identifier, rawPublicKey);
   }
 
   async accountTokenTransferCallback(context: any) {
-    await context.accountManager.tokenTransfer(
+    await context.cache.accountManager.tokenTransfer(
       {
         type        : ECO.BK_SENT_PAYMENT,
         payerAccount: context.vb.identifier,
@@ -391,8 +549,31 @@ export class NodeCore {
         mbHash: context.mb.hash,
         sectionIndex: context.section.index
       },
-      context.timestamp
+      context.timestamp,
+      this.logger
     );
+  }
+
+  async validatorNodeDescriptionCallback(context: any) {
+    const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
+    const cometAddress = this.cometPublicKeyToAddress(cometPublicKeyBytes);
+
+    const iterator = await context.cache.db.query(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS);
+    const list = await iterator.all();
+
+    for(const [ key, value ] of list) {
+      if(Utils.binaryIsEqual(Utils.bufferToUint8Array(key), context.vb.identifier)) {
+        await context.cache.db.del(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, key);
+      }
+    }
+
+    await context.cache.db.putRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, cometAddress, context.vb.identifier);
+
+    context.cache.validatorSetUpdate.push({
+      power: context.section.object.power,
+      pub_key_type: context.section.object.cometPublicKeyType,
+      pub_key_bytes: cometPublicKeyBytes
+    });
   }
 
   /**
@@ -505,11 +686,11 @@ export class NodeCore {
   }
 
   async getAccountState(object:any) {
-    const state = await this.accountManager.loadState(object.accountHash);
+    const info = await this.accountManager.loadInformation(object.accountHash);
 
     return this.messageSerializer.serialize(
       SCHEMAS.MSG_ACCOUNT_STATE,
-      state
+      info.state
     );
   }
 
@@ -566,28 +747,18 @@ export class NodeCore {
 
   getCacheInstance(): Cache {
     const db = new CachedLevelDb(this.db);
-    const cachedLevelDbProvider = new LevelDbProvider(db);
-    const cachedProvider = new Provider(cachedLevelDbProvider, new NullNetworkProvider());
+    const cachedInternalProvider = new this.internalProviderClass(db);
+    const cachedProvider = new Provider(cachedInternalProvider, new NullNetworkProvider());
     const blockchain = new Blockchain(cachedProvider);
-    const accountManager = new AccountManager(db);
     const vbRadix = new RadixTree(db, NODE_SCHEMAS.DB_VB_RADIX);
     const tokenRadix = new RadixTree(db, NODE_SCHEMAS.DB_TOKEN_RADIX);
+    const accountManager = new AccountManager(db, tokenRadix);
+    const validatorSetUpdate: any[] = [];
 
-    return { db, blockchain, accountManager, vbRadix, tokenRadix };
+    return { db, blockchain, accountManager, vbRadix, tokenRadix, validatorSetUpdate };
   };
 
-  /**
-    Static helper functions
-  */
-  static decodeQueryField(urlObject: any, fieldName: any) {
-    const hexa = urlObject.searchParams.get(fieldName);
-    const data = Utils.binaryFromHexa(hexa.slice(2));
-    return data;
-  }
-
-  static encodeResponse(response: any) {
-    return JSON.stringify({
-      data: Base64.encodeBinary(response)
-    });
+  cometPublicKeyToAddress(publicKey: Uint8Array) {
+    return Crypto.Hashes.sha256AsBinary(publicKey).slice(0, 20);
   }
 }
