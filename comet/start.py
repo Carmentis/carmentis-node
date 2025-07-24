@@ -6,8 +6,17 @@ import json
 import requests
 import shutil
 import subprocess
+import logging
 from urllib.parse import urlparse
 from pathlib import Path
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[Node launcher] %(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+)
+logger = logging.getLogger('carmentis')
 
 def create_new_chain(genesis_file_location):
     """
@@ -40,7 +49,7 @@ def join_existing_chain(peer_endpoint):
     genesis_url = f"{peer_endpoint}genesis?"
 
     try:
-        print(f"Contacting peer at {genesis_url}...")
+        logger.info(f"Contacting peer at {genesis_url}...")
         response = requests.get(genesis_url, timeout=10)
         response.raise_for_status()  # Raise an exception for HTTP errors
 
@@ -49,7 +58,7 @@ def join_existing_chain(peer_endpoint):
 
         # Extract the genesis JSON
         if 'result' not in data or 'genesis' not in data['result']:
-            print("Error: Invalid response format. 'result.genesis' not found in the response.")
+            logger.error("Invalid response format. 'result.genesis' not found in the response.")
             sys.exit(1)
 
         genesis_json = data['result']['genesis']
@@ -59,7 +68,7 @@ def join_existing_chain(peer_endpoint):
         os.makedirs(config_dir, exist_ok=True)
 
         # Save the genesis JSON to file
-        print(f"Saving genesis file to {genesis_file_path}...")
+        logger.info(f"Saving genesis file to {genesis_file_path}...")
         with open(genesis_file_path, 'w') as f:
             json.dump(genesis_json, f, indent=2)
 
@@ -76,7 +85,7 @@ def join_existing_chain(peer_endpoint):
         if not node_id:
             try:
                 status_url = f"{peer_endpoint}status?"
-                print(f"Node ID not found in genesis response. Trying {status_url}...")
+                logger.info(f"Node ID not found in genesis response. Trying {status_url}...")
                 status_response = requests.get(status_url, timeout=10)
                 status_response.raise_for_status()
                 status_data = status_response.json()
@@ -84,20 +93,20 @@ def join_existing_chain(peer_endpoint):
                 if 'result' in status_data and 'node_info' in status_data.get('result', {}):
                     node_id = status_data['result']['node_info'].get('id')
             except Exception as e:
-                print(f"Warning: Could not get node ID from status endpoint: {e}")
+                logger.warning(f"Could not get node ID from status endpoint: {e}")
                 # Continue with the process even if we can't get the node ID
 
         # If we still don't have a node ID, exit
         if not node_id:
-            print("Error: Could not determine node ID. Using placeholder.")
+            logger.error("Could not determine node ID. Using placeholder.")
             sys.exit(1)
 
         # Update the config.toml file
         if not os.path.exists(config_file_path):
-            print(f"Error: Config file not found at {config_file_path}")
+            logger.error(f"Config file not found at {config_file_path}")
             sys.exit(1)
 
-        print(f"Updating config file at {config_file_path}...")
+        logger.info(f"Updating config file at {config_file_path}...")
         # Create a backup of the original config file
         backup_file = f"{config_file_path}.bak"
         shutil.copy2(config_file_path, backup_file)
@@ -112,7 +121,7 @@ def join_existing_chain(peer_endpoint):
             if line.strip().startswith('persistent_peers ='):
                 updated_line = f'persistent_peers = "{node_id}@{peer_host}"\n'
                 updated_content.append(updated_line)
-                print(f"Updated persistent_peers to: {updated_line.strip()}")
+                logger.info(f"Updated persistent_peers to: {updated_line.strip()}")
             else:
                 updated_content.append(line)
 
@@ -120,19 +129,19 @@ def join_existing_chain(peer_endpoint):
         with open(config_file_path, 'w') as f:
             f.writelines(updated_content)
 
-        print("Successfully joined the existing blockchain.")
+        logger.info("Successfully joined the existing blockchain.")
 
     except requests.exceptions.RequestException as e:
-        print(f"Error: Failed to connect to peer: {e}")
+        logger.error(f"Failed to connect to peer: {e}")
         sys.exit(1)
     except json.JSONDecodeError:
-        print("Error: Failed to parse JSON response from peer.")
+        logger.error("Failed to parse JSON response from peer.")
         sys.exit(1)
     except IOError as e:
-        print(f"Error: File operation failed: {e}")
+        logger.error(f"File operation failed: {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"Error: An unexpected error occurred: {e}")
+        logger.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
 
 def launch_cometbft(abci_endpoint):
@@ -144,16 +153,16 @@ def launch_cometbft(abci_endpoint):
         abci_endpoint (str): The ABCI endpoint to connect to
     """
     try:
-        print(f"Launching CometBFT with ABCI endpoint: {abci_endpoint}")
+        logger.info(f"Launching CometBFT with ABCI endpoint: {abci_endpoint}")
         command = ["cometbft", "start", "--home", ".", "--abci", "grpc", "--proxy_app", abci_endpoint]
 
         # Run the command
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Error: Failed to launch CometBFT: {e}")
+        logger.error(f"Failed to launch CometBFT: {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"Error: An unexpected error occurred while launching CometBFT: {e}")
+        logger.error(f"An unexpected error occurred while launching CometBFT: {e}")
         sys.exit(1)
 
 def main():
@@ -165,39 +174,39 @@ def main():
 
     # Check if both old-style variables are defined
     if genesis_file_location and peer_endpoint:
-        print("Error: Both GENESIS_FILE_LOCATION and PEER_ENDPOINT are defined.")
-        print("Only one of these variables should be defined.")
+        logger.error("Both GENESIS_FILE_LOCATION and PEER_ENDPOINT are defined.")
+        logger.error("Only one of these variables should be defined.")
         sys.exit(1)
 
     # Check if NODE_MODE is undefined or defined with an invalid value
     if not node_mode:
-        print("No mode provided: switching to replication mode.")
+        logger.warning("No mode provided: switching to replication mode.")
         node_mode = 'replication'
     elif node_mode not in ['genesis', 'replication']:
-        print(f"Error: Invalid NODE_MODE value: {node_mode}")
-        print("NODE_MODE must be either 'genesis' or 'replication'.")
+        logger.error(f"Invalid NODE_MODE value: {node_mode}")
+        logger.error("NODE_MODE must be either 'genesis' or 'replication'.")
         sys.exit(1)
 
 
     # Check if ABCI_ENDPOINT is defined
     if not abci_endpoint:
-        print("Error: ABCI_ENDPOINT environment variable is not defined.")
-        print("Please set the ABCI_ENDPOINT environment variable to the ABCI endpoint.")
+        logger.error("ABCI_ENDPOINT environment variable is not defined.")
+        logger.error("Please set the ABCI_ENDPOINT environment variable to the ABCI endpoint.")
         sys.exit(1)
 
     # Call the appropriate function based on NODE_MODE or legacy variables
     if node_mode == 'genesis':
-        print("Creating a new blockchain...")
+        logger.info("Creating a new blockchain...")
         create_new_chain(genesis_file_location)
     elif node_mode == 'replication':
-        print("Joining an existing blockchain...")
+        logger.info("Joining an existing blockchain...")
         join_existing_chain(peer_endpoint)
     else:
-        print("Internal error: Invalid NODE_MODE value. Please contact support.")
+        logger.error("Internal error: Invalid NODE_MODE value. Please contact support.")
         sys.exit(1)
 
     # Launch CometBFT
-    print("Launching CometBFT...")
+    logger.info("Launching CometBFT...")
     launch_cometbft(abci_endpoint)
 
 if __name__ == "__main__":
