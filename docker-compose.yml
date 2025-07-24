@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  node-abci:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: abci
+    ports:
+      - "5000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ABCI=/data/abci
+    restart: unless-stopped
+
+  node-cometbft:
+    image: cometbft/cometbft

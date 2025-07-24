@@ -3,6 +3,8 @@
 /node_modules/*
 /build
 
+# runtime output
+.abci
 
 # Logs
 logs

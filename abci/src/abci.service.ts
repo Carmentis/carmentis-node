@@ -38,11 +38,20 @@ import {
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NodeCore } from './carmentis/nodeCore';
 import { CometNodeProvider } from './cometNodeProvider';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AbciService {
     private logger = new Logger('AbciService');
     private nodeCore: NodeCore;
+
+    constructor(private config: ConfigService) {
+        const abciStorage = config.getOrThrow('NODE_ABCI_STORAGE');
+        this.logger.debug(`Node storage (ABCI): ${abciStorage}`);
+        this.nodeCore = new NodeCore(this.logger, CometNodeProvider, {
+            dbPath: abciStorage,
+        });
+    }
 
     Echo(request: EchoRequest): Promise<EchoResponse> {
         return Promise.resolve({
@@ -61,11 +70,14 @@ export class AbciService {
     }
 
     async InitChain(request: InitChainRequest): Promise<InitChainResponse> {
+        /*
         if(!this.nodeCore) {
           this.nodeCore = new NodeCore(this.logger, CometNodeProvider, {
               dbPath: '../../.carmentis',
           });
         }
+
+         */
         return Promise.resolve(await this.nodeCore.initChain(request));
     }
 

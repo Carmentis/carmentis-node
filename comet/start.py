@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import json
+import requests
+import shutil
+import subprocess
+from urllib.parse import urlparse
+from pathlib import Path
+
+def create_new_chain(genesis_file_location):
+    """
+    Function to create a new blockchain.
+    This function is called when GENESIS_FILE_LOCATION is defined.
+    """
+    pass
+
+def join_existing_chain(peer_endpoint):
+    """
+    Function to join an existing blockchain.
+    This function is called when PEER_ENDPOINT is defined.
+
+    Args:
+        peer_endpoint (str): The endpoint of the peer to connect to
+
+    Steps:
+    1. Contact peer_endpoint/genesis? to get a JSON response
+    2. Extract the genesis JSON from result.genesis
+    3. Save it to /app/config/genesis.json
+    4. Update /app/config/config.toml by modifying the persistent_peers entry
+    """
+    genesis_file_path = "/app/config/genesis.json"
+    config_file_path = "/app/config/config.toml"
+
+    # Ensure the endpoint has a trailing slash if needed
+    if not peer_endpoint.endswith('/'):
+        peer_endpoint = peer_endpoint + '/'
+
+    genesis_url = f"{peer_endpoint}genesis?"
+
+    try:
+        print(f"Contacting peer at {genesis_url}...")
+        response = requests.get(genesis_url, timeout=10)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        # Parse the JSON response
+        data = response.json()
+
+        # Extract the genesis JSON
+        if 'result' not in data or 'genesis' not in data['result']:
+            print("Error: Invalid response format. 'result.genesis' not found in the response.")
+            sys.exit(1)
+
+        genesis_json = data['result']['genesis']
+
+        # Ensure the config directory exists
+        config_dir = os.path.dirname(genesis_file_path)
+        os.makedirs(config_dir, exist_ok=True)
+
+        # Save the genesis JSON to file
+        print(f"Saving genesis file to {genesis_file_path}...")
+        with open(genesis_file_path, 'w') as f:
+            json.dump(genesis_json, f, indent=2)
+
+        # Extract peer information for persistent_peers
+        parsed_url = urlparse(peer_endpoint)
+        peer_host = parsed_url.netloc
+
+        # Try to get node ID from the response
+        node_id = None
+        if 'result' in data and 'node_info' in data.get('result', {}):
+            node_id = data['result']['node_info'].get('id')
+
+        # If node_id is not available in the response, make another request to status endpoint
+        if not node_id:
+            try:
+                status_url = f"{peer_endpoint}status?"
+                print(f"Node ID not found in genesis response. Trying {status_url}...")
+                status_response = requests.get(status_url, timeout=10)
+                status_response.raise_for_status()
+                status_data = status_response.json()
+
+                if 'result' in status_data and 'node_info' in status_data.get('result', {}):
+                    node_id = status_data['result']['node_info'].get('id')
+            except Exception as e:
+                print(f"Warning: Could not get node ID from status endpoint: {e}")
+                # Continue with the process even if we can't get the node ID
+
+        # If we still don't have a node ID, exit
+        if not node_id:
+            print("Error: Could not determine node ID. Using placeholder.")
+            sys.exit(1)
+
+        # Update the config.toml file
+        if not os.path.exists(config_file_path):
+            print(f"Error: Config file not found at {config_file_path}")
+            sys.exit(1)
+
+        print(f"Updating config file at {config_file_path}...")
+        # Create a backup of the original config file
+        backup_file = f"{config_file_path}.bak"
+        shutil.copy2(config_file_path, backup_file)
+
+        # Read the config file
+        with open(config_file_path, 'r') as f:
+            config_content = f.readlines()
+
+        # Update the persistent_peers entry
+        updated_content = []
+        for line in config_content:
+            if line.strip().startswith('persistent_peers ='):
+                updated_line = f'persistent_peers = "{node_id}@{peer_host}"\n'
+                updated_content.append(updated_line)
+                print(f"Updated persistent_peers to: {updated_line.strip()}")
+            else:
+                updated_content.append(line)
+
+        # Write the updated content back to the config file
+        with open(config_file_path, 'w') as f:
+            f.writelines(updated_content)
+
+        print("Successfully joined the existing blockchain.")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error: Failed to connect to peer: {e}")
+        sys.exit(1)
+    except json.JSONDecodeError:
+        print("Error: Failed to parse JSON response from peer.")
+        sys.exit(1)
+    except IOError as e:
+        print(f"Error: File operation failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: An unexpected error occurred: {e}")
+        sys.exit(1)
+
+def launch_cometbft(abci_endpoint):
+    """
+    Function to launch CometBFT.
+    This function runs the command: cometbft start --home . --abci grpc --proxy_app abci_endpoint
+
+    Args:
+        abci_endpoint (str): The ABCI endpoint to connect to
+    """
+    try:
+        print(f"Launching CometBFT with ABCI endpoint: {abci_endpoint}")
+        command = ["cometbft", "start", "--home", ".", "--abci", "grpc", "--proxy_app", abci_endpoint]
+
+        # Run the command
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: Failed to launch CometBFT: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: An unexpected error occurred while launching CometBFT: {e}")
+        sys.exit(1)
+
+def main():
+    # Get environment variables
+    node_mode = os.environ.get('NODE_MODE')
+    genesis_file_location = os.environ.get('GENESIS_FILE_LOCATION')
+    peer_endpoint = os.environ.get('PEER_ENDPOINT')
+    abci_endpoint = os.environ.get('ABCI_ENDPOINT')
+
+    # Check if both old-style variables are defined
+    if genesis_file_location and peer_endpoint:
+        print("Error: Both GENESIS_FILE_LOCATION and PEER_ENDPOINT are defined.")
+        print("Only one of these variables should be defined.")
+        sys.exit(1)
+
+    # Check if NODE_MODE is undefined or defined with an invalid value
+    if not node_mode:
+        print("No mode provided: switching to replication mode.")
+        node_mode = 'replication'
+    elif node_mode not in ['genesis', 'replication']:
+        print(f"Error: Invalid NODE_MODE value: {node_mode}")
+        print("NODE_MODE must be either 'genesis' or 'replication'.")
+        sys.exit(1)
+
+
+    # Check if ABCI_ENDPOINT is defined
+    if not abci_endpoint:
+        print("Error: ABCI_ENDPOINT environment variable is not defined.")
+        print("Please set the ABCI_ENDPOINT environment variable to the ABCI endpoint.")
+        sys.exit(1)
+
+    # Call the appropriate function based on NODE_MODE or legacy variables
+    if node_mode == 'genesis':
+        print("Creating a new blockchain...")
+        create_new_chain(genesis_file_location)
+    elif node_mode == 'replication':
+        print("Joining an existing blockchain...")
+        join_existing_chain(peer_endpoint)
+    else:
+        print("Internal error: Invalid NODE_MODE value. Please contact support.")
+        sys.exit(1)
+
+    # Launch CometBFT
+    print("Launching CometBFT...")
+    launch_cometbft(abci_endpoint)
+
+if __name__ == "__main__":
+    main()

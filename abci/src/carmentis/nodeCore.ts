@@ -43,6 +43,9 @@ import {
     Provider,
     MessageSerializer,
     MessageUnserializer,
+    CryptoSchemeFactory,
+    CryptographicHash,
+    CMTSToken,
 } from '@cmts-dev/carmentis-sdk/server';
 
 interface Cache {
@@ -289,7 +292,8 @@ export class NodeCore {
     async verifyVoteExtension(request: VerifyVoteExtensionRequest) {}
 
     async finalizeBlock(request: FinalizeBlockRequest) {
-        this.logger.log(`finalizeBlock: ${request.txs.length} txs`);
+        const numberOfTransactionsInBlock = request.txs.length;
+        this.logger.log(`finalizeBlock: ${numberOfTransactionsInBlock} txs`);
 
         if (this.finalizedBlockCache !== null) {
             this.logger.warn(`finalizeBlock() called before the previous commit()`);
@@ -304,8 +308,8 @@ export class NodeCore {
         await this.payValidators(this.finalizedBlockCache, votes, blockHeight, blockTimestamp);
 
         const result = await this.processBlock(this.finalizedBlockCache, blockHeight, request.txs);
-
-        this.logger.log(`Total block fees: ${result.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
+        const fees = CMTSToken.createAtomic(result.totalFees);
+        this.logger.log(`Total block fees: ${fees.toString()}`);
 
         return FinalizeBlockResponse.create({
             tx_results: result.txResults,
@@ -353,14 +357,14 @@ export class NodeCore {
                     const validatorNode = await cache.blockchain.loadValidatorNode(
                         new Hash(validatorNodeHash),
                     );
-                    /*
-          TODO: debug in progress
+                    const validatorPublicKey = await validatorNode.getOrganizationPublicKey();
+                    const hash: CryptographicHash =
+                        CryptoSchemeFactory.createDefaultCryptographicHash();
+                    const account = await cache.accountManager.loadAccountByPublicKeyHash(
+                        hash.hash(validatorPublicKey),
+                    );
+                    validatorAccounts.push(account);
 
-          const validatorPublicKey = await validatorNode.getOrganizationPublicKey();
-          const account = await cache.accountManager.loadAccountByPublicKeyHash(Crypto.Hashes.sha256AsBinary(validatorPublicKey));
-
-          validatorAccounts.push(account);
-*/
                     validatorAccounts.push(null);
                 }
             }
@@ -649,11 +653,13 @@ export class NodeCore {
         const callback = this.queryCallbacks.get(type);
 
         if (!callback) {
-            throw `unsupported query type`;
+            throw new Error(`unsupported query type`);
         }
 
         try {
-            return await callback(object);
+            const response = await callback(object);
+            this.logger.log(`Response computed by the callback`);
+            return response;
         } catch (error) {
             let errorMsg = 'error';
 
@@ -686,7 +692,7 @@ export class NodeCore {
     }
 
     async getVirtualBlockchainUpdate(object: any) {
-        const stateData = await this.blockchain.provider.getVirtualBlockchainStateInternal(
+        let stateData = await this.blockchain.provider.getVirtualBlockchainStateInternal(
             object.virtualBlockchainId,
         );
         const exists = !!stateData;
@@ -698,7 +704,8 @@ export class NodeCore {
             : [];
         const changed = headers.length > 0;
 
-        //stateData = stateData || new Uint8Array();
+        // @ts-expect-error stateData is not typed correctly
+        stateData = stateData || new Uint8Array();
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_VIRTUAL_BLOCKCHAIN_UPDATE, {
             exists,
