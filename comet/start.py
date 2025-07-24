@@ -7,6 +7,7 @@ import requests
 import shutil
 import subprocess
 import logging
+import argparse
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -18,20 +19,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger('carmentis')
 
-def create_new_chain(genesis_file_location):
+def create_new_chain():
     """
     Function to create a new blockchain.
     This function is called when GENESIS_FILE_LOCATION is defined.
     """
     pass
 
-def join_existing_chain(peer_endpoint):
+def join_existing_chain(peer_endpoint, comet_home):
     """
     Function to join an existing blockchain.
     This function is called when PEER_ENDPOINT is defined.
 
     Args:
         peer_endpoint (str): The endpoint of the peer to connect to
+        comet_home (str): The home directory for CometBFT
 
     Steps:
     1. Contact peer_endpoint/genesis? to get a JSON response
@@ -39,8 +41,8 @@ def join_existing_chain(peer_endpoint):
     3. Save it to /app/config/genesis.json
     4. Update /app/config/config.toml by modifying the persistent_peers entry
     """
-    genesis_file_path = "/app/config/genesis.json"
-    config_file_path = "/app/config/config.toml"
+    genesis_file_path = f"{comet_home}/config/genesis.json"
+    config_file_path = f"{comet_home}/config/config.toml"
 
     # Ensure the endpoint has a trailing slash if needed
     if not peer_endpoint.endswith('/'):
@@ -144,17 +146,18 @@ def join_existing_chain(peer_endpoint):
         logger.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
 
-def launch_cometbft(abci_endpoint):
+def launch_cometbft(abci_endpoint, comet_home):
     """
     Function to launch CometBFT.
-    This function runs the command: cometbft start --home . --abci grpc --proxy_app abci_endpoint
+    This function runs the command: cometbft start --home <comet_home> --abci grpc --proxy_app abci_endpoint
 
     Args:
         abci_endpoint (str): The ABCI endpoint to connect to
+        comet_home (str): The home directory for CometBFT (default: ".")
     """
     try:
-        logger.info(f"Launching CometBFT with ABCI endpoint: {abci_endpoint}")
-        command = ["cometbft", "start", "--home", ".", "--abci", "grpc", "--proxy_app", abci_endpoint]
+        logger.info(f"Launching CometBFT with ABCI endpoint: {abci_endpoint} and home directory: {comet_home}")
+        command = ["cometbft", "start", "--home", comet_home, "--abci", "grpc", "--proxy_app", abci_endpoint]
 
         # Run the command
         subprocess.run(command, check=True)
@@ -166,17 +169,15 @@ def launch_cometbft(abci_endpoint):
         sys.exit(1)
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Carmentis Node Launcher')
+    parser.add_argument('--comet_home', type=str, help='Home directory for CometBFT', required=True)
+    args = parser.parse_args()
+
     # Get environment variables
     node_mode = os.environ.get('NODE_MODE')
-    genesis_file_location = os.environ.get('GENESIS_FILE_LOCATION')
     peer_endpoint = os.environ.get('PEER_ENDPOINT')
     abci_endpoint = os.environ.get('ABCI_ENDPOINT')
-
-    # Check if both old-style variables are defined
-    if genesis_file_location and peer_endpoint:
-        logger.error("Both GENESIS_FILE_LOCATION and PEER_ENDPOINT are defined.")
-        logger.error("Only one of these variables should be defined.")
-        sys.exit(1)
 
     # Check if NODE_MODE is undefined or defined with an invalid value
     if not node_mode:
@@ -197,17 +198,17 @@ def main():
     # Call the appropriate function based on NODE_MODE or legacy variables
     if node_mode == 'genesis':
         logger.info("Creating a new blockchain...")
-        create_new_chain(genesis_file_location)
+        create_new_chain()
     elif node_mode == 'replication':
         logger.info("Joining an existing blockchain...")
-        join_existing_chain(peer_endpoint)
+        join_existing_chain(peer_endpoint, args.comet_home)
     else:
         logger.error("Internal error: Invalid NODE_MODE value. Please contact support.")
         sys.exit(1)
 
-    # Launch CometBFT
+    # Launch CometBFT with the specified home directory
     logger.info("Launching CometBFT...")
-    launch_cometbft(abci_endpoint)
+    launch_cometbft(abci_endpoint, args.comet_home)
 
 if __name__ == "__main__":
     main()
