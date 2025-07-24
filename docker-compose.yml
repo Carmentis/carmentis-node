@@ -1,17 +1,29 @@
-version: '3.8'
-
 services:
-  node-abci:
+  alpha-node-abci:
     build:
-      context: .
+      context: abci
       dockerfile: Dockerfile
-    container_name: abci
+    container_name: alpha-node-abci
     ports:
-      - "5000:3000"
+      - "26658"
+    volumes:
+      - ./out/alpha/abci:/app/data
     environment:
-      - PORT=3000
-      - NODE_ABCI=/data/abci
-    restart: unless-stopped
+      - PORT=26658
+      - NODE_ABCI_STORAGE=/app/data
 
-  node-cometbft:
-    image: cometbft/cometbft
+  alpha-node-cometbft:
+    depends_on:
+      - alpha-node-abci
+    build:
+      context: comet
+      dockerfile: Dockerfile
+    container_name: alpha-node-cometbft
+    volumes:
+      - ./out/alpha/cometbft:/app/data
+    environment:
+      - NODE_MODE=genesis
+      - ABCI_ENDPOINT=alpha-node-abci:26658
+    ports:
+      - "26657:26657"
+

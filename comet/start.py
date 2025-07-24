@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import logging
 import argparse
+import re
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -146,6 +147,52 @@ def join_existing_chain(peer_endpoint, comet_home):
         logger.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
 
+def update_laddr_in_config(comet_home):
+    """
+    Function to update laddr entries in config.toml.
+    This function replaces 'tcp://127.0.0.1:xxxx' with 'tcp://0.0.0.0:xxxx' in the config file.
+
+    Args:
+        comet_home (str): The home directory for CometBFT
+    """
+    config_file_path = f"{comet_home}/config/config.toml"
+
+    try:
+        logger.info(f"Updating laddr entries in {config_file_path}...")
+
+        # Check if the config file exists
+        if not os.path.exists(config_file_path):
+            logger.error(f"Config file not found at {config_file_path}")
+            sys.exit(1)
+
+        # Create a backup of the original config file
+        backup_file = f"{config_file_path}.bak"
+        shutil.copy2(config_file_path, backup_file)
+
+        # Read the config file
+        with open(config_file_path, 'r') as f:
+            content = f.read()
+
+        # Replace all laddr entries with 127.0.0.1 to 0.0.0.0
+        # Use regex to find laddr entries with 127.0.0.1 and keep the port number
+        modified_content = re.sub(r'(laddr\s*=\s*"tcp://)127\.0\.0\.1(:\d+)"', r'\10.0.0.0\2"', content)
+
+        # Also replace proxy_app if it has 127.0.0.1
+        modified_content = re.sub(r'(proxy_app\s*=\s*"tcp://)127\.0\.0\.1(:\d+)"', r'\10.0.0.0\2"', modified_content)
+
+        # Write the modified content back to the config file
+        with open(config_file_path, 'w') as f:
+            f.write(modified_content)
+
+        logger.info("Successfully updated laddr entries in config.toml")
+
+    except IOError as e:
+        logger.error(f"File operation failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"An unexpected error occurred while updating config: {e}")
+        sys.exit(1)
+
 def launch_cometbft(abci_endpoint, comet_home):
     """
     Function to launch CometBFT.
@@ -205,6 +252,10 @@ def main():
     else:
         logger.error("Internal error: Invalid NODE_MODE value. Please contact support.")
         sys.exit(1)
+
+    # Update laddr entries in config.toml
+    logger.info("Updating laddr entries in config.toml...")
+    update_laddr_in_config(args.comet_home)
 
     # Launch CometBFT with the specified home directory
     logger.info("Launching CometBFT...")
