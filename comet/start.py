@@ -170,19 +170,23 @@ def update_laddr_in_config(comet_home):
         shutil.copy2(config_file_path, backup_file)
 
         # Read the config file
+        updated_lines = []
         with open(config_file_path, 'r') as f:
-            content = f.read()
+            lines = f.readlines()
+            for line in lines:
+                if 'laddr' in line and '127.0.0.1' in line:
+                    updated_line = line.replace('127.0.0.1', '0.0.0.0')
+                    updated_lines.append(updated_line)
+                    logger.info(f"Updated laddr entry: {updated_line.strip()}")
+                else:
+                    updated_lines.append(line)
 
-        # Replace all laddr entries with 127.0.0.1 to 0.0.0.0
-        # Use regex to find laddr entries with 127.0.0.1 and keep the port number
-        modified_content = re.sub(r'(laddr\s*=\s*"tcp://)127\.0\.0\.1(:\d+)"', r'\10.0.0.0\2"', content)
 
-        # Also replace proxy_app if it has 127.0.0.1
-        modified_content = re.sub(r'(proxy_app\s*=\s*"tcp://)127\.0\.0\.1(:\d+)"', r'\10.0.0.0\2"', modified_content)
 
         # Write the modified content back to the config file
         with open(config_file_path, 'w') as f:
-            f.write(modified_content)
+            updated_content = ''.join(updated_lines)
+            f.write(updated_content)
 
         logger.info("Successfully updated laddr entries in config.toml")
 

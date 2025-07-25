@@ -6,8 +6,10 @@ services:
     container_name: alpha-node-abci
     ports:
       - "26658"
-    volumes:
-      - ./out/alpha/abci:/app/data
+    networks:
+      - carmentis-nodes
+    #volumes:
+    #  - ./out/alpha/abci:/app/data
     environment:
       - PORT=26658
       - NODE_ABCI_STORAGE=/app/data
@@ -19,11 +21,18 @@ services:
       context: comet
       dockerfile: Dockerfile
     container_name: alpha-node-cometbft
-    volumes:
-      - ./out/alpha/cometbft:/app/data
+    networks:
+      - carmentis-nodes
+    #volumes:
+    #  - ./out/alpha/cometbft:/app/data
     environment:
       - NODE_MODE=genesis
       - ABCI_ENDPOINT=alpha-node-abci:26658
     ports:
+      - "26656"
       - "26657:26657"
 
+networks:
+  carmentis-nodes:
+    external: true
+    name: carmentis-nodes

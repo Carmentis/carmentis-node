@@ -1,0 +1,38 @@
+services:
+  beta-node-abci:
+    build:
+      context: abci
+      dockerfile: Dockerfile
+    container_name: beta-node-abci
+    ports:
+      - "26658"
+    networks:
+      - carmentis-nodes
+    #volumes:
+    #  - ./out/alpha/abci:/app/data
+    environment:
+      - PORT=26658
+      - NODE_ABCI_STORAGE=/app/data
+
+  beta-node-cometbft:
+    depends_on:
+      - beta-node-abci
+    build:
+      context: comet
+      dockerfile: Dockerfile
+    container_name: beta-node-cometbft
+    networks:
+      - carmentis-nodes
+    #volumes:
+    #  - ./out/alpha/cometbft:/app/data
+    environment:
+      - NODE_MODE=replication
+      - PEER_ENDPOINT=http://alpha-node-cometbft:26657
+      - ABCI_ENDPOINT=beta-node-abci:26658
+    ports:
+      - "26658:26657"
+
+networks:
+  carmentis-nodes:
+    external: true
+    name: carmentis-nodes
