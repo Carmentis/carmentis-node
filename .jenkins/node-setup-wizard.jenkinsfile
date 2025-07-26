@@ -1,0 +1,8 @@
+@Library('helper-building-scripts')_
+
+buildAndPushDockerImage(
+    GIT_REPO_URL: 'https://github.com/carmentis/carmentis-node.git',
+    PROJECT_DIR: './setup-wizard',
+    DOCKER_IMAGE_NAME: 'node/setup-wizard',
+    GIT_REPO_BRANCH: 'main'
+)

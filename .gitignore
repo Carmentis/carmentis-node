@@ -6,3 +6,4 @@ abci/package-lock.json
 *.bat
 log.txt
 out
+docker-compose.*.yml

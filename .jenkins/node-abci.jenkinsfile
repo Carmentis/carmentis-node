@@ -1,0 +1,9 @@
+@Library('helper-building-scripts')_
+
+buildAndPushDockerImage(
+    GIT_REPO_URL: 'https://github.com/carmentis/carmentis-node.git',
+    PROJECT_DIR: './abci',
+    DOCKER_IMAGE_NAME: 'node/abci',
+    GIT_REPO_BRANCH: 'main'
+)
+
