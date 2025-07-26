@@ -1,8 +1,62 @@
-@Library('helper-building-scripts')_
+pipeline {
+        agent {
+            docker {
+                image 'node:24.3.0-bullseye-slim'
+                args '-v /var/run/docker.sock:/var/run/docker.sock'  // Monter le socket Docker
+            }
+        }
 
-buildAndPushDockerImage(
-    GIT_REPO_URL: 'https://github.com/carmentis/carmentis-node.git',
-    PROJECT_DIR: './setup-wizard',
-    DOCKER_IMAGE_NAME: 'node/setup-wizard',
-    GIT_REPO_BRANCH: 'main'
-)
+        stages {
+
+            stage('Install Docker and JQ') {
+                steps {
+                    script {
+                        // Installation de Docker et JQ
+                        sh 'apt-get update && apt-get install -y docker.io jq'
+                    }
+                }
+            }
+
+
+            stage('Authentification GHCR') {
+                steps {
+                    withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'GHCR_PAT')]) {
+                        // Connexion à GitHub Container Registry
+                        sh 'echo $GHCR_PAT | docker login ghcr.io/carmentis -u USERNAME --password-stdin'
+                    }
+                }
+            }
+
+            stage('Build Docker Image') {
+                steps {
+                    script {
+                        dir("setup-wizard") {
+                            sh 'docker build -t ghcr.io/carmentis/node/setup-wizard .'
+                        }
+                    }
+                }
+            }
+
+            stage('Publish Docker Image') {
+                steps {
+                    script {
+                        sh 'docker push ghcr.io/carmentis/node/setup-wizard'
+                    }
+                }
+            }
+            stage('Cleaning repository') {
+                steps {
+                    deleteDir()
+                }
+            }
+        }
+
+        post {
+            success {
+                echo "Build and publish successful."
+            }
+            failure {
+                echo "Build or publish failed."
+            }
+        }
+}
