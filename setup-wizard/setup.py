@@ -4,12 +4,13 @@
 import os
 import sys
 import json
-import requests
 import shutil
 import subprocess
 import logging
 import argparse
 import re
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse
 
 # Configure logging
@@ -85,11 +86,15 @@ def create_new_configuration_from_peer(peer_endpoint, home_dir):
 
     try:
         logger.info(f"Contacting peer at {genesis_url}...")
-        response = requests.get(genesis_url, timeout=10)
-        response.raise_for_status()  # Raise an exception for HTTP errors
+        # Using urllib.request instead of requests
+        request = urllib.request.Request(genesis_url)
+        response = urllib.request.urlopen(request, timeout=10)
+
+        # Read and decode the response
+        response_data = response.read().decode('utf-8')
 
         # Parse the JSON response
-        data = response.json()
+        data = json.loads(response_data)
 
         # Extract the genesis JSON
         if 'result' not in data or 'genesis' not in data['result']:
@@ -122,9 +127,15 @@ def create_new_configuration_from_peer(peer_endpoint, home_dir):
         try:
             status_url = f"{peer_endpoint}status?"
             logger.info(f"Getting node status from {status_url}...")
-            status_response = requests.get(status_url, timeout=10)
-            status_response.raise_for_status()
-            status_data = status_response.json()
+            # Using urllib.request instead of requests
+            status_request = urllib.request.Request(status_url)
+            status_response = urllib.request.urlopen(status_request, timeout=10)
+
+            # Read and decode the response
+            status_response_data = status_response.read().decode('utf-8')
+
+            # Parse the JSON response
+            status_data = json.loads(status_response_data)
 
             if 'result' in status_data and 'node_info' in status_data.get('result', {}):
                 if not node_id:
@@ -194,7 +205,7 @@ def create_new_configuration_from_peer(peer_endpoint, home_dir):
 
         logger.info("Successfully joined the existing blockchain.")
 
-    except requests.exceptions.RequestException as e:
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
         logger.error(f"Failed to connect to peer: {e}")
         sys.exit(1)
     except json.JSONDecodeError:
