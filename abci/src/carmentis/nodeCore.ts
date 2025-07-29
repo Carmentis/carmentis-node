@@ -158,6 +158,8 @@ export class NodeCore {
     }
 
     async initChain(request: InitChainRequest) {
+        await this.db.clear();
+
         for (const validator of request.validators) {
             const address = this.cometPublicKeyToAddress(
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
@@ -219,8 +221,8 @@ export class NodeCore {
     }
 
     /**
-    Incoming transaction
-  */
+        Incoming transaction
+    */
     async checkTx(request: CheckTxRequest) {
         this.logger.log(`checkTx`);
 
@@ -250,9 +252,8 @@ export class NodeCore {
     }
 
     /**
-    Executed by the proposer
-    request.txs
-  */
+        Executed by the proposer
+    */
     async prepareProposal(request: PrepareProposalRequest) {
         this.logger.log(`prepareProposal: ${request.txs.length} txs`);
         const proposedTxs = [];
@@ -265,20 +266,19 @@ export class NodeCore {
     }
 
     /**
-    Executed by all validators
-    request.txs
-    request.proposed_last_commit
-    answer:
-      PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
-      PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
-      PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
-  */
+        Executed by all validators
+        answer:
+          PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
+          PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
+          PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
+    */
     async processProposal(request: ProcessProposalRequest) {
         this.logger.log(`processProposal: ${request.txs.length} txs`);
 
         const cache = this.getCacheInstance();
         const blockHeight = +request.height;
-        const result = await this.processBlock(cache, blockHeight, request.txs);
+        const blockTimestamp = +(request.time?.seconds ?? 0);
+        const result = await this.processBlock(cache, blockHeight, blockTimestamp, request.txs);
 
         this.logger.log(
             `processProposal / total block fees: ${result.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`,
@@ -307,7 +307,7 @@ export class NodeCore {
 
         await this.payValidators(this.finalizedBlockCache, votes, blockHeight, blockTimestamp);
 
-        const result = await this.processBlock(this.finalizedBlockCache, blockHeight, request.txs);
+        const result = await this.processBlock(this.finalizedBlockCache, blockHeight, blockTimestamp, request.txs);
         const fees = CMTSToken.createAtomic(result.totalFees);
         this.logger.log(`Total block fees: ${fees.toString()}`);
 
@@ -322,8 +322,8 @@ export class NodeCore {
 
     async payValidators(cache: any, votes: any, blockHeight: number, blockTimestamp: number) {
         /**
-      get the pending fees from the fees account
-    */
+            get the pending fees from the fees account
+        */
         const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
             ECO.ACCOUNT_BLOCK_FEES,
         );
@@ -335,8 +335,8 @@ export class NodeCore {
         }
 
         /**
-      get the validator accounts from decided_last_commit.votes sent by Comet
-    */
+            get the validator accounts from decided_last_commit.votes sent by Comet
+        */
         const validatorAccounts = [];
 
         for (const vote of votes) {
@@ -378,8 +378,8 @@ export class NodeCore {
         }
 
         /**
-      split the fees among the validators
-    */
+            split the fees among the validators
+        */
         const feesQuotient = Math.floor(pendingFees / nValidators);
         const feesRest = pendingFees % nValidators;
 
@@ -403,17 +403,17 @@ export class NodeCore {
         }
     }
 
-    async processBlock(cache: any, blockHeight: number, txs: any) {
+    async processBlock(cache: any, blockHeight: number, timestamp: number, txs: any) {
         const txResults = [];
         let totalFees = 0;
 
         for (const tx of txs) {
             const importer = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(tx));
-            const success = await this.checkMicroblock(cache, importer);
+            const success = await this.checkMicroblock(cache, importer, timestamp);
             const vb: any = await importer.getVirtualBlockchain();
             const fees = Math.floor(
                 (vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice) /
-                    ECO.GAS_UNIT,
+                ECO.GAS_UNIT,
             );
             const feesPayerAccount = vb.currentMicroblock.getFeesPayerAccount();
 
@@ -496,12 +496,12 @@ export class NodeCore {
     }
 
     /**
-    Checks a microblock and invokes the section callbacks of the node.
-  */
-    async checkMicroblock(cache: Cache, importer: any) {
+        Checks a microblock and invokes the section callbacks of the node.
+    */
+    async checkMicroblock(cache: Cache, importer: any, timestamp?: number) {
         this.logger.log(`Checking microblock ${Utils.binaryToHexa(importer.hash)}`);
 
-        const status = await importer.check();
+        const status = await importer.check(timestamp);
 
         if (status) {
             this.logger.error(`Rejected with status ${status}: ${importer.error}`);
@@ -547,8 +547,8 @@ export class NodeCore {
     }
 
     /**
-    Account callbacks
-  */
+        Account callbacks
+    */
     async accountTokenIssuanceCallback(context: any) {
         const rawPublicKey = await context.vb.getPublicKey();
         await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
@@ -643,8 +643,8 @@ export class NodeCore {
     }
 
     /**
-    Custom Carmentis query via abci_query
-  */
+        Custom Carmentis query via abci_query
+    */
     async query(data: any) {
         const { type, object } = this.messageUnserializer.unserialize(data);
 
