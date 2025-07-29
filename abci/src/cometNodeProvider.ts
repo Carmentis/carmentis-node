@@ -3,13 +3,18 @@ import { NodeProvider } from './carmentis/nodeProvider';
 import { Crypto, Utils, Base64 } from '@cmts-dev/carmentis-sdk/server';
 
 export class CometNodeProvider extends NodeProvider {
+    private host: string;
     constructor(db: any) {
         super(db);
+        this.host = process.env.COMET_NODE_HOST;
+        if (this.host === undefined) { // TODO, use configService
+            throw new Error("Missing COMET_NODE_HOST environment variable.")
+        }
     }
 
     async getMicroblock(identifier: Uint8Array) {
         const txHash = await this.getMicroblockTxHash(identifier);
-        const url = `http://localhost:26657/tx?hash=0x${Utils.binaryToHexa(txHash)}`;
+        const url = `${this.host}/tx?hash=0x${Utils.binaryToHexa(txHash)}`; // TODO: http://localhost:26657
         let data = new Uint8Array();
 
         try {
