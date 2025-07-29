@@ -45,6 +45,7 @@ import {
     MessageUnserializer,
     CryptoSchemeFactory,
     CryptographicHash,
+    PublicSignatureKey,
     CMTSToken,
 } from '@cmts-dev/carmentis-sdk/server';
 
@@ -357,15 +358,13 @@ export class NodeCore {
                     const validatorNode = await cache.blockchain.loadValidatorNode(
                         new Hash(validatorNodeHash),
                     );
-                    const validatorPublicKey = await validatorNode.getOrganizationPublicKey();
+                    const validatorPublicKey: PublicSignatureKey = await validatorNode.getOrganizationPublicKey();
                     const hash: CryptographicHash =
                         CryptoSchemeFactory.createDefaultCryptographicHash();
                     const account = await cache.accountManager.loadAccountByPublicKeyHash(
-                        hash.hash(validatorPublicKey),
+                        hash.hash(validatorPublicKey.getPublicKeyAsBytes()),
                     );
                     validatorAccounts.push(account);
-
-                    validatorAccounts.push(null);
                 }
             }
         }
@@ -616,6 +615,9 @@ export class NodeCore {
         );
     }
 
+    /**
+     Validator node callbacks
+     */
     async validatorNodeDescriptionCallback(context: any) {
         const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
         const cometAddress = this.cometPublicKeyToAddress(cometPublicKeyBytes);
@@ -628,6 +630,8 @@ export class NodeCore {
                 await context.cache.db.del(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, key);
             }
         }
+
+        this.logger.log(`linking Comet address ${Utils.binaryToHexa(cometAddress)} to VB ${Utils.binaryToHexa(context.vb.identifier)}`);
 
         await context.cache.db.putRaw(
             NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
