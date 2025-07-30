@@ -11,6 +11,9 @@ import logging
 import argparse
 import re
 from urllib.parse import urlparse
+import tomllib
+
+from ansible_collections.community.network.plugins.modules.cv_server_provision import updated_configlet_content
 
 # Configure logging
 logging.basicConfig(
@@ -68,12 +71,66 @@ class CometBFTRunner:
     def run_init(self):
         self.run_command(f'init --home {self.config_home}')
 
-def create_new_configuration_from_peer(peer_endpoint, home_dir):
+class CometBFTConfigEditor:
+    def __init__(self, config_home):
+        self.genesis_file_path = os.path.join(config_home, "config", "genesis.json")
+        self.config_file_path = os.path.join(config_home, "config", "config.toml")
 
-    logger.info("Generate a new configuration")
-    runner = CometBFTRunner(config_home=home_dir)
-    runner.run_init()
+        logger.info(f"Creating backup file for {self.config_file_path}...")
+        # Create a backup of the original config file
+        backup_file = f"{self.config_file_path}.bak"
+        shutil.copy2(self.config_file_path, backup_file)
 
+
+        with open(self.config_file_path, "r") as f:
+            self.config_content = f.readlines()
+
+    def set_moniker_name(self, moniker_name):
+        self.edit_config('moniker', moniker_name)
+
+    def set_cors_allowed_origin(self, cors_origins):
+        self.edit_config('cors_allowed_origins', cors_origins)
+
+    def set_persisten_peers(self, persistent_peers):
+        self.edit_config('persistent_peers', persistent_peers)
+
+    def set_rpc_laddr(self, laddr):
+        self.edit_config('laddr', laddr, section='rpc')
+
+    def set_p2p_laddr(self, laddr):
+        self.edit_config('laddr', laddr, section='p2p')
+
+    def edit_config(self, entry, value, section=None):
+        current_section=None
+        updated_content = []
+        for line in self.config_content:
+            if line.startswith('['):
+                current_section = line.strip().replace('[', '').replace(']', '')
+
+
+            if line.strip().startswith(entry + ' =') and (section is None or current_section == section):
+                if isinstance(value, list):
+                    updated_line = f'{entry} = {value}\n'
+                elif isinstance(value, str):
+                    updated_line = f'{entry} = "{value}"\n'
+                else:
+                    raise Exception("Unsupported value type for config entry")
+
+                updated_content.append(updated_line)
+                logger.info(f"Updated {entry} to: {updated_line.strip()} " + (f"[{section}]" if section else "" ))
+            else:
+                updated_content.append(line)
+        self.config_content = updated_content
+
+    def persist_config(self):
+        # Write the updated content back to the config file
+        with open(self.config_file_path, "w") as f:
+            logger.info(f"Writing updated config file at {self.config_file_path}...")
+            for line in self.config_content:
+                f.write(line)
+
+
+def update_configuration_from_peer(config_editor, peer_endpoint, home_dir):
     genesis_file_path = os.path.join(home_dir, "config", "genesis.json")
     config_file_path = os.path.join(home_dir, "config", "config.toml")
 
@@ -155,42 +212,25 @@ def create_new_configuration_from_peer(peer_endpoint, home_dir):
             logger.error(f"Config file not found at {config_file_path}")
             sys.exit(1)
 
-        logger.info(f"Updating config file at {config_file_path}...")
-        # Create a backup of the original config file
-        backup_file = f"{config_file_path}.bak"
-        shutil.copy2(config_file_path, backup_file)
-
-        # Read the config file
-        with open(config_file_path, 'r') as f:
-            config_content = f.readlines()
 
         # Update the persistent_peers entry
-        updated_content = []
-        for line in config_content:
-            if line.strip().startswith('persistent_peers ='):
-                # If sync_port is available, use it instead of the original port
-                if sync_port:
-                    # Extract host without port
-                    host_parts = peer_host.split(':')
-                    if len(host_parts) > 1:
-                        # Replace the port in peer_host with sync_port
-                        peer_host_with_sync_port = f"{host_parts[0]}:{sync_port}"
-                    else:
-                        # If there's no port in the original peer_host, just append the sync_port
-                        peer_host_with_sync_port = f"{peer_host}:{sync_port}"
-
-                    updated_line = f'persistent_peers = "{node_id}@{peer_host_with_sync_port}"\n'
-                else:
-                    updated_line = f'persistent_peers = "{node_id}@{peer_host}"\n'
-
-                updated_content.append(updated_line)
-                logger.info(f"Updated persistent_peers to: {updated_line.strip()}")
+        if sync_port:
+            # Extract host without port
+            host_parts = peer_host.split(':')
+            if len(host_parts) > 1:
+                # Replace the port in peer_host with sync_port
+                peer_host_with_sync_port = f"{host_parts[0]}:{sync_port}"
             else:
-                updated_content.append(line)
+                # If there's no port in the original peer_host, just append the sync_port
+                peer_host_with_sync_port = f"{peer_host}:{sync_port}"
 
-        # Write the updated content back to the config file
-        with open(config_file_path, 'w') as f:
-            f.writelines(updated_content)
+            updated_persistent_peer = f'{node_id}@{peer_host_with_sync_port}'
+            config_editor.edit_config('persistent_peers', updated_persistent_peer)
+        else:
+            updated_persistent_peer = f'{node_id}@{peer_host}'
+            config_editor.edit_config('persistent_peers', updated_persistent_peer)
+
+
 
         logger.info("Successfully joined the existing blockchain.")
 
@@ -216,6 +256,10 @@ def main():
 
     # Add required home directory argument
     parser.add_argument('--home', type=str, required=True, help='Home directory for CometBFT configuration')
+    parser.add_argument('--node-name', type=str, help='Name of the node')
+    parser.add_argument('--cors-allowed-origins', type=str, help='Comma-separated list of CORS allowed origins', default='*')
+    parser.add_argument('--rpc-laddr', type=str, help='Address where CometBFT is exposing RPC', default='tcp://0.0.0.0:26657')
+    parser.add_argument('--p2p-laddr', type=str, help='Address where CometBFT is exposing RPC', default='tcp://0.0.0.0:26656')
 
     # Add mutually exclusive group for --new and --from-peer options
     group = parser.add_mutually_exclusive_group(required=True)
@@ -227,17 +271,30 @@ def main():
     args = parser.parse_args()
 
     # Get home directory
-    home_dir = args.home
-    logger.info(f"Using home directory: '{home_dir}'")
+    if args.new or args.from_peer:
+        home_dir = args.home
+        logger.info(f"Using home directory: '{home_dir}'")
 
-    # Handle options
-    if args.new:
+
         logger.info("Initializing CometBFT configuration...")
         runner = CometBFTRunner(config_home=home_dir)
         runner.run_init()
-    elif args.from_peer:
-        logger.info(f"Creating configuration from peer: {args.from_peer}")
-        create_new_configuration_from_peer(args.from_peer, home_dir)
+
+        # apply common updates in the config
+        config_editor = CometBFTConfigEditor(config_home=home_dir)
+        config_editor.set_cors_allowed_origin(args.cors_allowed_origins.split(','))
+        config_editor.set_rpc_laddr(args.rpc_laddr)
+        config_editor.set_p2p_laddr(args.p2p_laddr)
+        if args.node_name:
+            config_editor.set_moniker_name(args.node_name)
+
+        # Handle options
+        if args.from_peer:
+            logger.info(f"Updating configuration from remote peer: {args.from_peer}")
+            update_configuration_from_peer(config_editor, args.from_peer, home_dir)
+
+        # persist the configuration
+        config_editor.persist_config()
     else:
         # This should not happen due to required=True in the mutually exclusive group
         parser.print_help()
