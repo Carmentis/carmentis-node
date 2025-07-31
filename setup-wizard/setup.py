@@ -180,6 +180,18 @@ class HttpNodeStatus:
         else:
             raise Exception('No port found in listen_addr')
 
+    def get_rpc_port(self):
+        listen_addr = self.status['result']['node_info']['other']['rpc_address']
+        logger.info(f"Found listen_addr: {listen_addr}")
+        # Extract port from format like "tcp://0.0.0.0:26656"
+        match = re.search(r':(\d+)$', listen_addr)
+        if match:
+            rpc_port = match.group(1)
+            logger.info(f"Extracted rpc port: {rpc_port}")
+            return rpc_port
+        else:
+            raise Exception('No port found for rpc')
+
     def get_latest_block_hash(self):
         return self.status['result']['sync_info']['latest_block_hash']
 
@@ -193,10 +205,10 @@ class HttpNodeStatus:
         return f"{node_id}@{peer_host}:{sync_port}"
 
     def get_node_rpc_address_in_cometbft_format(self):
-        sync_port = self.get_sync_port()
+        rpc_port = self.get_rpc_port()
         node_id = self.get_node_id()
         peer_host = self.peer_host
-        return f"{node_id}@{peer_host}:26657"# TODO fetch rpc address
+        return f"{node_id}@{peer_host}:{rpc_port}"
 
 
 def update_configuration_from_peer(config_editor: CometBFTConfigEditor, peer_endpoint, sync_endpoints, home_dir):
