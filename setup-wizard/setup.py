@@ -91,7 +91,8 @@ class CometBFTConfigEditor:
     def set_cors_allowed_origin(self, cors_origins):
         self.edit_config('cors_allowed_origins', cors_origins)
 
-    def set_persisten_peers(self, persistent_peers):
+    def set_persistent_peers(self, persistent_peers):
+        #self.edit_config('seeds', persistent_peers, section='p2p')
         self.edit_config('persistent_peers', persistent_peers)
 
     def set_rpc_laddr(self, laddr):
@@ -113,12 +114,14 @@ class CometBFTConfigEditor:
     def edit_config(self, entry, value, section=None):
         current_section=None
         updated_content = []
+        has_updated = False
         for line in self.config_content:
             if line.startswith('['):
                 current_section = line.strip().replace('[', '').replace(']', '')
 
 
             if line.strip().startswith(entry + ' =') and (section is None or current_section == section):
+                has_updated = True
                 if isinstance(value, list):
                     updated_line = f'{entry} = {value}\n'
                 elif isinstance(value, str):
@@ -133,6 +136,9 @@ class CometBFTConfigEditor:
             else:
                 updated_content.append(line)
         self.config_content = updated_content
+
+        if not has_updated:
+            logger.warning(f"Entry {entry} not updated: not found")
 
     def persist_config(self):
         # Write the updated content back to the config file
@@ -246,7 +252,7 @@ def update_configuration_from_peer(config_editor: CometBFTConfigEditor, peer_end
 
         # we put the provided peer endpoint as a persistent peer
         updated_persistent_peer = peer_status.get_node_p2p_address_in_cometbft_format()
-        config_editor.edit_config('persistent_peers', updated_persistent_peer)
+        config_editor.set_persistent_peers(updated_persistent_peer)
 
 
         # handle synchronization when at least two peers are provided
@@ -316,11 +322,9 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
 
     group.add_argument('--new', action='store_true', help='Initialize a new CometBFT configuration')
-
-    sub_group = group.add_argument_group()
     group.add_argument('--from-peer', type=str, metavar='PEER_ENDPOINT',
                       help='Create configuration from peer (format: http(s)://host:ip)')
-    sub_group.add_argument('--sync-peers', type=str,  help="""
+    parser.add_argument('--sync-peers', type=str,  help="""
     Should be used only in combination with --from-peer, otherwise not effective. 
     Uses two servers to sync the blockchain.
     Example: --sync-servers=http://192.168.1.1:26657,http://192.168.1.2:26657

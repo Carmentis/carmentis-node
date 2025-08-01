@@ -22,7 +22,9 @@ interface Rpc {
     request(service: string, method: string, data: Uint8Array): Promise<Uint8Array>;
 }
 
-@WebSocketGateway(26659)
+const port = parseInt(process.env.NODE_ABCI_WS_PORT ?? '26659', 10);
+
+@WebSocketGateway(port)
 export class AbciGateway implements OnGatewayInit, OnGatewayConnection {
     private readonly logger: Logger = new Logger('AbciGateway');
 
@@ -32,7 +34,7 @@ export class AbciGateway implements OnGatewayInit, OnGatewayConnection {
     constructor(private abciService: AbciService) {}
 
     afterInit(server: any): any {
-        this.logger.debug('AbciGateway initialized');
+        this.logger.debug('AbciGateway initialized, listening on port ' + port);
     }
 
     handleConnection(client: Socket): any {
