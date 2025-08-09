@@ -1,5 +1,7 @@
+import path from 'node:path';
 import { NODE_SCHEMAS } from './constants/constants';
 import { NodeProvider } from './nodeProvider';
+import { Storage } from './storage';
 import { AccountManager } from './accountManager';
 import { LevelDb } from './levelDb';
 import { RadixTree } from './radixTree';
@@ -38,6 +40,7 @@ import {
     Utils,
     Base64,
     Blockchain,
+    MicroblockImporter,
     Economics,
     NullNetworkProvider,
     Provider,
@@ -50,6 +53,7 @@ import {
 
 interface Cache {
     db: CachedLevelDb;
+    storage: Storage,
     blockchain: Blockchain;
     accountManager: AccountManager;
     vbRadix: RadixTree;
@@ -62,10 +66,12 @@ type QueryCallback = (arg: any) => Promise<Uint8Array>;
 
 export class NodeCore {
     logger: any;
+    dbPath: string;
+    storagePath: string;
     accountManager: AccountManager;
     blockchain: Blockchain;
     db: LevelDb;
-    internalProviderClass: typeof NodeProvider;
+    storage: Storage;
     messageSerializer: MessageSerializer;
     messageUnserializer: MessageUnserializer;
     vbRadix: RadixTree;
@@ -74,14 +80,17 @@ export class NodeCore {
     queryCallbacks: Map<number, QueryCallback>;
     finalizedBlockCache: Cache | null;
 
-    constructor(logger: any, internalProviderClass: typeof NodeProvider, options: any) {
+    constructor(logger: any, options: any) {
         this.logger = logger;
-        this.internalProviderClass = internalProviderClass;
+        this.dbPath = path.join(options.abciStoragePath, "db");
+        this.storagePath = path.join(options.abciStoragePath, "microblocks");
 
-        this.db = new LevelDb(options.dbPath, NODE_SCHEMAS.DB);
+        this.db = new LevelDb(this.dbPath, NODE_SCHEMAS.DB);
         this.db.initialize();
 
-        const internalProvider = new internalProviderClass(this.db);
+        this.storage = new Storage(this.storagePath, []);
+
+        const internalProvider = new NodeProvider(this.db, this.storage);
         const provider = new Provider(internalProvider, new NullNetworkProvider());
         this.blockchain = new Blockchain(provider);
 
@@ -97,14 +106,15 @@ export class NodeCore {
 
         this.finalizedBlockCache = null;
 
-        this.registerSectionCallbacks(CHAIN.VB_ACCOUNT, [
+        this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
             [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
             [SECTIONS.ACCOUNT_CREATION, this.accountCreationCallback],
             [SECTIONS.ACCOUNT_TRANSFER, this.accountTokenTransferCallback],
         ]);
 
-        this.registerSectionCallbacks(CHAIN.VB_VALIDATOR_NODE, [
+        this.registerSectionPostUpdateCallbacks(CHAIN.VB_VALIDATOR_NODE, [
             [SECTIONS.VN_DESCRIPTION, this.validatorNodeDescriptionCallback],
+            [SECTIONS.VN_NETWORK_INTEGRATION, this.validatorNodeNetworkIntegrationCallback],
         ]);
 
         this.registerQueryCallback(
@@ -133,9 +143,17 @@ export class NodeCore {
         this.registerQueryCallback(SCHEMAS.MSG_GET_OBJECT_LIST, this.getObjectList);
     }
 
-    registerSectionCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
+    registerSectionPreUpdateCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
+        this.registerSectionCallbacks(objectType, callbackList, 0);
+    }
+
+    registerSectionPostUpdateCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
+        this.registerSectionCallbacks(objectType, callbackList, 1);
+    }
+
+    registerSectionCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>, isPostUpdate: number) {
         for (const [sectionType, callback] of callbackList) {
-            const key = (sectionType << 4) | objectType;
+            const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
             this.sectionCallbacks.set(key, callback.bind(this));
         }
     }
@@ -144,21 +162,35 @@ export class NodeCore {
         this.queryCallbacks.set(messageId, callback.bind(this));
     }
 
-    async invokeSectionCallback(vbType: number, sectionType: number, context: any) {
-        const key = (sectionType << 4) | vbType;
+    async invokeSectionPreUpdateCallback(objectType: number, sectionType: number, context: any) {
+        await this.invokeSectionCallback(objectType, sectionType, context, 0);
+    }
+
+    async invokeSectionPostUpdateCallback(objectType: number, sectionType: number, context: any) {
+        await this.invokeSectionCallback(objectType, sectionType, context, 1);
+    }
+
+    async invokeSectionCallback(objectType: number, sectionType: number, context: any, isPostUpdate: number) {
+        const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
 
         if (this.sectionCallbacks.has(key)) {
             const callback = this.sectionCallbacks.get(key);
 
             if (!callback) {
-                throw `callback unexpectedly undefined`;
+                throw `internal error: undefined section callback`;
             }
             await callback(context);
         }
     }
 
     async initChain(request: InitChainRequest) {
+        this.logger.log(`initChain`);
+
+        this.logger.log(`Clearing database`);
         await this.db.clear();
+
+        this.logger.log(`Clearing storage`);
+        await this.storage.clear();
 
         for (const validator of request.validators) {
             const address = this.cometPublicKeyToAddress(
@@ -226,7 +258,7 @@ export class NodeCore {
     async checkTx(request: CheckTxRequest) {
         this.logger.log(`checkTx`);
 
-        const cache = this.getCacheInstance();
+        const cache = this.getCacheInstance([]);
         const importer = cache.blockchain.getMicroblockImporter(
             Utils.bufferToUint8Array(request.tx),
         );
@@ -256,6 +288,7 @@ export class NodeCore {
     */
     async prepareProposal(request: PrepareProposalRequest) {
         this.logger.log(`prepareProposal: ${request.txs.length} txs`);
+
         const proposedTxs = [];
 
         for (const tx of request.txs) {
@@ -275,7 +308,7 @@ export class NodeCore {
     async processProposal(request: ProcessProposalRequest) {
         this.logger.log(`processProposal: ${request.txs.length} txs`);
 
-        const cache = this.getCacheInstance();
+        const cache = this.getCacheInstance(request.txs);
         const blockHeight = +request.height;
         const blockTimestamp = +(request.time?.seconds ?? 0);
         const result = await this.processBlock(cache, blockHeight, blockTimestamp, request.txs);
@@ -299,7 +332,7 @@ export class NodeCore {
             this.logger.warn(`finalizeBlock() called before the previous commit()`);
         }
 
-        this.finalizedBlockCache = this.getCacheInstance();
+        this.finalizedBlockCache = this.getCacheInstance(request.txs);
 
         const blockHeight = +request.height;
         const blockTimestamp = +(request.time?.seconds ?? 0);
@@ -321,6 +354,8 @@ export class NodeCore {
     }
 
     async payValidators(cache: any, votes: any, blockHeight: number, blockTimestamp: number) {
+        this.logger.log(`payValidators`);
+
         /**
             get the pending fees from the fees account
         */
@@ -361,11 +396,9 @@ export class NodeCore {
                     const hash: CryptographicHash =
                         CryptoSchemeFactory.createDefaultCryptographicHash();
                     const account = await cache.accountManager.loadAccountByPublicKeyHash(
-                        hash.hash(validatorPublicKey),
+                        hash.hash(validatorPublicKey.getPublicKeyAsBytes())
                     );
                     validatorAccounts.push(account);
-
-                    validatorAccounts.push(null);
                 }
             }
         }
@@ -404,10 +437,13 @@ export class NodeCore {
     }
 
     async processBlock(cache: any, blockHeight: number, timestamp: number, txs: any) {
+        this.logger.log(`processBlock`);
+
         const txResults = [];
         let totalFees = 0;
 
-        for (const tx of txs) {
+        for (const txId in txs) {
+            const tx = txs[txId];
             const importer = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(tx));
             const success = await this.checkMicroblock(cache, importer, timestamp);
             const vb: any = await importer.getVirtualBlockchain();
@@ -425,6 +461,9 @@ export class NodeCore {
             );
 
             await importer.store();
+
+            const fileOffset = await cache.storage.writeMicroblock(importer.vb.expirationDay, txId);
+            await cache.db.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, importer.hash, { expirationDay: importer.vb.expirationDay, fileOffset });
 
             const stateData = await cache.blockchain.provider.getVirtualBlockchainStateInternal(
                 importer.vb.identifier,
@@ -445,7 +484,7 @@ export class NodeCore {
                     {
                         mbHash: vb.currentMicroblock.hash,
                     },
-                    importer.currentTimestamp,
+                    timestamp,
                     this.logger,
                 );
             }
@@ -485,6 +524,7 @@ export class NodeCore {
         }
 
         await this.finalizedBlockCache.db.commit();
+        await this.finalizedBlockCache.storage.commit();
 
         this.finalizedBlockCache = null;
 
@@ -498,10 +538,17 @@ export class NodeCore {
     /**
         Checks a microblock and invokes the section callbacks of the node.
     */
-    async checkMicroblock(cache: Cache, importer: any, timestamp?: number) {
+    async checkMicroblock(cache: Cache, importer: MicroblockImporter, timestamp?: number) {
         this.logger.log(`Checking microblock ${Utils.binaryToHexa(importer.hash)}`);
 
-        const status = await importer.check(timestamp);
+        timestamp = timestamp || Utils.getTimestampInSeconds();
+
+        const status =
+            (await importer.checkHeader()) ||
+            (await importer.checkTimestamp(timestamp)) ||
+            (await importer.instantiateVirtualBlockchain()) ||
+            (await importer.importMicroblock()) ||
+            (await importer.checkGas());
 
         if (status) {
             this.logger.error(`Rejected with status ${status}: ${importer.error}`);
@@ -511,35 +558,19 @@ export class NodeCore {
         for (const section of importer.vb.currentMicroblock.sections) {
             const context = {
                 cache,
+                object: importer.object,
                 vb: importer.vb,
                 mb: importer.vb.currentMicroblock,
                 section,
-                timestamp: importer.currentTimestamp,
+                timestamp,
             };
-            await this.invokeSectionCallback(importer.vb.type, section.type, context);
+            await this.invokeSectionPostUpdateCallback(importer.vb.type, section.type, context);
         }
 
-        switch (importer.vb.type) {
-            case CHAIN.VB_ACCOUNT: {
-                await cache.db.putObject(NODE_SCHEMAS.DB_ACCOUNTS, importer.vb.identifier, {});
-                break;
-            }
-            case CHAIN.VB_VALIDATOR_NODE: {
-                await cache.db.putObject(
-                    NODE_SCHEMAS.DB_VALIDATOR_NODES,
-                    importer.vb.identifier,
-                    {},
-                );
-                break;
-            }
-            case CHAIN.VB_ORGANIZATION: {
-                await cache.db.putObject(NODE_SCHEMAS.DB_ORGANIZATIONS, importer.vb.identifier, {});
-                break;
-            }
-            case CHAIN.VB_APPLICATION: {
-                await cache.db.putObject(NODE_SCHEMAS.DB_APPLICATIONS, importer.vb.identifier, {});
-                break;
-            }
+        const indexTableId = this.getIndexTableId(importer.vb.type);
+
+        if(indexTableId != -1) {
+            await cache.db.putObject(indexTableId, importer.vb.identifier, {});
         }
 
         this.logger.log(`Accepted`);
@@ -620,15 +651,10 @@ export class NodeCore {
         const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
         const cometAddress = this.cometPublicKeyToAddress(cometPublicKeyBytes);
 
-        const iterator = await context.cache.db.query(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS);
-        const list = await iterator.all();
+        const description = await context.object.getDescription();
+        const networkIntegration = await context.object.getNetworkIntegration();
 
-        for (const [key, value] of list) {
-            if (Utils.binaryIsEqual(Utils.bufferToUint8Array(key), context.vb.identifier)) {
-                await context.cache.db.del(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, key);
-            }
-        }
-
+        // create the new link: Comet address -> identifier
         await context.cache.db.putRaw(
             NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
             cometAddress,
@@ -636,10 +662,13 @@ export class NodeCore {
         );
 
         context.cache.validatorSetUpdate.push({
-            power: context.section.object.power,
+            power: networkIntegration.votingPower,
             pub_key_type: context.section.object.cometPublicKeyType,
             pub_key_bytes: cometPublicKeyBytes,
         });
+    }
+
+    async validatorNodeNetworkIntegrationCallback(context: any) {
     }
 
     /**
@@ -722,7 +751,7 @@ export class NodeCore {
     }
 
     async awaitMicroblockAnchoring(object: any): Promise<Uint8Array> {
-        let remaingingAttempts = 1000;
+        let remaingingAttempts = 120;
 
         return new Promise((resolve, reject) => {
             const test = async () => {
@@ -739,7 +768,7 @@ export class NodeCore {
                     );
                 } else {
                     if (--remaingingAttempts > 0) {
-                        setTimeout(test, 100);
+                        setTimeout(test, 500);
                     } else {
                         reject();
                     }
@@ -776,34 +805,25 @@ export class NodeCore {
     }
 
     async getObjectList(object: any) {
-        let tableId;
+        const indexTableId = this.getIndexTableId(object.type);
 
-        switch (object.type) {
-            case CHAIN.VB_ACCOUNT: {
-                tableId = NODE_SCHEMAS.DB_ACCOUNTS;
-                break;
-            }
-            case CHAIN.VB_VALIDATOR_NODE: {
-                tableId = NODE_SCHEMAS.DB_VALIDATOR_NODES;
-                break;
-            }
-            case CHAIN.VB_ORGANIZATION: {
-                tableId = NODE_SCHEMAS.DB_ORGANIZATIONS;
-                break;
-            }
-            case CHAIN.VB_APPLICATION: {
-                tableId = NODE_SCHEMAS.DB_APPLICATIONS;
-                break;
-            }
-
-            default: {
-                throw `invalid object type ${object.type}`;
-            }
+        if (indexTableId == -1) {
+            throw `invalid object type ${object.type}`;
         }
 
-        const list = await this.db.getKeys(tableId);
+        const list = await this.db.getKeys(indexTableId);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_OBJECT_LIST, { list });
+    }
+
+    getIndexTableId(type) {
+        switch (type) {
+            case CHAIN.VB_ACCOUNT: { return NODE_SCHEMAS.DB_ACCOUNTS; }
+            case CHAIN.VB_VALIDATOR_NODE: { return NODE_SCHEMAS.DB_VALIDATOR_NODES; }
+            case CHAIN.VB_ORGANIZATION: { return NODE_SCHEMAS.DB_ORGANIZATIONS; }
+            case CHAIN.VB_APPLICATION: { return NODE_SCHEMAS.DB_APPLICATIONS; }
+            default: { return -1; }
+        }
     }
 
     async getMicroblockBodys(object: any) {
@@ -814,9 +834,10 @@ export class NodeCore {
         });
     }
 
-    getCacheInstance(): Cache {
+    getCacheInstance(txs: Uint8Array[]): Cache {
         const db = new CachedLevelDb(this.db);
-        const cachedInternalProvider = new this.internalProviderClass(db);
+        const storage = new Storage(this.storagePath, txs);
+        const cachedInternalProvider = new NodeProvider(db, storage);
         const cachedProvider = new Provider(cachedInternalProvider, new NullNetworkProvider());
         const blockchain = new Blockchain(cachedProvider);
         const vbRadix = new RadixTree(db, NODE_SCHEMAS.DB_VB_RADIX);
@@ -824,7 +845,7 @@ export class NodeCore {
         const accountManager = new AccountManager(db, tokenRadix);
         const validatorSetUpdate: any[] = [];
 
-        return { db, blockchain, accountManager, vbRadix, tokenRadix, validatorSetUpdate };
+        return { db, storage, blockchain, accountManager, vbRadix, tokenRadix, validatorSetUpdate };
     }
 
     cometPublicKeyToAddress(publicKey: Uint8Array) {

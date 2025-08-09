@@ -1,29 +1,32 @@
 import { NODE_SCHEMAS } from './constants/constants';
-import { SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
+import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
 
 export class NodeProvider {
     db: any;
+    storage: any;
 
-    constructor(db: any) {
+    constructor(db: any, storage: any) {
         this.db = db;
+        this.storage = storage;
     }
 
-    async getMicroblockInformation(hash: Uint8Array): Promise<Uint8Array> {
-        return await this.get(NODE_SCHEMAS.DB_MICROBLOCK_INFORMATION, hash);
+    async getMicroblockVbInformation(hash: Uint8Array): Promise<Uint8Array> {
+        return await this.get(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, hash);
+    }
+
+    async getMicroblockHeader(identifier: Uint8Array) {
+        const storageInfo = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier);
+        return storageInfo ? await this.storage.readMicroblockHeader(storageInfo.expirationDay, identifier, storageInfo.fileOffset) : null;
     }
 
     async getMicroblockBody(identifier: Uint8Array) {
-        const microblockData = await this.getMicroblock(identifier);
-        return microblockData.slice(SCHEMAS.MICROBLOCK_HEADER_SIZE);
+        const storageInfo = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier);
+        return storageInfo ? await this.storage.readMicroblockBody(storageInfo.expirationDay, identifier, storageInfo.fileOffset) : null;
     }
 
     async getMicroblock(identifier: Uint8Array) {
-        // must be called from child class
-        return new Uint8Array();
-    }
-
-    async getMicroblockTxHash(identifier: Uint8Array) {
-        return await this.get(NODE_SCHEMAS.DB_MICROBLOCK_TX_HASH, identifier);
+        const { expirationDay, fileOffset } = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier);
+        return await this.storage.readFullMicroblock(expirationDay, identifier, fileOffset);
     }
 
     async getVirtualBlockchainState(identifier: Uint8Array) {
@@ -34,20 +37,22 @@ export class NodeProvider {
         return await this.get(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, publicKeyHash);
     }
 
-    async setMicroblockInformation(identifier: Uint8Array, data: Uint8Array) {
-        return await this.set(NODE_SCHEMAS.DB_MICROBLOCK_INFORMATION, identifier, data);
+    async setMicroblockVbInformation(identifier: Uint8Array, data: Uint8Array) {
+        return await this.set(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, identifier, data);
+    }
+
+    async setMicroblockHeader(identifier: Uint8Array, data: Uint8Array) {
+        // ignored
     }
 
     async setMicroblockBody(identifier: Uint8Array, data: Uint8Array) {
-        // the node does not store the body
+        // ignored
     }
 
-    async setMicroblock(identifier: Uint8Array, headerData: Uint8Array, bodyData: Uint8Array) {
-        // must be called from child class
-    }
-
-    async setMicroblockTxHash(identifier: Uint8Array, txHash: Uint8Array) {
-        return await this.set(NODE_SCHEMAS.DB_MICROBLOCK_TX_HASH, identifier, txHash);
+    async setMicroblock(identifier: Uint8Array, expirationDay: number, headerData: Uint8Array, bodyData: Uint8Array) {
+        const data = Utils.binaryFrom(headerData, bodyData);
+        const fileOffset = await this.storage.writeMicroblock(expirationDay, data);
+        return await this.db.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier, { expirationDay, fileOffset });
     }
 
     async setVirtualBlockchainState(identifier: Uint8Array, data: Uint8Array) {

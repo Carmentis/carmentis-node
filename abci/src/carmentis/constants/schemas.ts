@@ -6,8 +6,8 @@ export const DB_TOKEN_RADIX = 0x02;
 export const DB_BLOCK_INFORMATION = 0x03;
 export const DB_BLOCK_CONTENT = 0x04;
 export const DB_MICROBLOCK_VERIFICATION = 0x05;
-export const DB_MICROBLOCK_TX_HASH = 0x06;
-export const DB_MICROBLOCK_INFORMATION = 0x07;
+export const DB_MICROBLOCK_VB_INFORMATION = 0x06;
+export const DB_MICROBLOCK_STORAGE = 0x07;
 export const DB_VIRTUAL_BLOCKCHAIN_STATE = 0x08;
 export const DB_ACCOUNT_STATE = 0x09;
 export const DB_ACCOUNT_HISTORY = 0x0a;
@@ -35,11 +35,15 @@ DB[DB_CHAIN] = {
     ],
 };
 
+// content of the VB radix tree
+// key: VB identifier
 DB[DB_VB_RADIX] = {
     label: 'VbRadix',
     definition: [],
 };
 
+// content of the token radix tree
+// key: account identifier
 DB[DB_TOKEN_RADIX] = {
     label: 'TokenRadix',
     definition: [],
@@ -84,19 +88,24 @@ DB[DB_BLOCK_CONTENT] = {
 // key: microblock hash
 DB[DB_MICROBLOCK_VERIFICATION] = {
     label: 'MicroblockVerification',
-    definition: [{ name: 'status', type: DATA.TYPE_UINT8 }],
+    definition: [
+      { name: 'status', type: DATA.TYPE_UINT8 }
+    ]
 };
 
-// stores the transaction hash
+// microblock VB information
 // key: microblock hash
-DB[DB_MICROBLOCK_TX_HASH] = {
-    label: 'MicroblockTxHash',
-    definition: [],
-};
+DB[DB_MICROBLOCK_VB_INFORMATION] = SCHEMAS.MICROBLOCK_VB_INFORMATION;
 
-// microblock information
+// microblock storage information
 // key: microblock hash
-DB[DB_MICROBLOCK_INFORMATION] = SCHEMAS.MICROBLOCK_INFORMATION;
+DB[DB_MICROBLOCK_STORAGE] = {
+    label: 'MicroblockStorage',
+    definition: [
+      { name: 'expirationDay', type: DATA.TYPE_UINT32 },
+      { name: 'fileOffset', type: DATA.TYPE_UINT48 }
+    ]
+};
 
 // virtual blockchain meta information
 // key: VB identifier
@@ -115,7 +124,9 @@ DB[DB_ACCOUNT_HISTORY] = SCHEMAS.ACCOUNT_HISTORY;
 // key: public key hash
 DB[DB_ACCOUNT_BY_PUBLIC_KEY] = {
     label: 'AccountByPublicKey',
-    definition: [{ name: 'accountHash', type: DATA.TYPE_BIN256 }],
+    definition: [
+      { name: 'accountHash', type: DATA.TYPE_BIN256 }
+    ],
 };
 
 // Comet address -> validator node VB hash

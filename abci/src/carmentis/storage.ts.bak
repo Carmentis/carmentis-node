@@ -1,0 +1,92 @@
+// unused method in the new version of the class
+async readFile(filePath: string, callback: (fileOffset: number, data: Uint8Array) => Promise<void>) {
+    let fileOffset = 0;
+    let handle;
+
+    try {
+        handle = await open(filePath, 'r');
+    }
+    catch(error) {
+        throw `cannot open '${filePath}'`;
+    }
+
+    do {
+        let dataBuffer;
+
+        try {
+            dataBuffer = await this.read(handle, fileOffset, READ_ALL);
+            await callback(fileOffset, dataBuffer);
+            fileOffset += META_DATA_SIZE + dataBuffer.length;
+        }
+        catch(error) {
+            dataBuffer = new Uint8Array();
+        }
+    } while(dataBuffer.length);
+
+    await handle.close();
+}
+
+// early version of the class
+export class Storage {
+    path: string;
+    db: any;
+    maxIndex: number;
+
+    constructor(path: string, db: any) {
+        this.path = path;
+        this.db = db;
+        this.maxIndex = -1;
+    }
+
+    processChallenge(seed: Uint8Array) {
+    }
+
+    createChallenge(seed: Uint8Array) {
+    }
+
+    async addFileToIndex(id) {
+        this.maxIndex++;
+        await this.setIdToIndex(id, this.maxIndex);
+        await this.setIndexToId(this.maxIndex, id);
+    }
+
+    async removeFileFromIndex(id) {
+        const removedIndex = await this.getIdToIndex(id);
+        const lastId = await this.getIndexToId(this.maxIndex);
+
+        await this.deleteIdToIndex(id);
+        await this.deleteIndexToId(removedIndex);
+
+        if(removedIndex < this.maxIndex) {
+            await this.deleteIndexToId(this.maxIndex);
+            await this.setIndexToId(removedIndex, lastId);
+            await this.setIdToIndex(lastId, removedIndex);
+        }
+
+        this.maxIndex--;
+    }
+
+    async getIdToIndex(id) {
+        return await this.db.getRaw(NODE_SCHEMAS.DB_MICROBLOCK_ID_TO_INDEX, id);
+    }
+
+    async setIdToIndex(id, index) {
+        await this.db.putRaw(NODE_SCHEMAS.DB_MICROBLOCK_ID_TO_INDEX, id, index);
+    }
+
+    async deleteIdToIndex(id) {
+        await this.db.del(NODE_SCHEMAS.DB_MICROBLOCK_ID_TO_INDEX, id);
+    }
+
+    async getIndexToId(index) {
+        return await this.db.getRaw(NODE_SCHEMAS.DB_MICROBLOCK_INDEX_TO_ID, index);
+    }
+
+    async setIndexToId(index, id) {
+        await this.db.putRaw(NODE_SCHEMAS.DB_MICROBLOCK_INDEX_TO_ID, index, id);
+    }
+
+    async deleteIndexToId(index) {
+        await this.db.del(NODE_SCHEMAS.DB_MICROBLOCK_INDEX_TO_ID, index);
+    }
+}

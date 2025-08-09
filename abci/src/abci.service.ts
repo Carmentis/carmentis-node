@@ -37,7 +37,6 @@ import {
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NodeCore } from './carmentis/nodeCore';
-import { CometNodeProvider } from './cometNodeProvider';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -46,11 +45,14 @@ export class AbciService {
     private nodeCore: NodeCore;
 
     constructor(private config: ConfigService) {
-        const abciStorage = config.getOrThrow('NODE_ABCI_STORAGE');
-        this.logger.debug(`Node storage (ABCI): ${abciStorage}`);
-        this.nodeCore = new NodeCore(this.logger, CometNodeProvider, {
-            dbPath: abciStorage,
-        });
+        const abciStoragePath = config.getOrThrow('NODE_ABCI_STORAGE');
+        this.logger.debug(`Node storage (ABCI): ${abciStoragePath}`);
+        this.nodeCore = new NodeCore(
+            this.logger,
+            {
+                abciStoragePath
+            }
+        );
     }
 
     Echo(request: EchoRequest): Promise<EchoResponse> {

@@ -1,4 +1,5 @@
 import { NODE_SCHEMAS } from './constants/constants';
+
 import {
     ECO,
     Economics,
@@ -24,7 +25,7 @@ export class AccountManager {
         this.radix = radix;
     }
 
-    async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: any, logger: any) {
+    async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: number, logger: any) {
         const accountCreation =
             transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
         let payeeBalance;
