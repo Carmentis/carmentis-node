@@ -1,7 +1,8 @@
 import { LevelDb } from './levelDb';
 import { Utils } from '@cmts-dev/carmentis-sdk/server';
+import { dbInterface } from './dbInterface';
 
-export class CachedLevelDb {
+export class CachedLevelDb implements dbInterface {
     db: LevelDb;
     updateCache: any;
     deletionCache: any;
@@ -95,6 +96,7 @@ export class CachedLevelDb {
 
         this.updateCache[tableId].delete(keyStr);
         this.deletionCache[tableId].add(keyStr);
+        return true;
     }
 
     serialize(tableId: number, object: any) {

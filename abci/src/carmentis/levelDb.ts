@@ -1,10 +1,9 @@
 import { Level } from 'level';
 import { NODE_SCHEMAS } from './constants/constants';
 import { SchemaSerializer, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { dbInterface } from './dbInterface';
 
-const SUB_PREFIX = 'SUB';
-
-export class LevelDb {
+export class LevelDb implements dbInterface {
     db: any;
     path: string;
     sub: any;
@@ -27,7 +26,7 @@ export class LevelDb {
         const nTables = this.getTableCount();
 
         for (let n = 0; n < nTables; n++) {
-            this.sub[n] = this.db.sublevel(SUB_PREFIX + n.toString().padStart(2, '0'), encoding);
+            this.sub[n] = this.db.sublevel(Utils.numberToHexa(n, 2), encoding);
         }
     }
 
@@ -45,6 +44,10 @@ export class LevelDb {
 
     async clear() {
         await this.db.clear();
+    }
+
+    getDbIterator() {
+        return this.db.iterator();
     }
 
     async getRaw(tableId: number, key: Uint8Array) {

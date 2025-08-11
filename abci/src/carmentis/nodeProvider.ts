@@ -15,18 +15,15 @@ export class NodeProvider {
     }
 
     async getMicroblockHeader(identifier: Uint8Array) {
-        const storageInfo = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier);
-        return storageInfo ? await this.storage.readMicroblockHeader(storageInfo.expirationDay, identifier, storageInfo.fileOffset) : null;
+        return await this.storage.readMicroblockHeader(identifier);
     }
 
     async getMicroblockBody(identifier: Uint8Array) {
-        const storageInfo = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier);
-        return storageInfo ? await this.storage.readMicroblockBody(storageInfo.expirationDay, identifier, storageInfo.fileOffset) : null;
+        return await this.storage.readMicroblockBody(identifier);
     }
 
     async getMicroblock(identifier: Uint8Array) {
-        const { expirationDay, fileOffset } = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier);
-        return await this.storage.readFullMicroblock(expirationDay, identifier, fileOffset);
+        return await this.storage.readFullMicroblock(identifier);
     }
 
     async getVirtualBlockchainState(identifier: Uint8Array) {
