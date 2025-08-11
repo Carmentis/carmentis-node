@@ -69,20 +69,157 @@ class CometBFTRunner:
     def run_init(self):
         self.run_command(f'init --home {self.config_home}')
 
-def create_new_configuration_from_peer(peer_endpoint, home_dir):
+class CometBFTConfigEditor:
+    def __init__(self, config_home):
+        self.genesis_file_path = os.path.join(config_home, "config", "genesis.json")
+        self.config_file_path = os.path.join(config_home, "config", "config.toml")
 
-    logger.info("Generate a new configuration")
-    runner = CometBFTRunner(config_home=home_dir)
-    runner.run_init()
+        logger.info(f"Creating backup file for {self.config_file_path}...")
+        # Create a backup of the original config file
+        backup_file = f"{self.config_file_path}.bak"
+        shutil.copy2(self.config_file_path, backup_file)
 
+
+        with open(self.config_file_path, "r") as f:
+            self.config_content = f.readlines()
+
+    def set_moniker_name(self, moniker_name):
+        self.edit_config('moniker', moniker_name)
+
+    def set_cors_allowed_origin(self, cors_origins):
+        self.edit_config('cors_allowed_origins', cors_origins)
+
+    def set_persistent_peers(self, persistent_peers):
+        #self.edit_config('seeds', persistent_peers, section='p2p')
+        self.edit_config('persistent_peers', persistent_peers)
+
+    def set_rpc_laddr(self, laddr):
+        self.edit_config('laddr', laddr, section='rpc')
+
+    def set_p2p_laddr(self, laddr):
+        self.edit_config('laddr', laddr, section='p2p')
+
+    def enable_sync(self):
+        self.edit_config('enable', True, section='statesync')
+
+    def set_sync_peers(self, sync_endpoints: str):
+        self.edit_config('rpc_servers', sync_endpoints, section='statesync')
+
+    def set_sync_latest_state(self, latest_block_height, latest_block_hash):
+        self.edit_config('trust_height', latest_block_height, section='statesync')
+        self.edit_config('trust_hash', latest_block_hash, section='statesync')
+
+    def edit_config(self, entry, value, section=None):
+        current_section=None
+        updated_content = []
+        has_updated = False
+        for line in self.config_content:
+            if line.startswith('['):
+                current_section = line.strip().replace('[', '').replace(']', '')
+
+
+            if line.strip().startswith(entry + ' =') and (section is None or current_section == section):
+                has_updated = True
+                if isinstance(value, list):
+                    updated_line = f'{entry} = {value}\n'
+                elif isinstance(value, str):
+                    updated_line = f'{entry} = "{value}"\n'
+                elif isinstance(value, bool):
+                    updated_line = f'{entry} = {str(value).lower()}\n'
+                else:
+                    raise Exception("Unsupported value type for config entry")
+
+                updated_content.append(updated_line)
+                logger.info(f"Updated {entry} to: {updated_line.strip()} " + (f"[{section}]" if section else "" ))
+            else:
+                updated_content.append(line)
+        self.config_content = updated_content
+
+        if not has_updated:
+            logger.warning(f"Entry {entry} not updated: not found")
+
+    def persist_config(self):
+        # Write the updated content back to the config file
+        with open(self.config_file_path, "w") as f:
+            logger.info(f"Writing updated config file at {self.config_file_path}...")
+            for line in self.config_content:
+                f.write(line)
+
+
+class HttpNodeStatus:
+    def __init__(self, peer_host, node_status):
+        host_parts = peer_host.split(':')
+        self.peer_host = peer_host if len(host_parts) == 1 else host_parts[0]
+        self.status = node_status
+
+    @staticmethod
+    def create_from_peer_endpoint(peer_endpoint):
+        parsed_url = urlparse(peer_endpoint)
+        peer_host = parsed_url.netloc
+        status_url = f"{peer_endpoint}/status?"
+        logger.info(f"Getting node status from {status_url}...")
+        status_response = requests.get(status_url, timeout=10)
+        status_response.raise_for_status()
+        status_data = status_response.json()
+        return HttpNodeStatus(peer_host, status_data)
+
+    def get_peer_host(self):
+        return self.peer_host
+
+    def get_node_id(self):
+        return self.status['result']['node_info']['id']
+
+    def get_sync_info(self):
+        return self.status['result']['sync_info']
+
+    def get_sync_port(self):
+        listen_addr = self.status['result']['node_info']['listen_addr']
+        logger.info(f"Found listen_addr: {listen_addr}")
+        # Extract port from format like "tcp://0.0.0.0:26656"
+        match = re.search(r':(\d+)$', listen_addr)
+        if match:
+            sync_port = match.group(1)
+            logger.info(f"Extracted sync port: {sync_port}")
+            return sync_port
+        else:
+            raise Exception('No port found in listen_addr')
+
+    def get_rpc_port(self):
+        listen_addr = self.status['result']['node_info']['other']['rpc_address']
+        logger.info(f"Found listen_addr: {listen_addr}")
+        # Extract port from format like "tcp://0.0.0.0:26656"
+        match = re.search(r':(\d+)$', listen_addr)
+        if match:
+            rpc_port = match.group(1)
+            logger.info(f"Extracted rpc port: {rpc_port}")
+            return rpc_port
+        else:
+            raise Exception('No port found for rpc')
+
+    def get_latest_block_hash(self):
+        return self.status['result']['sync_info']['latest_block_hash']
+
+    def get_latest_block_height(self):
+        return self.status['result']['sync_info']['latest_block_height']
+
+    def get_node_p2p_address_in_cometbft_format(self):
+        sync_port = self.get_sync_port()
+        node_id = self.get_node_id()
+        peer_host = self.peer_host
+        return f"{node_id}@{peer_host}:{sync_port}"
+
+    def get_node_rpc_address_in_cometbft_format(self):
+        rpc_port = self.get_rpc_port()
+        node_id = self.get_node_id()
+        peer_host = self.peer_host
+        return f"{node_id}@{peer_host}:{rpc_port}"
+
+
+def update_configuration_from_peer(config_editor: CometBFTConfigEditor, peer_endpoint, sync_endpoints, home_dir):
     genesis_file_path = os.path.join(home_dir, "config", "genesis.json")
-    config_file_path = os.path.join(home_dir, "config", "config.toml")
 
-    # Ensure the endpoint has a trailing slash if needed
-    if not peer_endpoint.endswith('/'):
-        peer_endpoint = peer_endpoint + '/'
 
-    genesis_url = f"{peer_endpoint}genesis?"
+    genesis_url = f"{peer_endpoint}/genesis?"
 
     try:
         logger.info(f"Contacting peer at {genesis_url}...")
@@ -113,95 +250,45 @@ def create_new_configuration_from_peer(peer_endpoint, home_dir):
             json.dump(genesis_json, f, indent=2)
 
         # Extract peer information for persistent_peers
-        parsed_url = urlparse(peer_endpoint)
-        peer_host = parsed_url.netloc
-        sync_port = None
+        peer_status = HttpNodeStatus.create_from_peer_endpoint(peer_endpoint)
 
-        # Try to get node ID from the response
-        node_id = None
-        if 'result' in data and 'node_info' in data.get('result', {}):
-            node_id = data['result']['node_info'].get('id')
+        # we put the provided peer endpoint as a persistent peer
+        updated_persistent_peer = peer_status.get_node_p2p_address_in_cometbft_format()
+        config_editor.set_persistent_peers(updated_persistent_peer)
 
-        # If node_id is not available in the response or we need to get the sync port, make another request to status endpoint
-        status_data = None
-        try:
-            status_url = f"{peer_endpoint}status?"
-            logger.info(f"Getting node status from {status_url}...")
-            # Using urllib.request instead of requests
-            status_request = urllib.request.Request(status_url)
-            status_response = urllib.request.urlopen(status_request, timeout=10)
 
-            # Read and decode the response
-            status_response_data = status_response.read().decode('utf-8')
+        # handle synchronization when at least two peers are provided
+        if 0 < len(sync_endpoints):
+            if 2 <= len(sync_endpoints):
+                # we fetch status for all nodes
+                peers_status_list: list[HttpNodeStatus] = []
+                for peer in sync_endpoints:
+                    peers_status_list.append(HttpNodeStatus.create_from_peer_endpoint(peer))
 
-            # Parse the JSON response
-            status_data = json.loads(status_response_data)
+                # enable state sync
+                config_editor.enable_sync()
 
-            if 'result' in status_data and 'node_info' in status_data.get('result', {}):
-                if not node_id:
-                    node_id = status_data['result']['node_info'].get('id')
+                # set the sync endpoints
+                sync_endpoints_str = ','.join([
+                    status.get_node_rpc_address_in_cometbft_format()
+                    for status in peers_status_list
+                ])
+                config_editor.set_sync_peers(sync_endpoints_str)
 
-                # Extract the sync port from listen_addr
-                if 'listen_addr' in status_data['result']['node_info']:
-                    listen_addr = status_data['result']['node_info']['listen_addr']
-                    logger.info(f"Found listen_addr: {listen_addr}")
-                    # Extract port from format like "tcp://0.0.0.0:26656"
-                    match = re.search(r':(\d+)$', listen_addr)
-                    if match:
-                        sync_port = match.group(1)
-                        logger.info(f"Extracted sync port: {sync_port}")
-                    else:
-                        raise Exception('No port found in listen_addr')
-        except Exception as e:
-            logger.warning(f"Could not get information from status endpoint: {e}")
-            # Continue with the process even if we can't get the node ID or sync port
+                # we use the state of the first node to synchronize
+                first_peer_stats = peers_status_list[0]
+                latest_block_hash = first_peer_stats.get_latest_block_hash()
+                latest_block_height = first_peer_stats.get_latest_block_height()
+                logger.info(f"Latest block height: {latest_block_height}")
+                logger.info(f"Latest block hash: {latest_block_hash}")
+                config_editor.set_sync_latest_state(latest_block_height, latest_block_hash)
 
-        # If we still don't have a node ID, exit
-        if not node_id:
-            logger.error("Could not determine node ID. Using placeholder.")
-            sys.exit(1)
 
-        # Update the config.toml file
-        if not os.path.exists(config_file_path):
-            logger.error(f"Config file not found at {config_file_path}")
-            sys.exit(1)
-
-        logger.info(f"Updating config file at {config_file_path}...")
-        # Create a backup of the original config file
-        backup_file = f"{config_file_path}.bak"
-        shutil.copy2(config_file_path, backup_file)
-
-        # Read the config file
-        with open(config_file_path, 'r') as f:
-            config_content = f.readlines()
-
-        # Update the persistent_peers entry
-        updated_content = []
-        for line in config_content:
-            if line.strip().startswith('persistent_peers ='):
-                # If sync_port is available, use it instead of the original port
-                if sync_port:
-                    # Extract host without port
-                    host_parts = peer_host.split(':')
-                    if len(host_parts) > 1:
-                        # Replace the port in peer_host with sync_port
-                        peer_host_with_sync_port = f"{host_parts[0]}:{sync_port}"
-                    else:
-                        # If there's no port in the original peer_host, just append the sync_port
-                        peer_host_with_sync_port = f"{peer_host}:{sync_port}"
-
-                    updated_line = f'persistent_peers = "{node_id}@{peer_host_with_sync_port}"\n'
-                else:
-                    updated_line = f'persistent_peers = "{node_id}@{peer_host}"\n'
-
-                updated_content.append(updated_line)
-                logger.info(f"Updated persistent_peers to: {updated_line.strip()}")
             else:
-                updated_content.append(line)
+                logger.warning("At least two peers are needed to enable synchronisation")
+        else:
+            logger.info("No sync peers provided, skipping synchronisation")
 
-        # Write the updated content back to the config file
-        with open(config_file_path, 'w') as f:
-            f.writelines(updated_content)
 
         logger.info("Successfully joined the existing blockchain.")
 
@@ -227,28 +314,53 @@ def main():
 
     # Add required home directory argument
     parser.add_argument('--home', type=str, required=True, help='Home directory for CometBFT configuration')
+    parser.add_argument('--node-name', type=str, help='Name of the node')
+    parser.add_argument('--cors-allowed-origins', type=str, help='Comma-separated list of CORS allowed origins', default='*')
+    parser.add_argument('--rpc-laddr', type=str, help='Address where CometBFT is exposing RPC', default='tcp://0.0.0.0:26657')
+    parser.add_argument('--p2p-laddr', type=str, help='Address where CometBFT is exposing P2P', default='tcp://0.0.0.0:26656')
+    parser.add_argument('--prometheus-laddr', type=str, help='Address where CometBFT is exposing instrumentation.', default=":26660")
 
     # Add mutually exclusive group for --new and --from-peer options
     group = parser.add_mutually_exclusive_group(required=True)
+
     group.add_argument('--new', action='store_true', help='Initialize a new CometBFT configuration')
-    group.add_argument('--from-peer', type=str, metavar='PEER_ENDPOINT', 
+    group.add_argument('--from-peer', type=str, metavar='PEER_ENDPOINT',
                       help='Create configuration from peer (format: http(s)://host:ip)')
+    parser.add_argument('--sync-peers', type=str,  help="""
+    Should be used only in combination with --from-peer, otherwise not effective.
+    Uses two servers to sync the blockchain.
+    Example: --sync-servers=http://192.168.1.1:26657,http://192.168.1.2:26657
+    """)
 
     # Parse arguments
     args = parser.parse_args()
 
     # Get home directory
-    home_dir = args.home
-    logger.info(f"Using home directory: '{home_dir}'")
+    if args.new or args.from_peer:
+        home_dir = args.home
+        logger.info(f"Using home directory: '{home_dir}'")
 
-    # Handle options
-    if args.new:
+
         logger.info("Initializing CometBFT configuration...")
         runner = CometBFTRunner(config_home=home_dir)
         runner.run_init()
-    elif args.from_peer:
-        logger.info(f"Creating configuration from peer: {args.from_peer}")
-        create_new_configuration_from_peer(args.from_peer, home_dir)
+
+        # apply common updates in the config
+        config_editor = CometBFTConfigEditor(config_home=home_dir)
+        config_editor.set_cors_allowed_origin(args.cors_allowed_origins.split(','))
+        config_editor.set_rpc_laddr(args.rpc_laddr)
+        config_editor.set_p2p_laddr(args.p2p_laddr)
+        if args.node_name:
+            config_editor.set_moniker_name(args.node_name)
+
+        # Handle options
+        if args.from_peer:
+            logger.info(f"Updating configuration from remote peer: {args.from_peer}")
+            sync_endpoints = [] if args.sync_peers is None else args.sync_peers.split(',')
+            update_configuration_from_peer(config_editor, args.from_peer, sync_endpoints, home_dir)
+
+        # persist the configuration
+        config_editor.persist_config()
     else:
         # This should not happen due to required=True in the mutually exclusive group
         parser.print_help()

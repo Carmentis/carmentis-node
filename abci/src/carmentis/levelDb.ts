@@ -50,18 +50,16 @@ export class LevelDb implements dbInterface {
         return this.db.iterator();
     }
 
-    async getRaw(tableId: number, key: Uint8Array) {
+    async getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined> {
         try {
             const b = await this.sub[tableId].get(key);
-
-            if (b === undefined) {
-                return b;
+            if (b !== undefined) {
+                return new Uint8Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
             }
-            return new Uint8Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
         } catch (e) {
             console.error(e);
-            return undefined;
         }
+        return undefined;
     }
 
     async getObject(tableId: number, key: Uint8Array) {

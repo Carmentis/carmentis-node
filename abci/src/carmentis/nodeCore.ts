@@ -49,6 +49,7 @@ import {
     MessageUnserializer,
     CryptoSchemeFactory,
     CryptographicHash,
+    PublicSignatureKey,
     CMTSToken,
 } from '@cmts-dev/carmentis-sdk/server';
 
@@ -345,8 +346,8 @@ export class NodeCore {
             processBlockResult.blockSize,
             request.txs.length
         );
- 
-        await this.setBlockContent(this.finalizedBlockCache, blockHeight, processBlockResult.microblocks); 
+
+        await this.setBlockContent(this.finalizedBlockCache, blockHeight, processBlockResult.microblocks);
 
         return FinalizeBlockResponse.create({
             tx_results: processBlockResult.txResults,
@@ -396,11 +397,11 @@ export class NodeCore {
                     const validatorNode = await cache.blockchain.loadValidatorNode(
                         new Hash(validatorNodeHash),
                     );
-                    const validatorPublicKey = await validatorNode.getOrganizationPublicKey();
+                    const validatorPublicKey: PublicSignatureKey = await validatorNode.getOrganizationPublicKey();
                     const hash: CryptographicHash =
                         CryptoSchemeFactory.createDefaultCryptographicHash();
                     const account = await cache.accountManager.loadAccountByPublicKeyHash(
-                        hash.hash(validatorPublicKey.getPublicKeyAsBytes())
+                        hash.hash(validatorPublicKey.getPublicKeyAsBytes()),
                     );
                     validatorAccounts.push(account);
                 }
@@ -718,6 +719,9 @@ export class NodeCore {
         );
     }
 
+    /**
+     Validator node callbacks
+     */
     async validatorNodeDescriptionCallback(context: any) {
         const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
         const cometAddress = this.cometPublicKeyToAddress(cometPublicKeyBytes);
@@ -745,7 +749,7 @@ export class NodeCore {
     /**
         Custom Carmentis query via abci_query
     */
-    async query(data: any) {
+    async query(data: any): Promise<Uint8Array> {
         const { type, object } = this.messageUnserializer.unserialize(data);
 
         this.logger.log(`Received query ${SCHEMAS.NODE_MESSAGES[type].label} (${type})`);
@@ -775,14 +779,17 @@ export class NodeCore {
     }
 
     async getChainInformation(object: any) {
+        this.logger.verbose(`getChainInformation`);
         return await this.db.getRaw(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY);
     }
 
     async getBlockInformation(object: any) {
+        this.logger.verbose(`getBlockInformation`);
         return await this.db.getRaw(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(object.height));
     }
 
     async getBlockContent(object: any) {
+        this.logger.verbose(`getBlockContent`);
         return await this.db.getRaw(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(object.height));
     }
 
@@ -815,7 +822,8 @@ export class NodeCore {
             : [];
         const changed = headers.length > 0;
 
-        // @ts-expect-error stateData is not typed correctly
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error
         stateData = stateData || new Uint8Array();
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_VIRTUAL_BLOCKCHAIN_UPDATE, {
@@ -892,8 +900,11 @@ export class NodeCore {
             object.address
         );
 
+
+        // @ts-expect-error The validator hash should be verified
+        const validatorNodeHash = dataObject.validatorNodeHash;
         return this.messageSerializer.serialize(SCHEMAS.MSG_VALIDATOR_NODE_BY_ADDRESS, {
-            validatorNodeHash: dataObject.validatorNodeHash
+            validatorNodeHash
         });
     }
 

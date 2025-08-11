@@ -4,6 +4,7 @@
 /build
 
 # runtime output
+.output
 .abci
 
 # Logs

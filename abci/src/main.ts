@@ -14,6 +14,9 @@ async function bootstrap() {
     let app;
 
     if (grpc) {
+        const grpcPort = Number.parseInt(process.env.NODE_ABCI_GRPC_PORT ?? '26658');
+        const grpcUrl = `0.0.0.0:${grpcPort}`;
+        logger.log(`Configuring GRPC at ${grpcUrl}`);
         app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
             transport: Transport.GRPC,
             options: {
@@ -28,7 +31,7 @@ async function bootstrap() {
                     oneofs: true,
                 },
 
-                url: '0.0.0.0:26658',
+                url: grpcUrl,
                 onLoadPackageDefinition: (pkg, server) => {
                     new ReflectionService(pkg).addToServer(server);
                 },
