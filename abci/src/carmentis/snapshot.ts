@@ -69,15 +69,73 @@ export class Snapshot {
       * Gets a snapshot chunk stored by this node.
       */
     async getChunk(height: number, index: number) {
-        const filePath = this.getFilePrefix(height) + '.json';
+        const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + '.json');
 
         try {
-            const content = fs.readFileSync(filePath);
+            const content = fs.readFileSync(jsonFilePath);
             const object = JSON.parse(content.toString());
-
         }
         catch(error) {
+            console.error(error);
+            return;
         }
+
+        const chunksFilePath = path.join(this.path, this.getFilePrefix(height) + '-chunks.bin');
+        const handle = await open(chunksFilePath, 'r');
+        const buffer = new Uint8Array(CHUNK_RECORD_LENGTH);
+
+        // read the header (height and chunks count)
+        await handle.read(buffer, 0, CHUNK_HEIGHT_LENGTH + CHUNK_COUNT_LENGTH, 0);
+
+        const readHeight = Utils.byteArrayToInt([...buffer.slice(0, CHUNK_HEIGHT_LENGTH)]);
+        const chunksCount = Utils.byteArrayToInt([...buffer.slice(CHUNK_HEIGHT_LENGTH, CHUNK_HEIGHT_LENGTH + CHUNK_COUNT_LENGTH)]);
+
+        if(readHeight != height) {
+            console.error("internal error: height field is inconsistent");
+            return;
+        }
+        if(index < 0 || index >= chunksCount) {
+            console.error("requested chunk index is inconsistent");
+            return;
+        }
+
+        // get the initial and maximum pointers from the index
+        const indexPointer = CHUNK_HEIGHT_LENGTH + CHUNK_COUNT_LENGTH + index * CHUNK_INDEX_LENGTH;
+        await handle.read(buffer, 0, CHUNK_INDEX_LENGTH, indexPointer);
+        let pointer = Utils.byteArrayToInt([...buffer.slice(0, CHUNK_INDEX_LENGTH)]);
+
+        let maxPointer;
+
+        if(index == chunksCount - 1) {
+            const stats = await handle.stat();
+            maxPointer = stats.size;
+        }
+        else {
+            await handle.read(buffer, 0, CHUNK_INDEX_LENGTH, indexPointer + CHUNK_INDEX_LENGTH);
+            maxPointer = Utils.byteArrayToInt([...buffer.slice(0, CHUNK_INDEX_LENGTH)]);
+        }
+
+        // read the chunk records
+        let chunkSize = 0;
+
+        for(; pointer < maxPointer; pointer += CHUNK_RECORD_LENGTH) {
+            await handle.read(buffer, 0, CHUNK_RECORD_LENGTH, pointer);
+            const { fileIdentifier, offset, size } = this.decodeChunkRecord(buffer);
+            console.log(fileIdentifier, offset, size);
+            chunkSize += size;
+        }
+        await handle.close();
+
+        if(chunkSize > MAX_CHUNK_SIZE) {
+            console.error("internal error: chunk size is inconsistent");
+            return;
+        }
+    }
+
+    /**
+      * Loads a snapshot chunk from another node.
+      */
+    async loadChunk(chunk: Uint8Array) {
     }
 
     /**
@@ -99,7 +157,7 @@ export class Snapshot {
                 await mkdir(this.path, { recursive: true });
             }
 
-            const { height, files, dbFilePath } = await this.createDbFile();
+            const { height, files, earliestFileDate, dbFilePath } = await this.createDbFile();
             const { chunks, chunksFilePath } = await this.createChunksFile(height, files);
             const dbFileSha256 = await this.getFileSha256(dbFilePath);
             const chunksFileSha256 = await this.getFileSha256(chunksFilePath);
@@ -110,7 +168,8 @@ export class Snapshot {
                 format: FORMAT,
                 chunks,
                 hash,
-                metadata: {}
+                metadata: {},
+                earliestFileDate
             };
 
             const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + '.json');
@@ -124,7 +183,7 @@ export class Snapshot {
     /**
       * Creates the database dump file.
       */
-    async createDbFile() {
+    private async createDbFile() {
         const chainInfoTableId = Utils.numberToHexa(NODE_SCHEMAS.DB_CHAIN_INFORMATION, 2);
         const chainInfoTableChar0 = chainInfoTableId.charCodeAt(0);
         const chainInfoTableChar1 = chainInfoTableId.charCodeAt(1);
@@ -139,6 +198,7 @@ export class Snapshot {
 
         const iterator = this.db.getDbIterator();
         const files = [];
+        let earliestFileIdentifier = 0xFF000000;
         let height;
         let size = 0;
 
@@ -161,6 +221,7 @@ export class Snapshot {
                 const fileIdentifier = [ 4, 5, 6, 7 ].reduce((t, n) => t * 0x100 + key[n], 0);
                 const dataFileObject: any = dataFileUnserializer.unserialize(value);
                 files.push([ fileIdentifier, dataFileObject.fileSize ]);
+                earliestFileIdentifier = Math.min(earliestFileIdentifier, fileIdentifier);
             }
         }
         await handle.close();
@@ -170,13 +231,19 @@ export class Snapshot {
 
         files.push([ 0, size ]);
 
-        return { height, files, dbFilePath };
+        const [ earliestYear, earliestMonth, earliestDay ] = Utils.decodeDay(earliestFileIdentifier);
+        const earliestFileDate =
+          earliestYear.toString(10) +
+          earliestMonth.toString(10).padStart(2, "0") +
+          earliestDay.toString(10).padStart(2, "0");
+
+        return { height, files, earliestFileDate, dbFilePath };
     }
 
     /**
       * Creates the chunks file.
       */
-    async createChunksFile(height: number, files: [number, number][]) {
+    private async createChunksFile(height: number, files: [number, number][]) {
         let chunks = [];
         let currentChunk = [];
         let currentChunkSize = 0;
@@ -209,7 +276,7 @@ export class Snapshot {
         const chunksFilePath = path.join(this.path, this.getFilePrefix(height) + '-chunks.bin');
         const handle = await open(chunksFilePath, 'w');
 
-        // write the chunks count
+        // write the header (height and chunks count)
         await handle.write(new Uint8Array(Utils.intToByteArray(height, CHUNK_HEIGHT_LENGTH)));
         await handle.write(new Uint8Array(Utils.intToByteArray(chunks.length, CHUNK_COUNT_LENGTH)));
 
@@ -236,7 +303,7 @@ export class Snapshot {
     /**
       * Encodes a chunk record.
       */
-    encodeChunkRecord(fileIdentifier, offset, size) {
+    private encodeChunkRecord(fileIdentifier: number, offset: number, size: number) {
         const record = new Uint8Array(CHUNK_RECORD_LENGTH);
 
         record.set(new Uint8Array(Utils.intToByteArray(fileIdentifier, CHUNK_FILE_IDENTIFIER_LENGTH)), 0);
@@ -246,7 +313,19 @@ export class Snapshot {
         return record;
     }
 
-    async getFileSha256(filePath: string) {
+    /**
+      * Decodes a chunk record.
+      */
+    private decodeChunkRecord(record: Uint8Array) {
+        let pointer = 0;
+        const fileIdentifier = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_FILE_IDENTIFIER_LENGTH)]);
+        const offset = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_OFFSET_LENGTH)]);
+        const size = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_SIZE_LENGTH)]);
+
+        return { fileIdentifier, offset, size };
+    }
+
+    private async getFileSha256(filePath: string) {
         const readStream = fs.createReadStream(filePath);
         const hash = crypto.createHash('sha256');
         
@@ -258,7 +337,7 @@ export class Snapshot {
     /**
       * Gets a snapshot file prefix.
       */
-    getFilePrefix(height: number) {
+    private getFilePrefix(height: number) {
         return 'snapshot-' + height.toString(10).padStart(9, "0");
     }
 }

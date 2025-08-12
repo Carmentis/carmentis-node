@@ -571,16 +571,19 @@ export class NodeCore {
         this.finalizedBlockCache = null;
 
         this.logger.log(`Commit done`);
-
 /*
         this.logger.log(`Creating snapshot`);
         const snapshot = new Snapshot(this.db, this.snapshotPath);
         await snapshot.create();
         this.logger.log(`Done creating snapshot`);
         this.logger.log(`Listing snapshots`);
-        console.log(await snapshot.getList());
+        const list = await snapshot.getList();
+        const lastSnapshot = list[list.length - 1];
+        for(let n = 0; n < lastSnapshot.chunks; n++) {
+          this.logger.log(`Loading chunk ` + n);
+          await snapshot.getChunk(lastSnapshot.height, n);
+        }
 */
-
         return CommitResponse.create({
             retain_height: 0,
         });
@@ -642,7 +645,14 @@ export class NodeCore {
         );
     }
 
-    async setBlockContent(cache: Cache, blockHeight: number, microblocks: any[]) {
+    async setBlockContent(cache: Cache, height: number, microblocks: any[]) {
+        await cache.db.putObject(
+            NODE_SCHEMAS.DB_BLOCK_CONTENT,
+            this.heightToTableKey(height),
+            {
+                microblocks
+            }
+        );
     }
 
     heightToTableKey(height: number) {
@@ -780,17 +790,25 @@ export class NodeCore {
 
     async getChainInformation(object: any) {
         this.logger.verbose(`getChainInformation`);
-        return await this.db.getRaw(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY);
+        const dataObject = await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY);
+
+        return this.messageSerializer.serialize(SCHEMAS.MSG_CHAIN_INFORMATION, dataObject);
     }
 
     async getBlockInformation(object: any) {
         this.logger.verbose(`getBlockInformation`);
-        return await this.db.getRaw(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(object.height));
+        const dataObject = await this.db.getObject(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(object.height));
+
+        return this.messageSerializer.serialize(SCHEMAS.MSG_BLOCK_INFORMATION, dataObject);
     }
 
     async getBlockContent(object: any) {
         this.logger.verbose(`getBlockContent`);
-        return await this.db.getRaw(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(object.height));
+console.log(object);
+        const dataObject = await this.db.getObject(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(object.height));
+console.log(dataObject);
+
+        return this.messageSerializer.serialize(SCHEMAS.MSG_BLOCK_CONTENT, dataObject);
     }
 
     async getVirtualBlockchainState(object: any) {
