@@ -95,8 +95,8 @@ export class AbciService {
         });
     }
 
-    ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
-        return Promise.resolve(undefined);
+    async ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
+        return await this.nodeCore.applySnapshotChunk(request);
     }
 
     async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
@@ -117,7 +117,7 @@ export class AbciService {
     }
 
     async Commit(request: CommitRequest): Promise<CommitResponse> {
-        const response = await this.nodeCore.commit();
+        const response = await this.nodeCore.commit(request);
 
         return Promise.resolve(response);
     }
@@ -142,16 +142,16 @@ export class AbciService {
         return Promise.resolve(undefined);
     }
 
-    ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
-        return Promise.resolve(undefined);
+    async ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
+        return await this.nodeCore.listSnapshots(request);
     }
 
-    LoadSnapshotChunk(request: LoadSnapshotChunkRequest): Promise<LoadSnapshotChunkResponse> {
-        return Promise.resolve(undefined);
+    async LoadSnapshotChunk(request: LoadSnapshotChunkRequest): Promise<LoadSnapshotChunkResponse> {
+        return await this.nodeCore.loadSnapshotChunk(request);
     }
 
-    OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
-        return Promise.resolve(undefined);
+    async OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
+        return await this.nodeCore.offerSnapshot(request);
     }
 
     VerifyVoteExtension(request: VerifyVoteExtensionRequest): Promise<VerifyVoteExtensionResponse> {

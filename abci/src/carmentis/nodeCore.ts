@@ -8,15 +8,12 @@ import { LevelDb } from './levelDb';
 import { RadixTree } from './radixTree';
 import { CachedLevelDb } from './cachedLevelDb';
 
-const PROPOSAL_UNKNOWN = 0;
-const PROPOSAL_ACCEPT = 1;
-const PROPOSAL_REJECT = 2;
-
 import {
     InitChainRequest,
     InitChainResponse,
     CheckTxRequest,
     CheckTxResponse,
+    CommitRequest,
     CommitResponse,
     ExecTxResult,
     PrepareProposalRequest,
@@ -29,6 +26,17 @@ import {
     VerifyVoteExtensionResponse,
     FinalizeBlockRequest,
     FinalizeBlockResponse,
+    ListSnapshotsRequest,
+    ListSnapshotsResponse,
+    LoadSnapshotChunkRequest,
+    LoadSnapshotChunkResponse,
+    OfferSnapshotRequest,
+    OfferSnapshotResponse,
+    ApplySnapshotChunkRequest,
+    ApplySnapshotChunkResponse,
+    ProcessProposalStatus,
+    OfferSnapshotResult,
+    ApplySnapshotChunkResult,
 } from '../proto-ts/cometbft/abci/v1/types';
 
 import {
@@ -66,6 +74,8 @@ interface Cache {
 type SectionCallback = (arg: any) => Promise<void>;
 type QueryCallback = (arg: any) => Promise<Uint8Array>;
 
+const SNAPSHOT_PERIOD = 1;
+
 export class NodeCore {
     logger: any;
     dbPath: string;
@@ -75,6 +85,7 @@ export class NodeCore {
     blockchain: Blockchain;
     db: LevelDb;
     storage: Storage;
+    snapshot: Snapshot;
     messageSerializer: MessageSerializer;
     messageUnserializer: MessageUnserializer;
     vbRadix: RadixTree;
@@ -93,6 +104,8 @@ export class NodeCore {
         this.db.initialize();
 
         this.storage = new Storage(this.db, this.storagePath, []);
+
+        this.snapshot = new Snapshot(this.db, this.snapshotPath, this.logger);
 
         const internalProvider = new NodeProvider(this.db, this.storage);
         const provider = new Provider(internalProvider, new NullNetworkProvider());
@@ -184,6 +197,9 @@ export class NodeCore {
 
         this.logger.log(`Clearing storage`);
         await this.storage.clear();
+
+        this.logger.log(`Clearing snapshots`);
+        await this.snapshot.clear(0);
 
         for (const validator of request.validators) {
             const address = this.cometPublicKeyToAddress(
@@ -310,7 +326,7 @@ export class NodeCore {
             `processProposal / total block fees: ${processBlockResult.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`,
         );
 
-        return PROPOSAL_ACCEPT;
+        return ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT;
     }
 
     async extendVote(request: ExtendVoteRequest) {}
@@ -560,32 +576,82 @@ export class NodeCore {
         };
     }
 
-    async commit() {
+    async commit(request: CommitRequest) {
         if (this.finalizedBlockCache === null) {
             throw `nothing to commit`;
         }
 
         await this.finalizedBlockCache.db.commit();
-        await this.finalizedBlockCache.storage.commit();
+        await this.finalizedBlockCache.storage.flush();
 
         this.finalizedBlockCache = null;
 
         this.logger.log(`Commit done`);
-/*
-        this.logger.log(`Creating snapshot`);
-        const snapshot = new Snapshot(this.db, this.snapshotPath);
-        await snapshot.create();
-        this.logger.log(`Done creating snapshot`);
+
+        const chainInfoObject = <any>await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY);
+
+        if(chainInfoObject.height % SNAPSHOT_PERIOD == 0) {
+            this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
+            await this.snapshot.create();
+            this.logger.log(`Done creating snapshot`);
+        }
+
+        // !! BEGIN TEST
         this.logger.log(`Listing snapshots`);
-        const list = await snapshot.getList();
+        const list = await this.snapshot.getList();
         const lastSnapshot = list[list.length - 1];
         for(let n = 0; n < lastSnapshot.chunks; n++) {
-          this.logger.log(`Loading chunk ` + n);
-          await snapshot.getChunk(lastSnapshot.height, n);
+            this.logger.log(`Loading snapshot chunk ${n + 1} out of ${lastSnapshot.chunks}`);
+            await this.snapshot.getChunk(this.storage, lastSnapshot.height, n);
         }
-*/
+        // !! END TEST
+
         return CommitResponse.create({
             retain_height: 0,
+        });
+    }
+
+    async listSnapshots(request: ListSnapshotsRequest) {
+        const list = await this.snapshot.getList();
+
+        return ListSnapshotsResponse.create({
+            snapshots : list.map((object) => {
+                // FIXME: use serialized version of object.metadata?
+                const metadata = new Uint8Array();
+
+                return {
+                    height: object.height,
+                    format: object.format,
+                    chunks: object.chunks,
+                    hash: Utils.binaryFromHexa(object.hash),
+                    metadata
+                };
+            })
+        });
+    }
+
+    async loadSnapshotChunk(request: LoadSnapshotChunkRequest) {
+        const chunk = await this.snapshot.getChunk(this.storage, request.height, request.chunk);
+
+        return LoadSnapshotChunkResponse.create({
+            chunk
+        });
+    }
+
+    async offerSnapshot(request: OfferSnapshotRequest) {
+        return OfferSnapshotResponse.create({
+            result: OfferSnapshotResult.OFFER_SNAPSHOT_RESULT_ACCEPT
+        });
+    }
+
+    async applySnapshotChunk(request: ApplySnapshotChunkRequest) {
+        await this.snapshot.loadReceivedChunk(this.storage, request.index, request.chunk);
+        const result = ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
+
+        return ApplySnapshotChunkResponse.create({
+            result,
+            refetch_chunks: [],
+            reject_senders: []
         });
     }
 
@@ -804,9 +870,7 @@ export class NodeCore {
 
     async getBlockContent(object: any) {
         this.logger.verbose(`getBlockContent`);
-console.log(object);
         const dataObject = await this.db.getObject(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(object.height));
-console.log(dataObject);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_BLOCK_CONTENT, dataObject);
     }

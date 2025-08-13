@@ -29,10 +29,19 @@ export class Storage {
         this.cache = new Map;
     }
 
+    /**
+      * Deletes all microblock directories and files.
+      * This should be called when and ONLY WHEN InitChain is triggered.
+      */
     async clear() {
         await rm(this.path, { recursive: true, force: true });
     }
 
+    /**
+      * Writes a microblock taken from the block transaction pool with a given expiration day.
+      * This updates a dedicated cache and the database (which should be cached as well).
+      * The data is NOT saved on disk until flush() is called.
+      */
     async writeMicroblock(expirationDay: number, txId: number): Promise<boolean> {
         const content = this.txs[txId];
         const size = content.length;
@@ -83,7 +92,10 @@ export class Storage {
         return true;
     }
 
-    async commit() {
+    /**
+      * Flushes all pending writes to disk.
+      */
+    async flush() {
         for(const [ fileIdentifier, cacheObject ] of this.cache) {
             const filePath = this.getFilePath(fileIdentifier);
             const directoryPath = path.dirname(filePath);
@@ -116,18 +128,64 @@ export class Storage {
         }
     }
 
+    /**
+      * Copies from a microblock file to a buffer.
+      * This is used by snapshots.
+      */
+    async copyFileToBuffer(fileIdentifier: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
+        const filePath = this.getFilePath(fileIdentifier);
+        const handle = await open(filePath, 'r');
+        const rd = await handle.read(buffer, bufferOffset, size, fileOffset);
+        await handle.close();
+
+        if(rd.bytesRead < size) {
+            throw new Error(`Encountered end of file while reading ${size} bytes from '${filePath}' at offset ${fileOffset}`);
+        }
+    }
+
+    /**
+      * Copies from a buffer to a microblock file.
+      * This is used by snapshots.
+      */
+    async copyBufferToFile(fileIdentifier: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
+        const filePath = this.getFilePath(fileIdentifier);
+        const handle = await open(filePath, 'a+');
+        const stats = await handle.stat();
+        const fileSize = stats.size;
+
+        if(fileSize != fileOffset) {
+            await handle.close();
+            throw new Error(`copyBufferToFile(): argument fileOffset (${fileOffset}) doesn't match the current file size (${fileSize})`);
+        }
+
+        await handle.write(buffer, bufferOffset, size);
+        await handle.close();
+    }
+
+    /**
+      * Reads a full microblock from its hash.
+      */
     async readFullMicroblock(hash: Uint8Array) {
         return await this.readMicroblock(hash, READ_FULL);
     }
 
+    /**
+      * Reads a microblock header from its hash.
+      */
     async readMicroblockHeader(hash: Uint8Array) {
         return await this.readMicroblock(hash, READ_HEADER);
     }
 
+    /**
+      * Reads a microblock body from its hash.
+      */
     async readMicroblockBody(hash: Uint8Array) {
         return await this.readMicroblock(hash, READ_BODY);
     }
 
+    /**
+      * Reads a full microblock, microblock header or microblock body from its hash.
+      */
     private async readMicroblock(hash: Uint8Array, partType: number) {
         const storageInfo = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, hash);
 
@@ -151,9 +209,10 @@ export class Storage {
         return dataBuffer;
     }
 
+    /**
+      * Reads a microblock part given a file handle, offset, size and type of part.
+      */
     private async readMicroblockPart(handle: FileHandle, offset: number, size: number, partType: number) {
-        let rd;
-
         const [ extraOffset, targetSize ] = [
             [ 0, size ],
             [ 0, SCHEMAS.MICROBLOCK_HEADER_SIZE ],
@@ -161,9 +220,9 @@ export class Storage {
         ][partType];
 
         const dataBuffer = new Uint8Array(targetSize);
-        rd = await handle.read(dataBuffer, 0, targetSize, offset + extraOffset);
+        const rd = await handle.read(dataBuffer, 0, targetSize, offset + extraOffset);
 
-        if(rd.bytesRead != targetSize) {
+        if(rd.bytesRead < targetSize) {
             throw new Error(`PANIC - encountered end of file while reading microblock data`);
         }
 
@@ -176,10 +235,23 @@ export class Storage {
     async processChallenge(seed: Uint8Array) {
     }
 
+    /**
+      * Converts the 32-bit encoded expiration day and microblock hash to a 32-bit file identifier:
+      * - the range 0x00000000 - 0x000EFFFF is reserved for special uses (only 0x00000000 is currently
+      *   used to identify the database file in a snapshot)
+      * - the range 0x000F0000 - 0xFEFFFFFF is used for files with an expiration day
+      * - the range 0xFF000000 - 0xFF0000FF is used for files with endless storage
+      * - the range 0xFF000100 - 0xFFFFFFFF is currently not used
+      */
     private getFileIdentifier(expirationDay: number, hash: Uint8Array) {
         return expirationDay || (0xFF000000 | hash[0]) >>> 0;
     }
 
+    /**
+      * Converts a 32-bit file identifier to a file path:
+      * - either [this.path]/[ENDLESS_DIRECTORY_NAME]/NN.bin for files with endless storage
+      * - or [this.path]/YYYY/YYYYMMDD.bin for files with an expiration day
+      */
     private getFilePath(fileIdentifier: number) {
         let directory;
         let filename;
