@@ -61,42 +61,16 @@ export class AbciService {
         });
     }
 
-    Info(request: InfoRequest): Promise<InfoResponse> {
-        return Promise.resolve({
-            version: '1',
-            data: 'Carmentis ABCI application',
-            app_version: 1,
-            last_block_height: 0,
-            last_block_app_hash: new Uint8Array(32),
-        });
+    Flush(request: FlushRequest): Promise<FlushResponse> {
+        return Promise.resolve(undefined);
+    }
+
+    async Info(request: InfoRequest): Promise<InfoResponse> {
+        return Promise.resolve(await this.nodeCore.info(request));
     }
 
     async InitChain(request: InitChainRequest): Promise<InitChainResponse> {
-        /*
-        if(!this.nodeCore) {
-          this.nodeCore = new NodeCore(this.logger, CometNodeProvider, {
-              dbPath: '../../.carmentis',
-          });
-        }
-
-         */
         return Promise.resolve(await this.nodeCore.initChain(request));
-    }
-
-    async PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        return Promise.resolve({
-            txs: await this.nodeCore.prepareProposal(request),
-        });
-    }
-
-    async ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
-        return Promise.resolve({
-            status: await this.nodeCore.processProposal(request),
-        });
-    }
-
-    async ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
-        return await this.nodeCore.applySnapshotChunk(request);
     }
 
     async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
@@ -116,30 +90,28 @@ export class AbciService {
         });
     }
 
-    async Commit(request: CommitRequest): Promise<CommitResponse> {
-        const response = await this.nodeCore.commit(request);
-
-        return Promise.resolve(response);
+    async PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
+        return Promise.resolve({
+            txs: await this.nodeCore.prepareProposal(request),
+        });
     }
 
-    ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
-        return Promise.resolve(undefined);
+    async ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
+        return Promise.resolve({
+            status: await this.nodeCore.processProposal(request),
+        });
     }
 
     async FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
         const response = await this.nodeCore.finalizeBlock(request);
 
-        //    this.logger.debug(`txResults: ${response.txResults.length} entries`);
-        //    const encoded = FinalizeBlockResponse.encode(response).finish();
-        //    this.logger.debug('Encoded FinalizeBlockResponse:', [...encoded].map(v => v.toString(16).padStart(2, "0")).join(" "));
-        //    const decoded = FinalizeBlockResponse.decode(encoded);
-        //    this.logger.debug('Decoded:', decoded);
-
         return Promise.resolve(response);
     }
 
-    Flush(request: FlushRequest): Promise<FlushResponse> {
-        return Promise.resolve(undefined);
+    async Commit(request: CommitRequest): Promise<CommitResponse> {
+        const response = await this.nodeCore.commit(request);
+
+        return Promise.resolve(response);
     }
 
     async ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
@@ -152,6 +124,14 @@ export class AbciService {
 
     async OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
         return await this.nodeCore.offerSnapshot(request);
+    }
+
+    async ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
+        return await this.nodeCore.applySnapshotChunk(request);
+    }
+
+    ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
+        return Promise.resolve(undefined);
     }
 
     VerifyVoteExtension(request: VerifyVoteExtensionRequest): Promise<VerifyVoteExtensionResponse> {

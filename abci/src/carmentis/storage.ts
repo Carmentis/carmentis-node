@@ -16,6 +16,10 @@ const READ_FULL = 0;
 const READ_HEADER = 1;
 const READ_BODY = 2;
 
+const CHALLENGE_FILES_PER_CHALLENGE = 8;
+const CHALLENGE_PARTS_PER_FILE = 256;
+const CHALLENGE_BYTES_PER_PART = 1024;
+
 export class Storage {
     db: dbInterface;
     path: string;
@@ -229,10 +233,67 @@ export class Storage {
         return dataBuffer;
     }
 
-    createChallenge(seed: Uint8Array) {
-    }
-
+    /**
+      * Processes a storage challenge for a given seed.
+      */
     async processChallenge(seed: Uint8Array) {
+        const buffer = new Uint8Array(CHALLENGE_PARTS_PER_FILE * CHALLENGE_BYTES_PER_PART);
+        let prngValue = seed;
+        let prngCounter = 0;
+        let hash = new Uint8Array(32);
+
+        const iterator = await this.db.query(NODE_SCHEMAS.DB_DATA_FILE);
+        const fileEntries = (await iterator.all()).map(([key, value]) => {
+            return [
+                key.reduce((t, n) => t * 0x100 + n, 0),
+                value.slice(0, 6).reduce((t, n) => t * 0x100 + n, 0)
+            ];
+        });
+
+        const filesCount = fileEntries.length;
+
+        for(let fileNdx = 0; fileNdx < CHALLENGE_FILES_PER_CHALLENGE; fileNdx++) {
+            const fileRank = getRandom48() % filesCount;
+            const [ fileIdentifier, fileSize ] = fileEntries[fileRank];
+            const filePath = this.getFilePath(fileIdentifier);
+            const handle = await open(filePath, 'r');
+            let bufferOffset = 0;
+
+            for(let partNdx = 0; partNdx < CHALLENGE_PARTS_PER_FILE; partNdx++) {
+                let remainingBytes = CHALLENGE_BYTES_PER_PART;
+                let fileOffset = getRandom48() % fileSize;
+
+                while(remainingBytes) {
+                    const readSize = Math.min(fileSize - fileOffset, remainingBytes);
+                    const rd = await handle.read(buffer, bufferOffset, readSize, fileOffset);
+
+                    if(rd.bytesRead < readSize) {
+                        throw new Error(`PANIC - Failed to read enough bytes from '${filePath}' during storage challenge`);
+                    }
+
+                    bufferOffset += readSize;
+                    fileOffset += readSize;
+                    fileOffset %= fileSize;
+                    remainingBytes -= readSize;
+                }
+            }
+            await handle.close();
+
+            const newHash = Crypto.Hashes.sha256AsBinary(buffer);
+            hash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
+        }
+
+        return hash;
+
+        // we extract 5 pseudo-random 48-bit values per hash and renew the hash every 5 calls
+        function getRandom48() {
+            const index = prngCounter++ % 5 * 6;
+
+            if(index == 0) {
+                prngValue = Crypto.Hashes.sha256AsBinary(prngValue);
+            }
+            return prngValue.slice(index, index + 6).reduce((t, n) => t * 0x100 + n, 0);
+        }
     }
 
     /**

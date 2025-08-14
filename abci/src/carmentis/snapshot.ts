@@ -37,7 +37,7 @@ export class Snapshot {
     }
 
     /**
-      * Delete the oldest snapshots, keeping at most n of them.
+      * Keeps up to n of the most recent snapshots and deletes the rest.
       */
     async clear(n) {
         const list = await this.getList();
@@ -58,7 +58,15 @@ export class Snapshot {
       * Called internally and from ListSnapshots. 
       */
     async getList() {
-        const entries = await readdir(this.path, { withFileTypes: true });
+        let entries;
+
+        try {
+            entries = await readdir(this.path, { withFileTypes: true });
+        }
+        catch(error) {
+            return [];
+        }
+
         // FIXME: The '\\' before ${JSON_SUFFIX} is for the '.' of '.json' and is temporary.
         // Once we've switched to Node 24, we should use this cleaner and safer version:
         // const regex = new RegExp(`^${RegExp.escape(SNAPSHOT_PREFIX)}\\d{9}${RegExp.escape(JSON_SUFFIX)}$`);

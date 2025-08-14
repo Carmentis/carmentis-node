@@ -96,7 +96,7 @@ export class LevelDb implements dbInterface {
         return keys;
     }
 
-    async query(tableId: number, query: any) {
+    async query(tableId: number, query?: any) {
         try {
             return this.sub[tableId].iterator(query);
         } catch (e) {

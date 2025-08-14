@@ -8,7 +8,12 @@ import { LevelDb } from './levelDb';
 import { RadixTree } from './radixTree';
 import { CachedLevelDb } from './cachedLevelDb';
 
+const APP_VERSION = 1;
+const SNAPSHOT_PERIOD = 1;
+
 import {
+    InfoRequest,
+    InfoResponse,
     InitChainRequest,
     InitChainResponse,
     CheckTxRequest,
@@ -74,8 +79,6 @@ interface Cache {
 type SectionCallback = (arg: any) => Promise<void>;
 type QueryCallback = (arg: any) => Promise<Uint8Array>;
 
-const SNAPSHOT_PERIOD = 1;
-
 export class NodeCore {
     logger: any;
     dbPath: string;
@@ -93,6 +96,7 @@ export class NodeCore {
     sectionCallbacks: Map<number, SectionCallback>;
     queryCallbacks: Map<number, QueryCallback>;
     finalizedBlockCache: Cache | null;
+    isImportingSnapshot: boolean;
 
     constructor(logger: any, options: any) {
         this.logger = logger;
@@ -122,6 +126,8 @@ export class NodeCore {
         this.accountManager = new AccountManager(this.db, this.tokenRadix);
 
         this.finalizedBlockCache = null;
+
+        this.isImportingSnapshot = false;
 
         this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
             [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
@@ -187,6 +193,26 @@ export class NodeCore {
             }
             await sectionCallback(context);
         }
+    }
+
+    async info(request: InfoRequest) {
+        this.logger.log(`info`);
+
+        this.isImportingSnapshot = false;
+
+        const chainInfoObject = <any>await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY) || {
+            height: 0
+        };
+
+        const { appHash } = await this.computeApplicationHash(this.tokenRadix, this.vbRadix, this.storage);
+
+        return InfoResponse.create({
+            version: '1',
+            data: 'Carmentis ABCI application',
+            app_version: APP_VERSION,
+            last_block_height: chainInfoObject.height,
+            last_block_app_hash: appHash,
+        });
     }
 
     async initChain(request: InitChainRequest) {
@@ -559,9 +585,7 @@ export class NodeCore {
         chainInfoObject.objectCounts = chainInfoObject.objectCounts.map((count, ndx) => count + newObjects[ndx]);
         await cache.db.putObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY, chainInfoObject);
 
-        const tokenRadixHash = await cache.tokenRadix.getRootHash();
-        const vbRadixHash = await cache.vbRadix.getRootHash();
-        const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(vbRadixHash, tokenRadixHash));
+        const { tokenRadixHash, vbRadixHash, appHash } = await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
 
         this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
         this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
@@ -574,6 +598,16 @@ export class NodeCore {
             blockSize,
             microblocks
         };
+    }
+
+    async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: Storage) {
+        const tokenRadixHash = await tokenRadix.getRootHash();
+        const vbRadixHash = await vbRadix.getRootHash();
+        const radixHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(vbRadixHash, tokenRadixHash));
+        const storageHash = await storage.processChallenge(radixHash);
+        const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
+
+        return { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash };
     }
 
     async commit(request: CommitRequest) {
@@ -590,13 +624,14 @@ export class NodeCore {
 
         const chainInfoObject = <any>await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY);
 
-        if(chainInfoObject.height % SNAPSHOT_PERIOD == 0) {
+        if(!this.isImportingSnapshot && chainInfoObject.height % SNAPSHOT_PERIOD == 0) {
             this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
             await this.snapshot.create();
             this.logger.log(`Done creating snapshot`);
         }
 
         // !! BEGIN TEST
+/*
         this.logger.log(`Listing snapshots`);
         const list = await this.snapshot.getList();
         const lastSnapshot = list[list.length - 1];
@@ -604,6 +639,7 @@ export class NodeCore {
             this.logger.log(`Loading snapshot chunk ${n + 1} out of ${lastSnapshot.chunks}`);
             await this.snapshot.getChunk(this.storage, lastSnapshot.height, n);
         }
+*/
         // !! END TEST
 
         return CommitResponse.create({
@@ -612,6 +648,8 @@ export class NodeCore {
     }
 
     async listSnapshots(request: ListSnapshotsRequest) {
+        this.logger.log(`listSnapshots`);
+
         const list = await this.snapshot.getList();
 
         return ListSnapshotsResponse.create({
@@ -631,6 +669,8 @@ export class NodeCore {
     }
 
     async loadSnapshotChunk(request: LoadSnapshotChunkRequest) {
+        this.logger.log(`loadSnapshotChunk height=${request.height}`);
+
         const chunk = await this.snapshot.getChunk(this.storage, request.height, request.chunk);
 
         return LoadSnapshotChunkResponse.create({
@@ -639,12 +679,18 @@ export class NodeCore {
     }
 
     async offerSnapshot(request: OfferSnapshotRequest) {
+        this.logger.log(`offerSnapshot`);
+
+        this.isImportingSnapshot = true;
+
         return OfferSnapshotResponse.create({
             result: OfferSnapshotResult.OFFER_SNAPSHOT_RESULT_ACCEPT
         });
     }
 
     async applySnapshotChunk(request: ApplySnapshotChunkRequest) {
+        this.logger.log(`applySnapshotChunk index=${request.index}`);
+
         await this.snapshot.loadReceivedChunk(this.storage, request.index, request.chunk);
         const result = ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 
