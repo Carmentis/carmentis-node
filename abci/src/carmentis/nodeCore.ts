@@ -9,7 +9,12 @@ import { RadixTree } from './radixTree';
 import { CachedLevelDb } from './cachedLevelDb';
 
 const APP_VERSION = 1;
-const SNAPSHOT_PERIOD = 1;
+
+const nodeConfig = {
+    snapshotBlockPeriod: 1,
+    blockHistoryBeforeSnapshot: 0,
+    maxSnapshots: 3
+};
 
 import {
     InfoRequest,
@@ -244,43 +249,43 @@ export class NodeCore {
         }
 
         return {
-            consensus_params: undefined,
-            /*
-      consensusParams: {
-        feature: {
-          voteExtensionsEnableHeight: 2,
-          pbtsEnableHeight: undefined
-        },
-        block: {
-          maxBytes: 2202009,
-          maxGas: -1,
-        },
-        evidence: {
-          maxAgeDuration: {
-            seconds: 172800,
-            nanos: 0
-          },
-          maxBytes: 2202009,
-          maxAgeNumBlocks: 100000
-        },
-        validator: {
-          pubKeyTypes: ['ed25519']
-        },
-        version: {
-          app: 1
-        },
-        abci: undefined,
-        synchrony: {
-          precision: {
-            seconds: 172800,
-            nanos: 0
-          },
-          messageDelay: {
-            seconds: 172800,
-            nanos: 0
-          }
-        }
-      },
+            consensus_params: {},
+/*
+            consensus_params: {
+                feature: {
+                    vote_extensions_enable_height: 2,
+                    pbts_enable_height: undefined
+                },
+                block: {
+                    max_bytes: 16777216,
+                    max_gas: -1,
+                },
+                evidence: {
+                    max_age_duration: {
+                        seconds: 172800,
+                        nanos: 0
+                    },
+                    max_bytes: 2097152,
+                    max_age_num_blocks: 100000
+                },
+                validator: {
+                    pub_key_types: ['ed25519']
+                },
+                version: {
+                    app: 1
+                },
+                abci: undefined,
+                synchrony: {
+                    precision: {
+                        seconds: 172800,
+                        nanos: 0
+                    },
+                    message_delay: {
+                        seconds: 172800,
+                        nanos: 0
+                    }
+                }
+            },
 */
             validators: [],
             app_hash: new Uint8Array(32),
@@ -288,7 +293,7 @@ export class NodeCore {
     }
 
     /**
-        Incoming transaction
+      Incoming transaction
     */
     async checkTx(request: CheckTxRequest) {
         this.logger.log(`checkTx`);
@@ -319,7 +324,7 @@ export class NodeCore {
     }
 
     /**
-        Executed by the proposer
+      Executed by the proposer
     */
     async prepareProposal(request: PrepareProposalRequest) {
         this.logger.log(`prepareProposal: ${request.txs.length} txs`);
@@ -334,11 +339,11 @@ export class NodeCore {
     }
 
     /**
-        Executed by all validators
-        answer:
-          PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
-          PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
-          PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
+      Executed by all validators
+      answer:
+        PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
+        PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
+        PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
     */
     async processProposal(request: ProcessProposalRequest) {
         this.logger.log(`processProposal: ${request.txs.length} txs`);
@@ -355,9 +360,13 @@ export class NodeCore {
         return ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT;
     }
 
-    async extendVote(request: ExtendVoteRequest) {}
+    async extendVote(request: ExtendVoteRequest) {
+        // not implemented
+    }
 
-    async verifyVoteExtension(request: VerifyVoteExtensionRequest) {}
+    async verifyVoteExtension(request: VerifyVoteExtensionRequest) {
+        // not implemented
+    }
 
     async finalizeBlock(request: FinalizeBlockRequest) {
         const numberOfTransactionsInBlock = request.txs.length;
@@ -395,7 +404,7 @@ export class NodeCore {
             tx_results: processBlockResult.txResults,
             app_hash: processBlockResult.appHash,
             events: [],
-            validator_updates: [],
+            validator_updates: [], //this.finalizedBlockCache.validatorSetUpdate,
             consensus_param_updates: undefined,
         });
     }
@@ -404,7 +413,7 @@ export class NodeCore {
         this.logger.log(`payValidators`);
 
         /**
-            get the pending fees from the fees account
+          get the pending fees from the fees account
         */
         const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
             ECO.ACCOUNT_BLOCK_FEES,
@@ -417,7 +426,7 @@ export class NodeCore {
         }
 
         /**
-            get the validator accounts from decided_last_commit.votes sent by Comet
+          get the validator accounts from decided_last_commit.votes sent by Comet
         */
         const validatorAccounts = [];
 
@@ -458,7 +467,7 @@ export class NodeCore {
         }
 
         /**
-            split the fees among the validators
+          split the fees among the validators
         */
         const feesQuotient = Math.floor(pendingFees / nValidators);
         const feesRest = pendingFees % nValidators;
@@ -585,10 +594,12 @@ export class NodeCore {
         chainInfoObject.objectCounts = chainInfoObject.objectCounts.map((count, ndx) => count + newObjects[ndx]);
         await cache.db.putObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY, chainInfoObject);
 
-        const { tokenRadixHash, vbRadixHash, appHash } = await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
+        const { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash } = await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
 
         this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
         this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
+        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
+        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
         this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
         return {
@@ -624,10 +635,17 @@ export class NodeCore {
 
         const chainInfoObject = <any>await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY);
 
-        if(!this.isImportingSnapshot && chainInfoObject.height % SNAPSHOT_PERIOD == 0) {
+        let retainedHeight = 0;
+
+        if(!this.isImportingSnapshot && chainInfoObject.height % nodeConfig.snapshotBlockPeriod == 0) {
             this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
+            await this.snapshot.clear(nodeConfig.maxSnapshots - 1);
             await this.snapshot.create();
             this.logger.log(`Done creating snapshot`);
+
+            if(nodeConfig.blockHistoryBeforeSnapshot) {
+                retainedHeight = Math.max(0, chainInfoObject.height - nodeConfig.blockHistoryBeforeSnapshot);
+            }
         }
 
         // !! BEGIN TEST
@@ -643,7 +661,7 @@ export class NodeCore {
         // !! END TEST
 
         return CommitResponse.create({
-            retain_height: 0,
+            retain_height: retainedHeight
         });
     }
 
@@ -702,7 +720,7 @@ export class NodeCore {
     }
 
     /**
-        Checks a microblock and invokes the section callbacks of the node.
+      Checks a microblock and invokes the section callbacks of the node.
     */
     async checkMicroblock(cache: Cache, importer: MicroblockImporter, timestamp?: number) {
         this.logger.log(`Checking microblock ${Utils.binaryToHexa(importer.hash)}`);
@@ -772,7 +790,7 @@ export class NodeCore {
     }
 
     /**
-        Account callbacks
+      Account callbacks
     */
     async accountTokenIssuanceCallback(context: any) {
         const rawPublicKey = await context.vb.getPublicKey();
@@ -842,13 +860,12 @@ export class NodeCore {
     }
 
     /**
-     Validator node callbacks
+      Validator node callbacks
      */
     async validatorNodeDescriptionCallback(context: any) {
         const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
         const cometAddress = this.cometPublicKeyToAddress(cometPublicKeyBytes);
 
-        const description = await context.object.getDescription();
         const networkIntegration = await context.object.getNetworkIntegration();
 
         // create the new link: Comet address -> identifier
@@ -866,10 +883,18 @@ export class NodeCore {
     }
 
     async validatorNodeNetworkIntegrationCallback(context: any) {
+        const description = await context.object.getDescription();
+        const cometPublicKeyBytes = Base64.decodeBinary(description.cometPublicKey);
+
+        context.cache.validatorSetUpdate.push({
+            power: context.section.object.votingPower,
+            pub_key_type: description.cometPublicKeyType,
+            pub_key_bytes: cometPublicKeyBytes,
+        });
     }
 
     /**
-        Custom Carmentis query via abci_query
+      Custom Carmentis query via abci_query
     */
     async query(data: any): Promise<Uint8Array> {
         const { type, object } = this.messageUnserializer.unserialize(data);

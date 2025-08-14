@@ -16,7 +16,6 @@ import {
 } from '@cmts-dev/carmentis-sdk/server';
 
 const FORMAT = 1;
-const MAX_SNAPSHOTS = 3;
 const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
 const SNAPSHOT_PREFIX = 'snapshot-';
 const CHUNKS_SUFFIX = '-chunks.bin';
@@ -252,8 +251,6 @@ export class Snapshot {
         catch(error) {
             await mkdir(this.path, { recursive: true });
         }
-
-        await this.clear(MAX_SNAPSHOTS - 1);
 
         const { height, files, earliestFileDate, dbFilePath } = await this.createDbFile();
         const { chunks, chunksFilePath } = await this.createChunksFile(height, files);

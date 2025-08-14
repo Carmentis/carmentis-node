@@ -240,9 +240,15 @@ export class Storage {
         const buffer = new Uint8Array(CHALLENGE_PARTS_PER_FILE * CHALLENGE_BYTES_PER_PART);
         let prngValue = seed;
         let prngCounter = 0;
-        let hash = new Uint8Array(32);
+        let hash = Utils.getNullHash();
 
         const iterator = await this.db.query(NODE_SCHEMAS.DB_DATA_FILE);
+
+        if(iterator === null) {
+            return hash;
+        };
+
+        // fileEntries[] is the list of all pairs [ fileIdentifier, fileSize ]
         const fileEntries = (await iterator.all()).map(([key, value]) => {
             return [
                 key.reduce((t, n) => t * 0x100 + n, 0),
@@ -251,6 +257,10 @@ export class Storage {
         });
 
         const filesCount = fileEntries.length;
+
+        if(!filesCount) {
+            return hash;
+        };
 
         for(let fileNdx = 0; fileNdx < CHALLENGE_FILES_PER_CHALLENGE; fileNdx++) {
             const fileRank = getRandom48() % filesCount;
