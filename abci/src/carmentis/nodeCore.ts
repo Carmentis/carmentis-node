@@ -183,7 +183,7 @@ export class NodeCore {
             const sectionCallback = this.sectionCallbacks.get(key);
 
             if (!sectionCallback) {
-                throw `internal error: undefined section callback`;
+                throw new Error(`internal error: undefined section callback`);
             }
             await sectionCallback(context);
         }
@@ -578,7 +578,7 @@ export class NodeCore {
 
     async commit(request: CommitRequest) {
         if (this.finalizedBlockCache === null) {
-            throw `nothing to commit`;
+            throw new Error(`nothing to commit`);
         }
 
         await this.finalizedBlockCache.db.commit();
@@ -997,7 +997,7 @@ export class NodeCore {
         const indexTableId = this.getIndexTableId(object.type);
 
         if (indexTableId == -1) {
-            throw `invalid object type ${object.type}`;
+            throw new Error(`invalid object type ${object.type}`);
         }
 
         const list = await this.db.getKeys(indexTableId);
