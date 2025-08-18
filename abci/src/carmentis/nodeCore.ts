@@ -75,9 +75,10 @@ type SectionCallback = (arg: any) => Promise<void>;
 type QueryCallback = (arg: any) => Promise<Uint8Array>;
 
 const SNAPSHOT_PERIOD = 1;
+import { Logger } from '@nestjs/common';
 
 export class NodeCore {
-    logger: any;
+    logger: Logger;
     dbPath: string;
     storagePath: string;
     snapshotPath: string;
@@ -94,7 +95,7 @@ export class NodeCore {
     queryCallbacks: Map<number, QueryCallback>;
     finalizedBlockCache: Cache | null;
 
-    constructor(logger: any, options: any) {
+    constructor(logger: Logger, options: any) {
         this.logger = logger;
         this.dbPath = path.join(options.abciStoragePath, "db");
         this.storagePath = path.join(options.abciStoragePath, "microblocks");
