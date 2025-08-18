@@ -58,7 +58,8 @@ export class Snapshot {
       * Called internally and from ListSnapshots. 
       */
     async getList() {
-        const entries = await readdir(this.path, { withFileTypes: true });
+        const entries = await this.getSnapshotEntriesFromDirectory();
+        //const entries = await readdir(this.path, { withFileTypes: true});
         // FIXME: The '\\' before ${JSON_SUFFIX} is for the '.' of '.json' and is temporary.
         // Once we've switched to Node 24, we should use this cleaner and safer version:
         // const regex = new RegExp(`^${RegExp.escape(SNAPSHOT_PREFIX)}\\d{9}${RegExp.escape(JSON_SUFFIX)}$`);
@@ -390,5 +391,10 @@ export class Snapshot {
       */
     private getFilePrefix(height: number) {
         return SNAPSHOT_PREFIX + height.toString(10).padStart(9, '0');
+    }
+
+    private async getSnapshotEntriesFromDirectory() {
+        await mkdir(this.path, { recursive: true });
+        return  await readdir(this.path, { withFileTypes: true});
     }
 }
