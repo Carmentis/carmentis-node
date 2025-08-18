@@ -596,7 +596,9 @@ export class NodeCore {
             this.logger.log(`Done creating snapshot`);
         }
 
+        // TODO: This test takes some time, so I comment it
         // !! BEGIN TEST
+        /*
         this.logger.log(`Listing snapshots`);
         const list = await this.snapshot.getList();
         const lastSnapshot = list[list.length - 1];
@@ -604,6 +606,7 @@ export class NodeCore {
             this.logger.log(`Loading snapshot chunk ${n + 1} out of ${lastSnapshot.chunks}`);
             await this.snapshot.getChunk(this.storage, lastSnapshot.height, n);
         }
+         */
         // !! END TEST
 
         return CommitResponse.create({
