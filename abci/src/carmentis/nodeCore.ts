@@ -75,6 +75,8 @@ import {
     KeyedProvider,
     Microblock,
     PrivateSignatureKey,
+    IllegalParameterError,
+    EncoderFactory,
 } from '@cmts-dev/carmentis-sdk/server';
 
 interface Cache {
@@ -250,19 +252,6 @@ export class NodeCore {
         await this.snapshot.clear(0);
 
 
-
-        /*
-        const carmentisOrganization = await this.blockchain.createOrganization();
-        await carmentisOrganization.setDescription({
-            countryCode: "FR",
-            website: "https://carmentis.io",
-            name: "Carmentis",
-            city: "Paris"
-        });
-
-         */
-
-
         for (const validator of request.validators) {
             const address = this.cometPublicKeyToAddress(
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
@@ -280,7 +269,7 @@ export class NodeCore {
         }
 
         this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
-        const appHash = await this.createInitialState();
+        const appHash = await this.createInitialBlockchainState(request);
         return {
             consensus_params: {},
 /*
@@ -325,18 +314,36 @@ export class NodeCore {
         };
     }
 
-    private async createInitialState() {
-        // We create the genesis account
+    private async createInitialBlockchainState(request: InitChainRequest) {
+        // The init chain request should contain exactly one validator in the validator set.
+        // The validator, assumed to be this running node, is used to declare the first running node.
+        const validators = request.validators;
+        const containsExactlyOneValidator = validators.length === 1;
+        if (!containsExactlyOneValidator) {
+            throw new IllegalParameterError(
+                'Cannot create initial state with zero or more than one validator',
+            );
+        }
+
+        // Once we are sure that the validator set contains exactly one validator, we extract it from
+        // the set of validator to get its public key type and value.
+        // We also have to convert the public key value in base64.
+        const { pub_key_type: genesisNodePublicKeyType, pub_key_bytes } = validators[0];
+        const encoder = EncoderFactory.bytesToBase64Encoder();
+        const genesisNodePublicKey = encoder.encode(pub_key_bytes);
+
+        // We create the genesis account.
+        this.logger.verbose("Creating genesis account creation transaction")
         const privateKey = this.sk;
         const publicKey = privateKey.getPublicKey();
         const account = await this.blockchain.createGenesisAccount(publicKey);
-        const accountId = account.getVirtualBlockchainId();
         const accountVb = account.vb;
         await accountVb.setSignature(privateKey);
         const {headerData, bodyData, microblockHash} = account.vb.currentMicroblock.serialize();
-        const genesisAccountTx = Utils.binaryFrom(headerData, bodyData);
+        const genesisAccountCreationTx = Utils.binaryFrom(headerData, bodyData);
 
         // we create the initial Carmentis organisation
+        this.logger.verbose("Creating organisation creation transaction")
         const organisation = await this.blockchain.createOrganization();
         await organisation.setDescription({
             name: "Carmentis",
@@ -347,6 +354,7 @@ export class NodeCore {
         const organisationVb = organisation.vb;
         await organisationVb.setSignature(privateKey);
         const serializedOrganisationMicroBlock = organisationVb.currentMicroblock.serialize();
+        const organizationId = Hash.from(serializedOrganisationMicroBlock.microblockHash);
         const organisationCreationMicroBlockHeader = serializedOrganisationMicroBlock.headerData;
         const organisationCreationMicroBlockBody = serializedOrganisationMicroBlock.bodyData;
         const organisationCreationTx = Utils.binaryFrom(
@@ -356,29 +364,111 @@ export class NodeCore {
 
 
 
-
-        const txs = [genesisAccountTx, organisationCreationTx];
-        const cache = this.getCacheInstance(txs);
-        const blockHeight = 0; // if we put 1, the micro-blocks do not appear in the explorer.
+        // We proceed to the publication of the genesis account creation transaction and the initial Carmentis organisation creation transaction.
+        const firstBatchTxs = [genesisAccountCreationTx, organisationCreationTx];
         const blockTimestamp = 0;
-        const processBlockResult = await this.processBlock(cache, blockHeight, blockTimestamp, txs);
+        const cache = this.getCacheInstance(firstBatchTxs);
+        const blockHeight = 0; // if we put 1, the micro-blocks do not appear in the explorer.
 
-        const appHash = processBlockResult.appHash;
+        const processBlockResult = await this.processBlock(cache, blockHeight, blockTimestamp, firstBatchTxs);
+        const firstAppHash = processBlockResult.appHash;
+        const proposedAddress = new Uint8Array(32);
         await this.setBlockInformation(
             cache,
             blockHeight,
-            appHash,
+            firstAppHash,
             blockTimestamp,
-            new Uint8Array(32),
+            proposedAddress,
             processBlockResult.blockSize,
-            txs.length
+            firstBatchTxs.length
         );
-
         await this.setBlockContent(cache, blockHeight, processBlockResult.microblocks);
         await cache.db.commit();
         await cache.storage.flush();
 
-        return appHash;
+
+
+        // We now declare the running node as the genesis node.
+        const genesisNode = await this.blockchain.createValidatorNode(organizationId);
+        await genesisNode.setDescription({
+            cometPublicKey: genesisNodePublicKey,
+            cometPublicKeyType: genesisNodePublicKeyType,
+        });
+        //await genesisNode.setNetworkIntegration({
+        //    votingPower: 10
+        //});
+        const validatorNodeVb = genesisNode.vb;
+        // we have to disable callback to prevent provider to check existence of organization we have created above.
+        await validatorNodeVb.setSignature(privateKey, false);
+        const serializedGenesisNodeMicroBlock = validatorNodeVb.currentMicroblock.serialize();
+        const validatorNodeId = Hash.from(serializedGenesisNodeMicroBlock.microblockHash);
+        const genesisNodeMicroBlockHeader = serializedGenesisNodeMicroBlock.headerData;
+        const genesisNodeMicroBlockBody = serializedGenesisNodeMicroBlock.bodyData;
+        const genesisNodeDeclarationTx = Utils.binaryFrom(
+            genesisNodeMicroBlockHeader,
+            genesisNodeMicroBlockBody,
+        );
+
+
+        // We proceed to the creation of the initial state based on the three previously created transactions.
+        const secondBatchTxs = [genesisNodeDeclarationTx];
+        const secondBatchCache = this.getCacheInstance(secondBatchTxs);
+        const secondBlockTransactionHeight = 1; // if we put 1, the micro-blocks do not appear in the explorer.
+
+        const processSecondBlockResult = await this.processBlock(secondBatchCache, secondBlockTransactionHeight, 0, secondBatchTxs);
+        const secondAppHash = processSecondBlockResult.appHash;
+        await this.setBlockInformation(
+            secondBatchCache,
+            secondBlockTransactionHeight,
+            secondAppHash,
+            blockTimestamp,
+            proposedAddress,
+            processSecondBlockResult.blockSize,
+            secondBatchTxs.length
+        );
+        await this.setBlockContent(secondBatchCache, secondBlockTransactionHeight, processSecondBlockResult.microblocks);
+        await secondBatchCache.db.commit();
+        await secondBatchCache.storage.flush();
+
+
+        // We now load the genesis validator node and set the voting power to 10.
+        const loadedNode = await this.blockchain.loadValidatorNode(validatorNodeId);
+        await loadedNode.setNetworkIntegration({
+            votingPower: 10
+        });
+        const vb = loadedNode.vb;
+        await vb.setSignature(privateKey);
+        const serializedMb = vb.currentMicroblock.serialize();
+        const genesisNodeVotingPowerUpdateTx = Utils.binaryFrom(
+            serializedMb.headerData,
+            serializedMb.bodyData,
+        );
+
+
+        // We proceed to the creation of the initial state based on the three previously created transactions.
+        const thirdBatchTxs = [genesisNodeVotingPowerUpdateTx];
+        const thirdBatchCache = this.getCacheInstance(thirdBatchTxs);
+        const thirdBlockTransactionHeight = 2; // if we put 1, the micro-blocks do not appear in the explorer.
+
+        const processThirdBlockResult = await this.processBlock(thirdBatchCache, thirdBlockTransactionHeight, 0, thirdBatchTxs);
+        const finalAppHash = processThirdBlockResult.appHash;
+        await this.setBlockInformation(
+            thirdBatchCache,
+            thirdBlockTransactionHeight,
+            finalAppHash,
+            blockTimestamp,
+            proposedAddress,
+            processThirdBlockResult.blockSize,
+            thirdBatchTxs.length
+        );
+        await this.setBlockContent(thirdBatchCache, thirdBlockTransactionHeight, processThirdBlockResult.microblocks);
+        await thirdBatchCache.db.commit();
+        await thirdBatchCache.storage.flush();
+
+
+
+
+        return secondAppHash;
     }
 
     /**
