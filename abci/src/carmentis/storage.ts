@@ -240,7 +240,7 @@ export class Storage {
         const buffer = new Uint8Array(CHALLENGE_PARTS_PER_FILE * CHALLENGE_BYTES_PER_PART);
         let prngValue = seed;
         let prngCounter = 0;
-        let hash = Utils.getNullHash();
+        let hash: Uint8Array = Utils.getNullHash();
 
         const iterator = await this.db.query(NODE_SCHEMAS.DB_DATA_FILE);
 
