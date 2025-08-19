@@ -8,7 +8,17 @@ import { LevelDb } from './levelDb';
 import { RadixTree } from './radixTree';
 import { CachedLevelDb } from './cachedLevelDb';
 
+const APP_VERSION = 1;
+
+const nodeConfig = {
+    snapshotBlockPeriod: 1,
+    blockHistoryBeforeSnapshot: 0,
+    maxSnapshots: 3
+};
+
 import {
+    InfoRequest,
+    InfoResponse,
     InitChainRequest,
     InitChainResponse,
     CheckTxRequest,
@@ -101,6 +111,7 @@ export class NodeCore {
     queryCallbacks: Map<number, QueryCallback>;
     finalizedBlockCache: Cache | null;
     private sk: PrivateSignatureKey;
+    isImportingSnapshot: boolean;
 
     constructor(logger: Logger, options: any) {
         this.logger = logger;
@@ -137,6 +148,8 @@ export class NodeCore {
         this.accountManager = new AccountManager(this.db, this.tokenRadix);
 
         this.finalizedBlockCache = null;
+
+        this.isImportingSnapshot = false;
 
         this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
             [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
@@ -204,6 +217,26 @@ export class NodeCore {
         }
     }
 
+    async info(request: InfoRequest) {
+        this.logger.log(`info`);
+
+        this.isImportingSnapshot = false;
+
+        const chainInfoObject = <any>await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY) || {
+            height: 0
+        };
+
+        const { appHash } = await this.computeApplicationHash(this.tokenRadix, this.vbRadix, this.storage);
+
+        return InfoResponse.create({
+            version: '1',
+            data: 'Carmentis ABCI application',
+            app_version: APP_VERSION,
+            last_block_height: chainInfoObject.height,
+            last_block_app_hash: appHash,
+        });
+    }
+
     async initChain(request: InitChainRequest) {
         this.logger.log(`initChain`);
 
@@ -249,43 +282,43 @@ export class NodeCore {
         this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
         const appHash = await this.createInitialState();
         return {
-            consensus_params: undefined,
-            /*
-      consensusParams: {
-        feature: {
-          voteExtensionsEnableHeight: 2,
-          pbtsEnableHeight: undefined
-        },
-        block: {
-          maxBytes: 2202009,
-          maxGas: -1,
-        },
-        evidence: {
-          maxAgeDuration: {
-            seconds: 172800,
-            nanos: 0
-          },
-          maxBytes: 2202009,
-          maxAgeNumBlocks: 100000
-        },
-        validator: {
-          pubKeyTypes: ['ed25519']
-        },
-        version: {
-          app: 1
-        },
-        abci: undefined,
-        synchrony: {
-          precision: {
-            seconds: 172800,
-            nanos: 0
-          },
-          messageDelay: {
-            seconds: 172800,
-            nanos: 0
-          }
-        }
-      },
+            consensus_params: {},
+/*
+            consensus_params: {
+                feature: {
+                    vote_extensions_enable_height: 2,
+                    pbts_enable_height: undefined
+                },
+                block: {
+                    max_bytes: 16777216,
+                    max_gas: -1,
+                },
+                evidence: {
+                    max_age_duration: {
+                        seconds: 172800,
+                        nanos: 0
+                    },
+                    max_bytes: 2097152,
+                    max_age_num_blocks: 100000
+                },
+                validator: {
+                    pub_key_types: ['ed25519']
+                },
+                version: {
+                    app: 1
+                },
+                abci: undefined,
+                synchrony: {
+                    precision: {
+                        seconds: 172800,
+                        nanos: 0
+                    },
+                    message_delay: {
+                        seconds: 172800,
+                        nanos: 0
+                    }
+                }
+            },
 */
             validators: [],
             app_hash: appHash,
@@ -349,7 +382,7 @@ export class NodeCore {
     }
 
     /**
-        Incoming transaction
+      Incoming transaction
     */
     async checkTx(request: CheckTxRequest) {
         this.logger.log(`checkTx`);
@@ -380,7 +413,7 @@ export class NodeCore {
     }
 
     /**
-        Executed by the proposer
+      Executed by the proposer
     */
     async prepareProposal(request: PrepareProposalRequest) {
         this.logger.log(`prepareProposal: ${request.txs.length} txs`);
@@ -395,11 +428,11 @@ export class NodeCore {
     }
 
     /**
-        Executed by all validators
-        answer:
-          PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
-          PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
-          PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
+      Executed by all validators
+      answer:
+        PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
+        PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
+        PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
     */
     async processProposal(request: ProcessProposalRequest) {
         this.logger.log(`processProposal: ${request.txs.length} txs`);
@@ -416,9 +449,13 @@ export class NodeCore {
         return ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT;
     }
 
-    async extendVote(request: ExtendVoteRequest) {}
+    async extendVote(request: ExtendVoteRequest) {
+        // not implemented
+    }
 
-    async verifyVoteExtension(request: VerifyVoteExtensionRequest) {}
+    async verifyVoteExtension(request: VerifyVoteExtensionRequest) {
+        // not implemented
+    }
 
     async finalizeBlock(request: FinalizeBlockRequest) {
         const numberOfTransactionsInBlock = request.txs.length;
@@ -456,7 +493,7 @@ export class NodeCore {
             tx_results: processBlockResult.txResults,
             app_hash: processBlockResult.appHash,
             events: [],
-            validator_updates: [],
+            validator_updates: [], //this.finalizedBlockCache.validatorSetUpdate,
             consensus_param_updates: undefined,
         });
     }
@@ -465,7 +502,7 @@ export class NodeCore {
         this.logger.log(`payValidators`);
 
         /**
-            get the pending fees from the fees account
+          get the pending fees from the fees account
         */
         const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
             ECO.ACCOUNT_BLOCK_FEES,
@@ -478,7 +515,7 @@ export class NodeCore {
         }
 
         /**
-            get the validator accounts from decided_last_commit.votes sent by Comet
+          get the validator accounts from decided_last_commit.votes sent by Comet
         */
         const validatorAccounts = [];
 
@@ -519,7 +556,7 @@ export class NodeCore {
         }
 
         /**
-            split the fees among the validators
+          split the fees among the validators
         */
         const feesQuotient = Math.floor(pendingFees / nValidators);
         const feesRest = pendingFees % nValidators;
@@ -646,12 +683,12 @@ export class NodeCore {
         chainInfoObject.objectCounts = chainInfoObject.objectCounts.map((count, ndx) => count + newObjects[ndx]);
         await cache.db.putObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY, chainInfoObject);
 
-        const tokenRadixHash = await cache.tokenRadix.getRootHash();
-        const vbRadixHash = await cache.vbRadix.getRootHash();
-        const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(vbRadixHash, tokenRadixHash));
+        const { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash } = await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
 
         this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
         this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
+        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
+        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
         this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
         return {
@@ -661,6 +698,16 @@ export class NodeCore {
             blockSize,
             microblocks
         };
+    }
+
+    async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: Storage) {
+        const tokenRadixHash = await tokenRadix.getRootHash();
+        const vbRadixHash = await vbRadix.getRootHash();
+        const radixHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(vbRadixHash, tokenRadixHash));
+        const storageHash = await storage.processChallenge(radixHash);
+        const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
+
+        return { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash };
     }
 
     async commit(request: CommitRequest) {
@@ -677,10 +724,17 @@ export class NodeCore {
 
         const chainInfoObject = <any>await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY);
 
-        if(chainInfoObject.height % SNAPSHOT_PERIOD == 0) {
+        let retainedHeight = 0;
+
+        if(!this.isImportingSnapshot && chainInfoObject.height % nodeConfig.snapshotBlockPeriod == 0) {
             this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
+            await this.snapshot.clear(nodeConfig.maxSnapshots - 1);
             await this.snapshot.create();
             this.logger.log(`Done creating snapshot`);
+
+            if(nodeConfig.blockHistoryBeforeSnapshot) {
+                retainedHeight = Math.max(0, chainInfoObject.height - nodeConfig.blockHistoryBeforeSnapshot);
+            }
         }
 
         // TODO: This test takes some time, so I comment it
@@ -697,11 +751,13 @@ export class NodeCore {
         // !! END TEST
 
         return CommitResponse.create({
-            retain_height: 0,
+            retain_height: retainedHeight
         });
     }
 
     async listSnapshots(request: ListSnapshotsRequest) {
+        this.logger.log(`listSnapshots`);
+
         const list = await this.snapshot.getList();
 
         return ListSnapshotsResponse.create({
@@ -721,6 +777,8 @@ export class NodeCore {
     }
 
     async loadSnapshotChunk(request: LoadSnapshotChunkRequest) {
+        this.logger.log(`loadSnapshotChunk height=${request.height}`);
+
         const chunk = await this.snapshot.getChunk(this.storage, request.height, request.chunk);
 
         return LoadSnapshotChunkResponse.create({
@@ -729,12 +787,18 @@ export class NodeCore {
     }
 
     async offerSnapshot(request: OfferSnapshotRequest) {
+        this.logger.log(`offerSnapshot`);
+
+        this.isImportingSnapshot = true;
+
         return OfferSnapshotResponse.create({
             result: OfferSnapshotResult.OFFER_SNAPSHOT_RESULT_ACCEPT
         });
     }
 
     async applySnapshotChunk(request: ApplySnapshotChunkRequest) {
+        this.logger.log(`applySnapshotChunk index=${request.index}`);
+
         await this.snapshot.loadReceivedChunk(this.storage, request.index, request.chunk);
         const result = ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 
@@ -746,7 +810,7 @@ export class NodeCore {
     }
 
     /**
-        Checks a microblock and invokes the section callbacks of the node.
+      Checks a microblock and invokes the section callbacks of the node.
     */
     async checkMicroblock(cache: Cache, importer: MicroblockImporter, timestamp?: number) {
         this.logger.log(`Checking microblock ${Utils.binaryToHexa(importer.hash)}`);
@@ -816,7 +880,7 @@ export class NodeCore {
     }
 
     /**
-        Account callbacks
+      Account callbacks
     */
     async accountTokenIssuanceCallback(context: any) {
         const rawPublicKey = await context.vb.getPublicKey();
@@ -886,13 +950,12 @@ export class NodeCore {
     }
 
     /**
-     Validator node callbacks
+      Validator node callbacks
      */
     async validatorNodeDescriptionCallback(context: any) {
         const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
         const cometAddress = this.cometPublicKeyToAddress(cometPublicKeyBytes);
 
-        const description = await context.object.getDescription();
         const networkIntegration = await context.object.getNetworkIntegration();
 
         // create the new link: Comet address -> identifier
@@ -910,10 +973,18 @@ export class NodeCore {
     }
 
     async validatorNodeNetworkIntegrationCallback(context: any) {
+        const description = await context.object.getDescription();
+        const cometPublicKeyBytes = Base64.decodeBinary(description.cometPublicKey);
+
+        context.cache.validatorSetUpdate.push({
+            power: context.section.object.votingPower,
+            pub_key_type: description.cometPublicKeyType,
+            pub_key_bytes: cometPublicKeyBytes,
+        });
     }
 
     /**
-        Custom Carmentis query via abci_query
+      Custom Carmentis query via abci_query
     */
     async query(data: any): Promise<Uint8Array> {
         const { type, object } = this.messageUnserializer.unserialize(data);

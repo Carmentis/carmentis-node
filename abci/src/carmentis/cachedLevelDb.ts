@@ -86,7 +86,7 @@ export class CachedLevelDb implements dbInterface {
         return this.db.getKeys(tableId);
     }
 
-    async query(tableId: number, query: any) {
+    async query(tableId: number, query?: any) {
         // TODO: should also use the cache
         return this.db.query(tableId, query);
     }

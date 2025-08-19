@@ -6,6 +6,6 @@
 .idea
 abci/package-lock.json
 *.bat
-log.txt
+log*.txt
 out
 docker-compose.*.yml
