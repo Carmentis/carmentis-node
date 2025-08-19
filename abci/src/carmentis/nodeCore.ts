@@ -59,6 +59,12 @@ import {
     CryptographicHash,
     PublicSignatureKey,
     CMTSToken,
+    Account,
+    AccountVb,
+    Secp256k1PrivateSignatureKey,
+    KeyedProvider,
+    Microblock,
+    PrivateSignatureKey,
 } from '@cmts-dev/carmentis-sdk/server';
 
 interface Cache {
@@ -94,6 +100,7 @@ export class NodeCore {
     sectionCallbacks: Map<number, SectionCallback>;
     queryCallbacks: Map<number, QueryCallback>;
     finalizedBlockCache: Cache | null;
+    private sk: PrivateSignatureKey;
 
     constructor(logger: Logger, options: any) {
         this.logger = logger;
@@ -108,9 +115,16 @@ export class NodeCore {
 
         this.snapshot = new Snapshot(this.db, this.snapshotPath, this.logger);
 
+        // TODO: for testing purpose, we generate a random private signature key to perform authenticated action
+        const sk = Secp256k1PrivateSignatureKey.gen();
+        const pk = sk.getPublicKey();
+        this.logger.warn(`Generated public key: ${pk.getPublicKeyAsString()}`)
         const internalProvider = new NodeProvider(this.db, this.storage);
-        const provider = new Provider(internalProvider, new NullNetworkProvider());
+        const provider = new KeyedProvider(sk, internalProvider, new NullNetworkProvider());
         this.blockchain = new Blockchain(provider);
+        this.sk = sk;
+
+
 
         this.messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
         this.messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
@@ -202,6 +216,20 @@ export class NodeCore {
         this.logger.log(`Clearing snapshots`);
         await this.snapshot.clear(0);
 
+
+
+        /*
+        const carmentisOrganization = await this.blockchain.createOrganization();
+        await carmentisOrganization.setDescription({
+            countryCode: "FR",
+            website: "https://carmentis.io",
+            name: "Carmentis",
+            city: "Paris"
+        });
+
+         */
+
+
         for (const validator of request.validators) {
             const address = this.cometPublicKeyToAddress(
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
@@ -218,6 +246,8 @@ export class NodeCore {
             }
         }
 
+        this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
+        const appHash = await this.createInitialState();
         return {
             consensus_params: undefined,
             /*
@@ -258,8 +288,64 @@ export class NodeCore {
       },
 */
             validators: [],
-            app_hash: new Uint8Array(32),
+            app_hash: appHash,
         };
+    }
+
+    private async createInitialState() {
+        // We create the genesis account
+        const privateKey = this.sk;
+        const publicKey = privateKey.getPublicKey();
+        const account = await this.blockchain.createGenesisAccount(publicKey);
+        const accountId = account.getVirtualBlockchainId();
+        const accountVb = account.vb;
+        await accountVb.setSignature(privateKey);
+        const {headerData, bodyData, microblockHash} = account.vb.currentMicroblock.serialize();
+        const genesisAccountTx = Utils.binaryFrom(headerData, bodyData);
+
+        // we create the initial Carmentis organisation
+        const organisation = await this.blockchain.createOrganization();
+        await organisation.setDescription({
+            name: "Carmentis",
+            countryCode: "FR",
+            city: "Paris",
+            website: "https://carmentis.io"
+        });
+        const organisationVb = organisation.vb;
+        await organisationVb.setSignature(privateKey);
+        const serializedOrganisationMicroBlock = organisationVb.currentMicroblock.serialize();
+        const organisationCreationMicroBlockHeader = serializedOrganisationMicroBlock.headerData;
+        const organisationCreationMicroBlockBody = serializedOrganisationMicroBlock.bodyData;
+        const organisationCreationTx = Utils.binaryFrom(
+            organisationCreationMicroBlockHeader,
+            organisationCreationMicroBlockBody,
+        );
+
+
+
+
+        const txs = [genesisAccountTx, organisationCreationTx];
+        const cache = this.getCacheInstance(txs);
+        const blockHeight = 0; // if we put 1, the micro-blocks do not appear in the explorer.
+        const blockTimestamp = 0;
+        const processBlockResult = await this.processBlock(cache, blockHeight, blockTimestamp, txs);
+
+        const appHash = processBlockResult.appHash;
+        await this.setBlockInformation(
+            cache,
+            blockHeight,
+            appHash,
+            blockTimestamp,
+            new Uint8Array(32),
+            processBlockResult.blockSize,
+            txs.length
+        );
+
+        await this.setBlockContent(cache, blockHeight, processBlockResult.microblocks);
+        await cache.db.commit();
+        await cache.storage.flush();
+
+        return appHash;
     }
 
     /**
