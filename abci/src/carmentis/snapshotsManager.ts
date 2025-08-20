@@ -24,7 +24,7 @@ const JSON_SUFFIX = '.json';
 const SNAPSHOT_IN_PROGRESS_FILENAME = 'snapshot-in-progress-db.bin';
 const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
 
-export class Snapshot {
+export class SnapshotsManager {
     db: LevelDb;
     path: string;
     logger: any;

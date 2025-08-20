@@ -38,20 +38,25 @@ import {
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NodeCore } from './carmentis/nodeCore';
 import { ConfigService } from '@nestjs/config';
+import { KeyManagementService } from './key-management.service';
 
 @Injectable()
-export class AbciService {
+export class AbciService implements OnModuleInit {
     private logger = new Logger('AbciService');
     private nodeCore: NodeCore;
 
-    constructor(private config: ConfigService) {
-        const abciStoragePath = config.getOrThrow('NODE_ABCI_STORAGE');
+    constructor(
+        private config: ConfigService,
+        private kms: KeyManagementService,
+    ) {}
+
+    onModuleInit() {
+        const abciStoragePath = this.config.getOrThrow<string>('NODE_ABCI_STORAGE');
         this.logger.debug(`Node storage (ABCI): ${abciStoragePath}`);
         this.nodeCore = new NodeCore(
             this.logger,
-            {
-                abciStoragePath
-            }
+            abciStoragePath,
+            this.kms
         );
     }
 
@@ -126,7 +131,9 @@ export class AbciService {
         return await this.nodeCore.offerSnapshot(request);
     }
 
-    async ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
+    async ApplySnapshotChunk(
+        request: ApplySnapshotChunkRequest,
+    ): Promise<ApplySnapshotChunkResponse> {
         return await this.nodeCore.applySnapshotChunk(request);
     }
 

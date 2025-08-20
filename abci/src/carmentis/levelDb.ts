@@ -1,6 +1,6 @@
 import { Level } from 'level';
 import { NODE_SCHEMAS } from './constants/constants';
-import { SchemaSerializer, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { CHAIN, SchemaSerializer, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { dbInterface } from './dbInterface';
 
 export class LevelDb implements dbInterface {
@@ -12,6 +12,29 @@ export class LevelDb implements dbInterface {
     constructor(path: string, tableSchemas: any) {
         this.path = path;
         this.tableSchemas = tableSchemas;
+    }
+
+    /**
+     * This method is used when a height should be used as a table key.
+     * @param height
+     */
+    public static convertHeightToTableKey(height: number): Uint8Array {
+        return new Uint8Array(Utils.intToByteArray(height, 6));
+    }
+
+    public static getTableIdFromVirtualBlockchainType(type: number) {
+        switch (type) {
+            case CHAIN.VB_ACCOUNT:
+                return NODE_SCHEMAS.DB_ACCOUNTS;
+            case CHAIN.VB_VALIDATOR_NODE:
+                return NODE_SCHEMAS.DB_VALIDATOR_NODES;
+            case CHAIN.VB_ORGANIZATION:
+                return NODE_SCHEMAS.DB_ORGANIZATIONS;
+            case CHAIN.VB_APPLICATION:
+                return NODE_SCHEMAS.DB_APPLICATIONS;
+            default:
+                return -1;
+        }
     }
 
     async initialize() {

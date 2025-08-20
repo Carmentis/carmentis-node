@@ -1,13 +1,7 @@
 import { NODE_SCHEMAS } from './constants/constants';
 
-import {
-    ECO,
-    Economics,
-    Utils,
-    SchemaSerializer,
-    SchemaUnserializer,
-    Crypto,
-} from '@cmts-dev/carmentis-sdk/server';
+import { Crypto, ECO, Economics, SchemaSerializer, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { AccountInformation } from './types/AccountInformation';
 
 interface Transfer {
     type: number;
@@ -99,7 +93,7 @@ export class AccountManager {
         );
     }
 
-    async loadInformation(accountHash: any) {
+    async loadInformation(accountHash: Uint8Array): Promise<AccountInformation> {
         const type = Economics.getAccountTypeFromIdentifier(accountHash);
         let state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash);
         const exists = !!state;
