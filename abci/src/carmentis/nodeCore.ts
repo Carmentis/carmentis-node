@@ -35,6 +35,7 @@ import {
 } from '../proto-ts/cometbft/abci/v1/types';
 
 import {
+    Base64,
     Blockchain,
     CHAIN,
     CMTSToken,
@@ -57,7 +58,7 @@ import {
     SCHEMAS,
     Secp256k1PrivateSignatureKey,
     SECTIONS,
-    Utils
+    Utils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 import { QueryCallback } from './types/QueryCallback';
@@ -97,7 +98,6 @@ export class NodeCore {
     snapshot: SnapshotsManager;
     sectionCallbacks: Map<number, SectionCallback>;
     finalizedBlockCache: Cache | null;
-    private sk: PrivateSignatureKey;
     isImportingSnapshot: boolean;
 
 
@@ -139,15 +139,13 @@ export class NodeCore {
         this.storage = new Storage(this.db, this.storagePath, []);
         this.snapshot = new SnapshotsManager(this.db, this.snapshotPath, this.logger);
 
-
-        const sk = kms.getIssuerPrivateKey();
-        const pk = sk.getPublicKey();
+        // Create unauthenticated blockchain client
         const internalProvider = new NodeProvider(this.db, this.storage);
-        const provider = new KeyedProvider(sk, internalProvider, new NullNetworkProvider());
+        const provider = new Provider(internalProvider, new NullNetworkProvider());
         this.blockchain = new Blockchain(provider);
-        this.sk = sk;
         this.accountManager = new AccountManager(this.db, this.tokenRadix);
 
+        // Set up the ABCI query handler
         this.abciQueryHandler = new ABCIQueryHandler(this.blockchain, this.db, this.accountManager);
 
         // instantiate radix trees
@@ -158,6 +156,146 @@ export class NodeCore {
 
         // we do not import snapshot by default
         this.isImportingSnapshot = false;
+
+        // we register the callbacks for the sections
+        this.sectionCallbacks = new Map();
+        this.registerSectionCallbacks();
+    }
+
+    private registerSectionCallbacks() {
+        this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
+            [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
+            [SECTIONS.ACCOUNT_CREATION, this.accountCreationCallback],
+            [SECTIONS.ACCOUNT_TRANSFER, this.accountTokenTransferCallback],
+        ]);
+
+        this.registerSectionPostUpdateCallbacks(CHAIN.VB_VALIDATOR_NODE, [
+            [SECTIONS.VN_DESCRIPTION, this.validatorNodeDescriptionCallback],
+            [SECTIONS.VN_NETWORK_INTEGRATION, this.validatorNodeNetworkIntegrationCallback],
+        ]);
+    }
+
+
+
+    /**
+     Account callbacks
+     */
+    async accountTokenIssuanceCallback(context: any) {
+        const rawPublicKey = await context.vb.getPublicKey();
+        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
+
+        await context.cache.accountManager.tokenTransfer(
+            {
+                type: ECO.BK_SENT_ISSUANCE,
+                payerAccount: null,
+                payeeAccount: context.vb.identifier,
+                amount: context.section.object.amount,
+            },
+            {
+                mbHash: context.mb.hash,
+                sectionIndex: context.section.index,
+            },
+            context.timestamp,
+            this.logger,
+        );
+
+        await context.cache.accountManager.saveAccountByPublicKey(
+            context.vb.identifier,
+            rawPublicKey,
+        );
+    }
+
+    async accountCreationCallback(context: any) {
+        const rawPublicKey = await context.vb.getPublicKey();
+        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
+
+        await context.cache.accountManager.tokenTransfer(
+            {
+                type: ECO.BK_SALE,
+                payerAccount: context.section.object.sellerAccount,
+                payeeAccount: context.vb.identifier,
+                amount: context.section.object.amount,
+            },
+            {
+                mbHash: context.mb.hash,
+                sectionIndex: context.section.index,
+            },
+            context.timestamp,
+            this.logger,
+        );
+
+        await context.cache.accountManager.saveAccountByPublicKey(
+            context.vb.identifier,
+            rawPublicKey,
+        );
+    }
+
+    async accountTokenTransferCallback(context: any) {
+        await context.cache.accountManager.tokenTransfer(
+            {
+                type: ECO.BK_SENT_PAYMENT,
+                payerAccount: context.vb.identifier,
+                payeeAccount: context.section.object.account,
+                amount: context.section.object.amount,
+            },
+            {
+                mbHash: context.mb.hash,
+                sectionIndex: context.section.index,
+            },
+            context.timestamp,
+            this.logger,
+        );
+    }
+
+    /**
+     Validator node callbacks
+     */
+    async validatorNodeDescriptionCallback(context: any) {
+        const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
+        const cometAddress = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
+
+        const networkIntegration = await context.object.getNetworkIntegration();
+
+        // create the new link: Comet address -> identifier
+        await context.cache.db.putRaw(
+            NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
+            cometAddress,
+            context.vb.identifier,
+        );
+
+        context.cache.validatorSetUpdate.push({
+            power: networkIntegration.votingPower,
+            pub_key_type: context.section.object.cometPublicKeyType,
+            pub_key_bytes: cometPublicKeyBytes,
+        });
+    }
+
+    async validatorNodeNetworkIntegrationCallback(context: any) {
+        const description = await context.object.getDescription();
+        const cometPublicKeyBytes = Base64.decodeBinary(description.cometPublicKey);
+
+        context.cache.validatorSetUpdate.push({
+            power: context.section.object.votingPower,
+            pub_key_type: description.cometPublicKeyType,
+            pub_key_bytes: cometPublicKeyBytes,
+        });
+    }
+
+
+
+    registerSectionPreUpdateCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
+        this.putSectionCallbackInRegister(objectType, callbackList, 0);
+    }
+
+    registerSectionPostUpdateCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
+        this.putSectionCallbackInRegister(objectType, callbackList, 1);
+    }
+
+    putSectionCallbackInRegister(objectType: number, callbackList: Array<[number, SectionCallback]>, isPostUpdate: number) {
+        for (const [sectionType, callback] of callbackList) {
+            const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
+            this.sectionCallbacks.set(key, callback.bind(this));
+        }
     }
 
 
@@ -230,11 +368,7 @@ export class NodeCore {
         await this.clearStorage();
         await this.clearSnapshots();
 
-
-
-
-
-
+        //
         for (const validator of request.validators) {
             const address = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
@@ -251,8 +385,14 @@ export class NodeCore {
             }
         }
 
+        // we construct a keyed blockchain client equipped with the private key of the issuer
+        const sk = this.kms.getIssuerPrivateKey();
+        const internalProvider = new NodeProvider(this.db, this.storage);
+        const provider = new KeyedProvider(sk, internalProvider, new NullNetworkProvider());
+        const blockchain = new Blockchain(provider);
+
         this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
-        const appHash = await this.publishInitialBlockchainState(request);
+        const appHash = await this.publishInitialBlockchainState(blockchain, request);
         return {
             consensus_params: {},
 /*
@@ -298,12 +438,13 @@ export class NodeCore {
     }
 
 
-    private async publishInitialBlockchainState(request: InitChainRequest) {
+    private async publishInitialBlockchainState(blockchain: Blockchain, request: InitChainRequest) {
+        // we first create a blockchain client equipped with the key of the
         const issuerPrivateKey = this.kms.getIssuerPrivateKey();
         const stateBuilder = new InitialBlockchainStateBuilder(
             request,
             issuerPrivateKey,
-            this.blockchain
+            blockchain
         );
 
         // we first publish the issuer account creation transaction and carmentis organisation creation transaction

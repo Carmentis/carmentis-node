@@ -107,7 +107,7 @@ export class InitialBlockchainStateBuilder {
         });
         const validatorNodeVb = genesisNode.vb;
         // we have to disable callback to prevent provider to check existence of organization we have created above.
-        await validatorNodeVb.setSignature(this.issuerPrivateKey, false);
+        await validatorNodeVb.setSignature(this.issuerPrivateKey);
         const serializedGenesisNodeMicroBlock = validatorNodeVb.currentMicroblock.serialize();
         const validatorNodeId = Hash.from(serializedGenesisNodeMicroBlock.microblockHash);
         const genesisNodeMicroBlockHeader = serializedGenesisNodeMicroBlock.headerData;

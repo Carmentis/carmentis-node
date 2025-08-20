@@ -32,13 +32,11 @@ import { Logger } from '@nestjs/common';
 import { SectionCallback } from './types/SectionCallback';
 import { QueryCallback } from './types/QueryCallback';
 import { LevelDb } from './levelDb';
-import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
 import { AccountManager } from './accountManager';
 
 export class ABCIQueryHandler {
     private logger: Logger;
 
-    sectionCallbacks: Map<number, SectionCallback>;
     queryCallbacks: Map<number, QueryCallback>;
 
     messageSerializer: MessageSerializer;
@@ -53,19 +51,9 @@ export class ABCIQueryHandler {
 
         this.messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
         this.messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
-        this.sectionCallbacks = new Map();
         this.queryCallbacks = new Map();
 
-        this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
-            [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
-            [SECTIONS.ACCOUNT_CREATION, this.accountCreationCallback],
-            [SECTIONS.ACCOUNT_TRANSFER, this.accountTokenTransferCallback],
-        ]);
 
-        this.registerSectionPostUpdateCallbacks(CHAIN.VB_VALIDATOR_NODE, [
-            [SECTIONS.VN_DESCRIPTION, this.validatorNodeDescriptionCallback],
-            [SECTIONS.VN_NETWORK_INTEGRATION, this.validatorNodeNetworkIntegrationCallback],
-        ]);
 
         this.registerQueryCallback(SCHEMAS.MSG_GET_CHAIN_INFORMATION, this.getChainInformation);
         this.registerQueryCallback(SCHEMAS.MSG_GET_BLOCK_INFORMATION, this.getBlockInformation);
@@ -93,129 +81,10 @@ export class ABCIQueryHandler {
     }
 
 
-    registerSectionPreUpdateCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
-        this.registerSectionCallbacks(objectType, callbackList, 0);
-    }
-
-    registerSectionPostUpdateCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>) {
-        this.registerSectionCallbacks(objectType, callbackList, 1);
-    }
-
-    registerSectionCallbacks(objectType: number, callbackList: Array<[number, SectionCallback]>, isPostUpdate: number) {
-        for (const [sectionType, callback] of callbackList) {
-            const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
-            this.sectionCallbacks.set(key, callback.bind(this));
-        }
-    }
 
     registerQueryCallback(messageId: any, callback: QueryCallback) {
         this.queryCallbacks.set(messageId, callback.bind(this));
     }
-
-    /**
-     Account callbacks
-     */
-    async accountTokenIssuanceCallback(context: any) {
-        const rawPublicKey = await context.vb.getPublicKey();
-        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
-
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SENT_ISSUANCE,
-                payerAccount: null,
-                payeeAccount: context.vb.identifier,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-            this.logger,
-        );
-
-        await context.cache.accountManager.saveAccountByPublicKey(
-            context.vb.identifier,
-            rawPublicKey,
-        );
-    }
-
-    async accountCreationCallback(context: any) {
-        const rawPublicKey = await context.vb.getPublicKey();
-        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
-
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SALE,
-                payerAccount: context.section.object.sellerAccount,
-                payeeAccount: context.vb.identifier,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-            this.logger,
-        );
-
-        await context.cache.accountManager.saveAccountByPublicKey(
-            context.vb.identifier,
-            rawPublicKey,
-        );
-    }
-
-    async accountTokenTransferCallback(context: any) {
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SENT_PAYMENT,
-                payerAccount: context.vb.identifier,
-                payeeAccount: context.section.object.account,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-            this.logger,
-        );
-    }
-
-    /**
-     Validator node callbacks
-     */
-    async validatorNodeDescriptionCallback(context: any) {
-        const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
-        const cometAddress = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
-
-        const networkIntegration = await context.object.getNetworkIntegration();
-
-        // create the new link: Comet address -> identifier
-        await context.cache.db.putRaw(
-            NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
-            cometAddress,
-            context.vb.identifier,
-        );
-
-        context.cache.validatorSetUpdate.push({
-            power: networkIntegration.votingPower,
-            pub_key_type: context.section.object.cometPublicKeyType,
-            pub_key_bytes: cometPublicKeyBytes,
-        });
-    }
-
-    async validatorNodeNetworkIntegrationCallback(context: any) {
-        const description = await context.object.getDescription();
-        const cometPublicKeyBytes = Base64.decodeBinary(description.cometPublicKey);
-
-        context.cache.validatorSetUpdate.push({
-            power: context.section.object.votingPower,
-            pub_key_type: description.cometPublicKeyType,
-            pub_key_bytes: cometPublicKeyBytes,
-        });
-    }
-
 
 
     async getChainInformation(object: any) {
