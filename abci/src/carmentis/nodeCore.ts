@@ -649,15 +649,14 @@ export class NodeCore {
         }
 
         // !! BEGIN TEST
-/*
         this.logger.log(`Listing snapshots`);
         const list = await this.snapshot.getList();
         const lastSnapshot = list[list.length - 1];
         for(let n = 0; n < lastSnapshot.chunks; n++) {
             this.logger.log(`Loading snapshot chunk ${n + 1} out of ${lastSnapshot.chunks}`);
-            await this.snapshot.getChunk(this.storage, lastSnapshot.height, n);
+            const buffer = await this.snapshot.getChunk(this.storage, lastSnapshot.height, n);
+            await this.snapshot.loadReceivedChunk(this.storage, n, buffer);
         }
-*/
         // !! END TEST
 
         return CommitResponse.create({

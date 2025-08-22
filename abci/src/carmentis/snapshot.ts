@@ -189,7 +189,7 @@ export class Snapshot {
         let bufferOffset = 0;
 
         await chunksFile.processChunk(
-            index,
+            index - 1,
             async (fileIdentifier, fileOffset, size) => {
                 if(fileIdentifier == 0) {
                     await this.copyBufferToDbFile(info.height, buffer, bufferOffset, fileOffset, size);
@@ -221,7 +221,7 @@ export class Snapshot {
       */
     async copyBufferToDbFile(height: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        const handle = await open(dbFilePath, 'r');
+        const handle = await open(dbFilePath + "_copy", fileOffset ? 'a+' : 'w+');
         const stats = await handle.stat();
         const fileSize = stats.size;
 

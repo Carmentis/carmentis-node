@@ -153,7 +153,7 @@ export class Storage {
       */
     async copyBufferToFile(fileIdentifier: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
         const filePath = this.getFilePath(fileIdentifier);
-        const handle = await open(filePath, 'a+');
+        const handle = await open(filePath + "_copy", fileOffset ? 'a+' : 'w+');
         const stats = await handle.stat();
         const fileSize = stats.size;
 
