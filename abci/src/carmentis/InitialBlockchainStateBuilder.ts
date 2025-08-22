@@ -19,12 +19,15 @@ import {
     Economics,
     Hash,
     KeyedProvider,
+    Microblock,
     NullNetworkProvider,
     PrivateSignatureKey,
     Provider,
     PublicSignatureKey,
     SECTIONS,
+    SectionType,
     Utils,
+    VirtualBlockchainType,
 } from '@cmts-dev/carmentis-sdk/server';
 import { EncoderFactory, IllegalParameterError } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
@@ -33,15 +36,17 @@ import { LevelDb } from './levelDb';
 import { Storage } from './storage';
 
 export class InitialBlockchainStateBuilder {
-    private issuerPublicKey: PublicSignatureKey;
     private logger = new Logger(InitialBlockchainStateBuilder.name);
 
+
+    private readonly issuerPublicKey: PublicSignatureKey;
     constructor(
         private readonly request: InitChainRequest,
+        private readonly dummyPrivateKey: PrivateSignatureKey,
         private readonly issuerPrivateKey: PrivateSignatureKey,
         private readonly blockchain: Blockchain
     ) {
-        this.issuerPublicKey = issuerPrivateKey.getPublicKey();
+        this.issuerPublicKey = this.issuerPrivateKey.getPublicKey();
     }
 
 
@@ -106,7 +111,6 @@ export class InitialBlockchainStateBuilder {
             cometPublicKeyType: genesisNodePublicKeyType,
         });
         const validatorNodeVb = genesisNode.vb;
-        // we have to disable callback to prevent provider to check existence of organization we have created above.
         await validatorNodeVb.setSignature(this.issuerPrivateKey);
         const serializedGenesisNodeMicroBlock = validatorNodeVb.currentMicroblock.serialize();
         const validatorNodeId = Hash.from(serializedGenesisNodeMicroBlock.microblockHash);
@@ -127,7 +131,7 @@ export class InitialBlockchainStateBuilder {
             votingPower: 10
         });
         const vb = loadedNode.vb;
-        await vb.setSignature(this.issuerPrivateKey);
+        await vb.setSignature(this.dummyPrivateKey);
         const serializedMb = vb.currentMicroblock.serialize();
         return Utils.binaryFrom(
             serializedMb.headerData,

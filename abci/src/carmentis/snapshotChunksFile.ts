@@ -12,7 +12,7 @@ const CHUNK_COUNT_LENGTH = 4;
 const CHUNK_INDEX_LENGTH = 4;
 const CHUNK_FILE_IDENTIFIER_LENGTH = 4;
 const CHUNK_OFFSET_LENGTH = 6;
-const CHUNK_SIZE_LENGTH = 4;
+const CHUNK_SIZE_LENGTH = 1000;
 const CHUNK_RECORD_LENGTH = CHUNK_FILE_IDENTIFIER_LENGTH + CHUNK_OFFSET_LENGTH + CHUNK_SIZE_LENGTH;
 
 export class SnapshotChunksFile {
@@ -82,7 +82,10 @@ export class SnapshotChunksFile {
     /**
       * Invokes a callback function on each record of a given chunk.
       */
-    async processChunk(index: number, callback: (fileIdentifier: number, offset: number, size: number) => void) {
+    async processChunk(
+        index: number,
+        callback: (fileIdentifier: number, offset: number, size: number) => Promise<void>,
+    ) {
         const info = await this.getInformation();
         const handle = await open(this.filePath, 'r');
 
@@ -129,10 +132,24 @@ export class SnapshotChunksFile {
       */
     static decodeChunkRecord(record: Uint8Array) {
         let pointer = 0;
+        /*
         const fileIdentifier = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_FILE_IDENTIFIER_LENGTH)]);
         const offset = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_OFFSET_LENGTH)]);
         const size = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_SIZE_LENGTH)]);
+        */
+
+        const fileIdentifier = this.readSubsetOfBinaryAsInt(record, pointer, pointer += CHUNK_FILE_IDENTIFIER_LENGTH);
+        const offset = this.readSubsetOfBinaryAsInt(record, pointer, pointer += CHUNK_OFFSET_LENGTH);
+        const size = this.readSubsetOfBinaryAsInt(record, pointer, pointer += CHUNK_SIZE_LENGTH);
 
         return { fileIdentifier, offset, size };
+    }
+
+    private static readSubsetOfBinaryAsInt(record: Uint8Array, start: number, end: number): number {
+        return Utils.byteArrayToInt(this.readSubsetOfBinary(record, start, end));
+    }
+
+    private static readSubsetOfBinary(binary: Uint8Array, start: number, end: number) {
+        return [...binary.slice(start, end)];
     }
 }

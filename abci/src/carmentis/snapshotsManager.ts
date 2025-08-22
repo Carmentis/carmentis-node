@@ -14,6 +14,7 @@ import {
     Crypto,
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
+import { Logger } from '@nestjs/common';
 
 const FORMAT = 1;
 const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
@@ -27,9 +28,9 @@ const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
 export class SnapshotsManager {
     db: LevelDb;
     path: string;
-    logger: any;
+    logger: Logger;
 
-    constructor(db: LevelDb, path: string, logger: any) {
+    constructor(db: LevelDb, path: string, logger: Logger) {
         this.db = db;
         this.path = path;
         this.logger = logger;
@@ -132,9 +133,10 @@ export class SnapshotsManager {
         // compute the total chunk size
         let chunkSize = 0;
 
+        // TODO replace chunck callback
         await chunksFile.processChunk(
             index - 1,
-            (fileIdentifier, offset, size) => {
+            async (fileIdentifier, offset, size) => {
                 chunkSize += size;
             }
         );
@@ -213,8 +215,10 @@ export class SnapshotsManager {
       * Copies from a buffer to a DB file.
       */
     async copyBufferToDbFile(height: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
+        // open database in writing mode
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        const handle = await open(dbFilePath, 'r');
+        this.logger.verbose(`Opening database (${dbFilePath}) in writing mode`);
+        const handle = await open(dbFilePath, 'a+');
         const stats = await handle.stat();
         const fileSize = stats.size;
 
@@ -335,7 +339,7 @@ export class SnapshotsManager {
       * Creates the chunks file.
       */
     private async createChunksFile(height: number, files: [number, number][]) {
-        let chunks = [];
+        const chunks = [];
         let currentChunk = [];
         let currentChunkSize = 0;
 
@@ -344,9 +348,11 @@ export class SnapshotsManager {
             let offset = 0;
 
             while(currentChunkSize + remainingSize > MAX_CHUNK_SIZE) {
-                let size = MAX_CHUNK_SIZE - currentChunkSize;
+                const size = MAX_CHUNK_SIZE - currentChunkSize;
                 if(size) {
-                    currentChunk.push(SnapshotChunksFile.encodeChunkRecord(fileIdentifier, offset, size));
+                    currentChunk.push(
+                        SnapshotChunksFile.encodeChunkRecord(fileIdentifier, offset, size),
+                    );
                 }
                 chunks.push(currentChunk);
                 currentChunk = [];
@@ -355,7 +361,9 @@ export class SnapshotsManager {
                 remainingSize -= size;
             }
             if(remainingSize) {
-                currentChunk.push(SnapshotChunksFile.encodeChunkRecord(fileIdentifier, offset, remainingSize));
+                currentChunk.push(
+                    SnapshotChunksFile.encodeChunkRecord(fileIdentifier, offset, remainingSize),
+                );
                 currentChunkSize += remainingSize;
             }
         }
