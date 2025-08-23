@@ -47,6 +47,7 @@ import {
     ProcessProposalStatus,
     OfferSnapshotResult,
     ApplySnapshotChunkResult,
+    Snapshot as SnapshotProto,
 } from '../proto-ts/cometbft/abci/v1/types';
 
 import {
@@ -101,7 +102,7 @@ export class NodeCore {
     sectionCallbacks: Map<number, SectionCallback>;
     queryCallbacks: Map<number, QueryCallback>;
     finalizedBlockCache: Cache | null;
-    isImportingSnapshot: boolean;
+    importedSnapshot: SnapshotProto | null;
 
     constructor(logger: any, options: any) {
         this.logger = logger;
@@ -132,7 +133,7 @@ export class NodeCore {
 
         this.finalizedBlockCache = null;
 
-        this.isImportingSnapshot = false;
+        this.importedSnapshot = null;
 
         this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
             [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
@@ -203,7 +204,7 @@ export class NodeCore {
     async info(request: InfoRequest) {
         this.logger.log(`info`);
 
-        this.isImportingSnapshot = false;
+        this.importedSnapshot = null;
 
         const chainInfoObject = <any>await this.db.getObject(NODE_SCHEMAS.DB_CHAIN_INFORMATION, NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY) || {
             height: 0
@@ -637,7 +638,7 @@ export class NodeCore {
 
         let retainedHeight = 0;
 
-        if(!this.isImportingSnapshot && chainInfoObject.height % nodeConfig.snapshotBlockPeriod == 0) {
+        if(this.importedSnapshot === null && chainInfoObject.height % nodeConfig.snapshotBlockPeriod == 0) {
             this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
             await this.snapshot.clear(nodeConfig.maxSnapshots - 1);
             await this.snapshot.create();
@@ -655,7 +656,7 @@ export class NodeCore {
         for(let n = 0; n < lastSnapshot.chunks; n++) {
             this.logger.log(`Loading snapshot chunk ${n + 1} out of ${lastSnapshot.chunks}`);
             const buffer = await this.snapshot.getChunk(this.storage, lastSnapshot.height, n);
-            await this.snapshot.loadReceivedChunk(this.storage, n, buffer);
+            await this.snapshot.loadReceivedChunk(this.storage, n, buffer, n == lastSnapshot.chunks - 1);
         }
         // !! END TEST
 
@@ -698,7 +699,7 @@ export class NodeCore {
     async offerSnapshot(request: OfferSnapshotRequest) {
         this.logger.log(`offerSnapshot`);
 
-        this.isImportingSnapshot = true;
+        this.importedSnapshot = request.snapshot;
 
         return OfferSnapshotResponse.create({
             result: OfferSnapshotResult.OFFER_SNAPSHOT_RESULT_ACCEPT
@@ -708,7 +709,8 @@ export class NodeCore {
     async applySnapshotChunk(request: ApplySnapshotChunkRequest) {
         this.logger.log(`applySnapshotChunk index=${request.index}`);
 
-        await this.snapshot.loadReceivedChunk(this.storage, request.index, request.chunk);
+        const isLast = request.index == this.importedSnapshot.chunks - 1;
+        await this.snapshot.loadReceivedChunk(this.storage, request.index, request.chunk, isLast);
         const result = ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 
         return ApplySnapshotChunkResponse.create({

@@ -121,7 +121,7 @@ export class LevelDb implements dbInterface {
 
         const obj = {
             del: function (tableId: number, list: any) {
-                const options = { sublevel: sub[tableId] };
+                const options = tableId == -1 ? {} : { sublevel: sub[tableId] };
 
                 for (const key of list) {
                     batchObject.del(key, options);
@@ -129,7 +129,7 @@ export class LevelDb implements dbInterface {
                 return obj;
             },
             put: function (tableId: number, list: any) {
-                const options = { sublevel: sub[tableId] };
+                const options = tableId == -1 ? {} : { sublevel: sub[tableId] };
 
                 for (const [key, value] of list) {
                     batchObject.put(key, value, options);
