@@ -184,12 +184,11 @@ export class SnapshotsManager {
         let bufferOffset = 0;
 
         await chunksFile.processChunk(
-            index,
+            index - 1,
             async (fileIdentifier, fileOffset, size) => {
                 if(fileIdentifier == 0) {
                     await this.copyBufferToDbFile(info.height, buffer, bufferOffset, fileOffset, size);
-                }
-                else {
+                } else {
                     await storage.copyBufferToFile(fileIdentifier, buffer, bufferOffset, fileOffset, size);
                 }
                 bufferOffset += size;
@@ -217,8 +216,7 @@ export class SnapshotsManager {
     async copyBufferToDbFile(height: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
         // open database in writing mode
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        this.logger.verbose(`Opening database (${dbFilePath}) in writing mode`);
-        const handle = await open(dbFilePath, 'a+');
+        const handle = await open(dbFilePath, fileOffset ? 'a+' : 'w+');
         const stats = await handle.stat();
         const fileSize = stats.size;
 

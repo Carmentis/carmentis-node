@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+import fs, { mkdirSync } from 'node:fs';
 import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
 import { dbInterface } from './dbInterface';
@@ -9,6 +9,7 @@ import {
     Crypto,
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
+import { FileIdentifier } from './types/FileIdentifier';
 
 const ENDLESS_DIRECTORY_NAME = "endless";
 
@@ -136,7 +137,7 @@ export class Storage {
       * Copies from a microblock file to a buffer.
       * This is used by snapshots.
       */
-    async copyFileToBuffer(fileIdentifier: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
+    async copyFileToBuffer(fileIdentifier: FileIdentifier, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
         const filePath = this.getFilePath(fileIdentifier);
         const handle = await open(filePath, 'r');
         const rd = await handle.read(buffer, bufferOffset, size, fileOffset);
@@ -151,9 +152,11 @@ export class Storage {
       * Copies from a buffer to a microblock file.
       * This is used by snapshots.
       */
-    async copyBufferToFile(fileIdentifier: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
+    async copyBufferToFile(fileIdentifier: FileIdentifier, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
         const filePath = this.getFilePath(fileIdentifier);
-        const handle = await open(filePath, 'a+');
+        const isWritingOnEmptyFile = fileOffset == 0;
+        const fileAccessMode = isWritingOnEmptyFile ? 'a+' : 'w+';
+        const handle = await open(filePath, fileAccessMode);
         const stats = await handle.stat();
         const fileSize = stats.size;
 
@@ -314,7 +317,7 @@ export class Storage {
       * - the range 0xFF000000 - 0xFF0000FF is used for files with endless storage
       * - the range 0xFF000100 - 0xFFFFFFFF is currently not used
       */
-    private getFileIdentifier(expirationDay: number, hash: Uint8Array) {
+    private getFileIdentifier(expirationDay: number, hash: Uint8Array): FileIdentifier {
         return expirationDay || (0xFF000000 | hash[0]) >>> 0;
     }
 
@@ -323,11 +326,13 @@ export class Storage {
       * - either [this.path]/[ENDLESS_DIRECTORY_NAME]/NN.bin for files with endless storage
       * - or [this.path]/YYYY/YYYYMMDD.bin for files with an expiration day
       */
-    private getFilePath(fileIdentifier: number) {
+    private getFilePath(fileIdentifier: FileIdentifier) {
         let directory;
         let filename;
 
-        if(fileIdentifier < 0xFF000000) {
+        const isFocusingFileHavingExpirationDay = fileIdentifier < 0xFF000000;
+        if (isFocusingFileHavingExpirationDay) {
+            // We extract the expiration day from the file identifier.
             const [ year, month, day ] = Utils.decodeDay(fileIdentifier);
             const yearStr = year.toString(10);
             const monthStr = month.toString(10).padStart(2, "0");
@@ -335,12 +340,21 @@ export class Storage {
 
             directory = yearStr;
             filename = yearStr + monthStr + dayStr;
-        }
-        else {
+        } else {
             directory = ENDLESS_DIRECTORY_NAME;
-            filename = (fileIdentifier & 0xFF).toString(16).padStart(2, "0");
+
+            // We use the hex-encoded upmost first byte of the microblock hash as the filename.
+            filename = (fileIdentifier & 0xFF)
+                .toString(16) // encoding in hex
+                .padStart(2, '0');
         }
 
-        return path.join(this.path, directory, filename + ".bin");
+        // we ensure that the directory exists
+        const directoryPath = path.join(this.path, directory);
+        mkdirSync(directoryPath, { recursive: true });
+
+        // we return the file path
+        const filePath = path.join(directoryPath, filename + ".bin");
+        return filePath;
     }
 }
