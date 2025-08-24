@@ -1,8 +1,8 @@
 import fs from 'node:fs';
+import path from 'path';
 import crypto from 'node:crypto';
 import stream from 'node:stream/promises';
 import { FileHandle, access, mkdir, open, rename, readdir, rm } from 'node:fs/promises';
-import path from 'path';
 import { LevelDb } from './levelDb';
 import { Storage } from './storage';
 import { SnapshotChunksFile } from './snapshotChunksFile';
@@ -18,11 +18,12 @@ import { Logger } from '@nestjs/common';
 
 const FORMAT = 1;
 const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
+const DB_BATCH_SIZE = 1000;
 const SNAPSHOT_PREFIX = 'snapshot-';
 const CHUNKS_SUFFIX = '-chunks.bin';
 const DB_SUFFIX = '-db.bin';
 const JSON_SUFFIX = '.json';
-const SNAPSHOT_IN_PROGRESS_FILENAME = 'snapshot-in-progress-db.bin';
+const DB_DUMP_IN_PROGRESS_FILENAME = 'db-dump-in-progress.bin';
 const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
 
 export class SnapshotsManager {
@@ -170,7 +171,7 @@ export class SnapshotsManager {
       * Loads a snapshot chunk received from another node.
       * Called from ApplySnapshotChunk.
       */
-    async loadReceivedChunk(storage: Storage, index: number, buffer: Uint8Array) {
+    async loadReceivedChunk(storage: Storage, index: number, buffer: Uint8Array, isLast: boolean) {
         const chunksFilePath = path.join(this.path, IMPORTED_CHUNKS_FILENAME);
 
         // the very first chunk contains the chunks description file
@@ -194,6 +195,10 @@ export class SnapshotsManager {
                 bufferOffset += size;
             }
         );
+
+        if(isLast) {
+            await this.importDbFile(info.height);
+        }
     }
 
     /**
@@ -286,7 +291,7 @@ export class SnapshotsManager {
         const dataFileTableChar1 = dataFileTableId.charCodeAt(1);
         const dataFileUnserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_DATA_FILE]);
 
-        const temporaryPath = path.join(this.path, SNAPSHOT_IN_PROGRESS_FILENAME);
+        const temporaryPath = path.join(this.path, DB_DUMP_IN_PROGRESS_FILENAME);
         const handle = await open(temporaryPath, 'w');
 
         const iterator = this.db.getDbIterator();
@@ -331,6 +336,63 @@ export class SnapshotsManager {
             earliestDay.toString(10).padStart(2, '0');
 
         return { height, files, earliestFileDate, dbFilePath };
+    }
+
+    /**
+      * Imports a database dump file.
+      */
+    private async importDbFile(height: number) {
+        const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
+        const handle = await open(dbFilePath, 'r');
+
+        const sizeBuffer = new Uint8Array(2);
+        let batch = this.db.getBatch();
+        let fileOffset = 0;
+        let size;
+        let rd;
+
+        await this.db.clear();
+
+        for(let batchSize = 0;; batchSize++) {
+            rd = await handle.read(sizeBuffer, 0, 2, fileOffset);
+            fileOffset += 2;
+
+            if(!rd.bytesRead || batchSize == DB_BATCH_SIZE) {
+                await batch.write();
+                batchSize = 0;
+
+                if(rd.bytesRead) {
+                    batch = this.db.getBatch();
+                }
+            }
+
+            if(!rd.bytesRead) {
+                break;
+            }
+
+            size = Utils.byteArrayToInt([...sizeBuffer]);
+            const keyBuffer = new Uint8Array(size);
+            rd = await handle.read(keyBuffer, 0, size, fileOffset);
+            fileOffset += size;
+
+            if(rd.bytesRead < size) {
+                throw new Error(`Encountered end of file while reading key from DB file`);
+            }
+
+            rd = await handle.read(sizeBuffer, 0, 2, fileOffset);
+            fileOffset += 2;
+
+            size = Utils.byteArrayToInt([...sizeBuffer]);
+            const valueBuffer = new Uint8Array(size);
+            rd = await handle.read(valueBuffer, 0, size, fileOffset);
+            fileOffset += size;
+
+            if(rd.bytesRead < size) {
+                throw new Error(`Encountered end of file while reading value from DB file`);
+            }
+            batch.put(-1, [[ keyBuffer, valueBuffer ]]);
+        }
+        await handle.close();
     }
 
     /**
