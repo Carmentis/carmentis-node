@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AbciGateway } from './abci.gateway';
-import { AbciService } from './abci.service';
+import { AbciService } from './carmentis/abci.service';
 import { GrpcAbciController } from './GrpcAbciController';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
