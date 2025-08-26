@@ -8,12 +8,7 @@ import { Storage } from './storage';
 import { SnapshotChunksFile } from './snapshotChunksFile';
 import { NODE_SCHEMAS } from './constants/constants';
 
-import {
-    SCHEMAS,
-    SchemaUnserializer,
-    Crypto,
-    Utils,
-} from '@cmts-dev/carmentis-sdk/server';
+import { SCHEMAS, SchemaUnserializer, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 
 const FORMAT = 1;
@@ -38,14 +33,14 @@ export class SnapshotsManager {
     }
 
     /**
-      * Keeps up to n of the most recent snapshots and deletes the rest.
-      */
+     * Keeps up to n of the most recent snapshots and deletes the rest.
+     */
     async clear(n) {
         const list = await this.getList();
 
         list.sort((a, b) => b.height - a.height);
 
-        while(list.length > n) {
+        while (list.length > n) {
             const entry = list.pop();
             await rm(path.join(this.path, entry.metadata.jsonFile));
             await rm(path.join(this.path, entry.metadata.dbFile));
@@ -55,9 +50,9 @@ export class SnapshotsManager {
     }
 
     /**
-      * Gets the list of snapshots stored by this node.
-      * Called internally and from ListSnapshots. 
-      */
+     * Gets the list of snapshots stored by this node.
+     * Called internally and from ListSnapshots.
+     */
     async getList() {
         const entries = await this.getSnapshotEntriesFromDirectory();
         //const entries = await readdir(this.path, { withFileTypes: true});
@@ -67,8 +62,8 @@ export class SnapshotsManager {
         const regex = new RegExp(`^${SNAPSHOT_PREFIX}\\d{9}\\${JSON_SUFFIX}$`);
         const list = [];
 
-        for(const entry of entries) {
-            if(!entry.isFile() || !regex.test(entry.name)) {
+        for (const entry of entries) {
+            if (!entry.isFile() || !regex.test(entry.name)) {
                 continue;
             }
 
@@ -79,8 +74,7 @@ export class SnapshotsManager {
                 const object = JSON.parse(content.toString());
 
                 list.push(object);
-            }
-            catch(error) {
+            } catch (error) {
                 this.logger.error(error);
             }
         }
@@ -88,9 +82,9 @@ export class SnapshotsManager {
     }
 
     /**
-      * Gets a snapshot chunk stored by this node.
-      * Called from LoadSnapshotChunk.
-      */
+     * Gets a snapshot chunk stored by this node.
+     * Called from LoadSnapshotChunk.
+     */
     async getChunk(storage: Storage, height: number, index: number): Promise<Uint8Array> {
         const emptyBuffer = new Uint8Array();
         const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + JSON_SUFFIX);
@@ -99,13 +93,12 @@ export class SnapshotsManager {
         try {
             const content = fs.readFileSync(jsonFilePath);
             jsonData = JSON.parse(content.toString());
-        }
-        catch(error) {
+        } catch (error) {
             this.logger.error(error);
             return emptyBuffer;
         }
 
-        if(jsonData.height != height) {
+        if (jsonData.height != height) {
             this.logger.error('internal error: inconsistent height in JSON file');
             return emptyBuffer;
         }
@@ -114,20 +107,24 @@ export class SnapshotsManager {
         const chunksFile = new SnapshotChunksFile(chunksFilePath);
         const info = await chunksFile.getInformation();
 
-        if(jsonData.chunks != info.chunksCount + 1) {
-            this.logger.error('internal error: number of chunks in JSON file and chunks file are inconsistent');
+        if (jsonData.chunks != info.chunksCount + 1) {
+            this.logger.error(
+                'internal error: number of chunks in JSON file and chunks file are inconsistent',
+            );
             return emptyBuffer;
         }
-        if(info.height != height) {
+        if (info.height != height) {
             this.logger.error('internal error: inconsistent height in chunks file');
             return emptyBuffer;
         }
-        if(index < 0 || index >= info.chunksCount + 1) {
-            this.logger.error(`requested chunk index ${index} is inconsistent (should be in 0 .. ${info.chunksCount})`);
+        if (index < 0 || index >= info.chunksCount + 1) {
+            this.logger.error(
+                `requested chunk index ${index} is inconsistent (should be in 0 .. ${info.chunksCount})`,
+            );
             return emptyBuffer;
         }
 
-        if(index == 0) {
+        if (index == 0) {
             return await chunksFile.getFullContent();
         }
 
@@ -135,14 +132,11 @@ export class SnapshotsManager {
         let chunkSize = 0;
 
         // TODO replace chunck callback
-        await chunksFile.processChunk(
-            index - 1,
-            async (fileIdentifier, offset, size) => {
-                chunkSize += size;
-            }
-        );
+        await chunksFile.processChunk(index - 1, async (fileIdentifier, offset, size) => {
+            chunkSize += size;
+        });
 
-        if(chunkSize > MAX_CHUNK_SIZE) {
+        if (chunkSize > MAX_CHUNK_SIZE) {
             this.logger.error('internal error: chunk size is inconsistent');
             return emptyBuffer;
         }
@@ -151,31 +145,33 @@ export class SnapshotsManager {
         const buffer = new Uint8Array(chunkSize);
         let bufferOffset = 0;
 
-        await chunksFile.processChunk(
-            index - 1,
-            async (fileIdentifier, fileOffset, size) => {
-                if(fileIdentifier == 0) {
-                    await this.copyDbFileToBuffer(height, buffer, bufferOffset, fileOffset, size);
-                }
-                else {
-                    await storage.copyFileToBuffer(fileIdentifier, buffer, bufferOffset, fileOffset, size);
-                }
-                bufferOffset += size;
+        await chunksFile.processChunk(index - 1, async (fileIdentifier, fileOffset, size) => {
+            if (fileIdentifier == 0) {
+                await this.copyDbFileToBuffer(height, buffer, bufferOffset, fileOffset, size);
+            } else {
+                await storage.copyFileToBuffer(
+                    fileIdentifier,
+                    buffer,
+                    bufferOffset,
+                    fileOffset,
+                    size,
+                );
             }
-        );
+            bufferOffset += size;
+        });
 
         return buffer;
     }
 
     /**
-      * Loads a snapshot chunk received from another node.
-      * Called from ApplySnapshotChunk.
-      */
+     * Loads a snapshot chunk received from another node.
+     * Called from ApplySnapshotChunk.
+     */
     async loadReceivedChunk(storage: Storage, index: number, buffer: Uint8Array, isLast: boolean) {
         const chunksFilePath = path.join(this.path, IMPORTED_CHUNKS_FILENAME);
 
         // the very first chunk contains the chunks description file
-        if(index == 0) {
+        if (index == 0) {
             fs.writeFileSync(chunksFilePath, buffer);
             return;
         }
@@ -184,50 +180,69 @@ export class SnapshotsManager {
         const info = await chunksFile.getInformation();
         let bufferOffset = 0;
 
-        await chunksFile.processChunk(
-            index - 1,
-            async (fileIdentifier, fileOffset, size) => {
-                if(fileIdentifier == 0) {
-                    await this.copyBufferToDbFile(info.height, buffer, bufferOffset, fileOffset, size);
-                } else {
-                    await storage.copyBufferToFile(fileIdentifier, buffer, bufferOffset, fileOffset, size);
-                }
-                bufferOffset += size;
+        await chunksFile.processChunk(index - 1, async (fileIdentifier, fileOffset, size) => {
+            if (fileIdentifier == 0) {
+                await this.copyBufferToDbFile(info.height, buffer, bufferOffset, fileOffset, size);
+            } else {
+                await storage.copyBufferToFile(
+                    fileIdentifier,
+                    buffer,
+                    bufferOffset,
+                    fileOffset,
+                    size,
+                );
             }
-        );
+            bufferOffset += size;
+        });
 
-        if(isLast) {
+        if (isLast) {
             await this.importDbFile(info.height);
         }
     }
 
     /**
-      * Copies from a DB file to a buffer.
-      */
-    async copyDbFileToBuffer(height: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
+     * Copies from a DB file to a buffer.
+     */
+    async copyDbFileToBuffer(
+        height: number,
+        buffer: Uint8Array,
+        bufferOffset: number,
+        fileOffset: number,
+        size: number,
+    ) {
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
         const handle = await open(dbFilePath, 'r');
         const rd = await handle.read(buffer, bufferOffset, size, fileOffset);
         await handle.close();
 
-        if(rd.bytesRead < size) {
-            throw new Error(`Encountered end of file while reading ${size} bytes from '${dbFilePath}' at offset ${fileOffset}`);
+        if (rd.bytesRead < size) {
+            throw new Error(
+                `Encountered end of file while reading ${size} bytes from '${dbFilePath}' at offset ${fileOffset}`,
+            );
         }
     }
 
     /**
-      * Copies from a buffer to a DB file.
-      */
-    async copyBufferToDbFile(height: number, buffer: Uint8Array, bufferOffset: number, fileOffset: number, size: number) {
+     * Copies from a buffer to a DB file.
+     */
+    async copyBufferToDbFile(
+        height: number,
+        buffer: Uint8Array,
+        bufferOffset: number,
+        fileOffset: number,
+        size: number,
+    ) {
         // open database in writing mode
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
         const handle = await open(dbFilePath, fileOffset ? 'a+' : 'w+');
         const stats = await handle.stat();
         const fileSize = stats.size;
 
-        if(fileSize != fileOffset) {
+        if (fileSize != fileOffset) {
             await handle.close();
-            throw new Error(`copyBufferToDbFile(): argument fileOffset (${fileOffset}) doesn't match the current file size (${fileSize})`);
+            throw new Error(
+                `copyBufferToDbFile(): argument fileOffset (${fileOffset}) doesn't match the current file size (${fileSize})`,
+            );
         }
 
         await handle.write(buffer, bufferOffset, size);
@@ -235,20 +250,19 @@ export class SnapshotsManager {
     }
 
     /**
-      * Creates a new snapshot at the current height. This will generate 3 files:
-      * - snapshot-[height]-db.bin
-      *   -> the dump of the database
-      * - snapshot-[height]-chunks.bin
-      *   -> the description of the chunks; the chunks include the full dump of the database
-      *      and the microblock files up to the length they have at the time of the snapshot
-      * - snapshot-[height].json
-      *   -> meta information about the snapshot, used to answer ListSnapshots
-      */
+     * Creates a new snapshot at the current height. This will generate 3 files:
+     * - snapshot-[height]-db.bin
+     *   -> the dump of the database
+     * - snapshot-[height]-chunks.bin
+     *   -> the description of the chunks; the chunks include the full dump of the database
+     *      and the microblock files up to the length they have at the time of the snapshot
+     * - snapshot-[height].json
+     *   -> meta information about the snapshot, used to answer ListSnapshots
+     */
     async create() {
         try {
             await access(this.path, fs.constants.F_OK);
-        }
-        catch(error) {
+        } catch (error) {
             await mkdir(this.path, { recursive: true });
         }
 
@@ -271,7 +285,7 @@ export class SnapshotsManager {
                 dbFileSha256: Utils.binaryToHexa(dbFileSha256),
                 chunksFile: path.basename(chunksFilePath),
                 chunksFileSha256: Utils.binaryToHexa(chunksFileSha256),
-                jsonFile: path.basename(jsonFilePath)
+                jsonFile: path.basename(jsonFilePath),
             },
         };
 
@@ -279,8 +293,8 @@ export class SnapshotsManager {
     }
 
     /**
-      * Creates the database dump file.
-      */
+     * Creates the database dump file.
+     */
     private async createDbFile() {
         const chainInfoTableId = Utils.numberToHexa(NODE_SCHEMAS.DB_CHAIN_INFORMATION, 2);
         const chainInfoTableChar0 = chainInfoTableId.charCodeAt(0);
@@ -289,14 +303,16 @@ export class SnapshotsManager {
         const dataFileTableId = Utils.numberToHexa(NODE_SCHEMAS.DB_DATA_FILE, 2);
         const dataFileTableChar0 = dataFileTableId.charCodeAt(0);
         const dataFileTableChar1 = dataFileTableId.charCodeAt(1);
-        const dataFileUnserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_DATA_FILE]);
+        const dataFileUnserializer = new SchemaUnserializer(
+            NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_DATA_FILE],
+        );
 
         const temporaryPath = path.join(this.path, DB_DUMP_IN_PROGRESS_FILENAME);
         const handle = await open(temporaryPath, 'w');
 
         const iterator = this.db.getDbIterator();
         const files = [];
-        let earliestFileIdentifier = 0xFF000000;
+        let earliestFileIdentifier = 0xff000000;
         let height;
         let size = 0;
 
@@ -309,16 +325,18 @@ export class SnapshotsManager {
             size += key.length + value.length + 4;
 
             // if this is the DB_CHAIN_INFORMATION record, collect the height
-            if(key[1] == chainInfoTableChar0 && key[2] == chainInfoTableChar1) {
-                const chainInfoUnserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_CHAIN_INFORMATION]);
+            if (key[1] == chainInfoTableChar0 && key[2] == chainInfoTableChar1) {
+                const chainInfoUnserializer = new SchemaUnserializer(
+                    NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_CHAIN_INFORMATION],
+                );
                 const chainInfoObject: any = chainInfoUnserializer.unserialize(value);
                 height = chainInfoObject.height;
             }
             // if this is a DB_DATA_FILE record, collect the file identifier and size
-            else if(key[1] == dataFileTableChar0 && key[2] == dataFileTableChar1) {
-                const fileIdentifier = [ 4, 5, 6, 7 ].reduce((t, n) => t * 0x100 + key[n], 0);
+            else if (key[1] == dataFileTableChar0 && key[2] == dataFileTableChar1) {
+                const fileIdentifier = [4, 5, 6, 7].reduce((t, n) => t * 0x100 + key[n], 0);
                 const dataFileObject: any = dataFileUnserializer.unserialize(value);
-                files.push([ fileIdentifier, dataFileObject.fileSize ]);
+                files.push([fileIdentifier, dataFileObject.fileSize]);
                 earliestFileIdentifier = Math.min(earliestFileIdentifier, fileIdentifier);
             }
         }
@@ -327,9 +345,9 @@ export class SnapshotsManager {
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
         await rename(temporaryPath, dbFilePath);
 
-        files.push([ 0, size ]);
+        files.push([0, size]);
 
-        const [ earliestYear, earliestMonth, earliestDay ] = Utils.decodeDay(earliestFileIdentifier);
+        const [earliestYear, earliestMonth, earliestDay] = Utils.decodeDay(earliestFileIdentifier);
         const earliestFileDate =
             earliestYear.toString(10) +
             earliestMonth.toString(10).padStart(2, '0') +
@@ -339,10 +357,11 @@ export class SnapshotsManager {
     }
 
     /**
-      * Imports a database dump file.
-      */
+     * Imports a database dump file.
+     */
     private async importDbFile(height: number) {
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
+        this.logger.verbose(`Importing db file ${dbFilePath}`);
         const handle = await open(dbFilePath, 'r');
 
         const sizeBuffer = new Uint8Array(2);
@@ -353,20 +372,20 @@ export class SnapshotsManager {
 
         await this.db.clear();
 
-        for(let batchSize = 0;; batchSize++) {
+        for (let batchSize = 0; ; batchSize++) {
             rd = await handle.read(sizeBuffer, 0, 2, fileOffset);
             fileOffset += 2;
 
-            if(!rd.bytesRead || batchSize == DB_BATCH_SIZE) {
+            if (!rd.bytesRead || batchSize == DB_BATCH_SIZE) {
                 await batch.write();
                 batchSize = 0;
 
-                if(rd.bytesRead) {
+                if (rd.bytesRead) {
                     batch = this.db.getBatch();
                 }
             }
 
-            if(!rd.bytesRead) {
+            if (!rd.bytesRead) {
                 break;
             }
 
@@ -375,7 +394,7 @@ export class SnapshotsManager {
             rd = await handle.read(keyBuffer, 0, size, fileOffset);
             fileOffset += size;
 
-            if(rd.bytesRead < size) {
+            if (rd.bytesRead < size) {
                 throw new Error(`Encountered end of file while reading key from DB file`);
             }
 
@@ -387,29 +406,29 @@ export class SnapshotsManager {
             rd = await handle.read(valueBuffer, 0, size, fileOffset);
             fileOffset += size;
 
-            if(rd.bytesRead < size) {
+            if (rd.bytesRead < size) {
                 throw new Error(`Encountered end of file while reading value from DB file`);
             }
-            batch.put(-1, [[ keyBuffer, valueBuffer ]]);
+            batch.put(-1, [[keyBuffer, valueBuffer]]);
         }
         await handle.close();
     }
 
     /**
-      * Creates the chunks file.
-      */
+     * Creates the chunks file.
+     */
     private async createChunksFile(height: number, files: [number, number][]) {
         const chunks = [];
         let currentChunk = [];
         let currentChunkSize = 0;
 
-        for(const [ fileIdentifier, fileSize ] of files) {
+        for (const [fileIdentifier, fileSize] of files) {
             let remainingSize = fileSize;
             let offset = 0;
 
-            while(currentChunkSize + remainingSize > MAX_CHUNK_SIZE) {
+            while (currentChunkSize + remainingSize > MAX_CHUNK_SIZE) {
                 const size = MAX_CHUNK_SIZE - currentChunkSize;
-                if(size) {
+                if (size) {
                     currentChunk.push(
                         SnapshotChunksFile.encodeChunkRecord(fileIdentifier, offset, size),
                     );
@@ -420,7 +439,7 @@ export class SnapshotsManager {
                 offset += size;
                 remainingSize -= size;
             }
-            if(remainingSize) {
+            if (remainingSize) {
                 currentChunk.push(
                     SnapshotChunksFile.encodeChunkRecord(fileIdentifier, offset, remainingSize),
                 );
@@ -428,7 +447,7 @@ export class SnapshotsManager {
             }
         }
 
-        if(currentChunkSize) {
+        if (currentChunkSize) {
             chunks.push(currentChunk);
         }
 
@@ -440,26 +459,26 @@ export class SnapshotsManager {
     }
 
     /**
-      * Gets a the SHA256 of a given file as a Uint8Array.
-      */
+     * Gets a the SHA256 of a given file as a Uint8Array.
+     */
     private async getFileSha256(filePath: string) {
         const readStream = fs.createReadStream(filePath);
         const hash = crypto.createHash('sha256');
-        
+
         await stream.pipeline(readStream, hash);
 
         return new Uint8Array(hash.digest());
     }
 
     /**
-      * Gets the snapshot file prefix for a given height.
-      */
+     * Gets the snapshot file prefix for a given height.
+     */
     private getFilePrefix(height: number) {
         return SNAPSHOT_PREFIX + height.toString(10).padStart(9, '0');
     }
 
     private async getSnapshotEntriesFromDirectory() {
         await mkdir(this.path, { recursive: true });
-        return  await readdir(this.path, { withFileTypes: true});
+        return await readdir(this.path, { withFileTypes: true });
     }
 }

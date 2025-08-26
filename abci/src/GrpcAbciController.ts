@@ -38,7 +38,7 @@ import {
 import { AbciService } from './abci.service';
 
 @Controller()
-export class AbciController {
+export class GrpcAbciController {
     private logger = new Logger('AbciController');
 
     constructor(private readonly abciService: AbciService) {

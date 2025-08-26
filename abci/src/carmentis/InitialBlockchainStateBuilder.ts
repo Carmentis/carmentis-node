@@ -38,18 +38,15 @@ import { Storage } from './storage';
 export class InitialBlockchainStateBuilder {
     private logger = new Logger(InitialBlockchainStateBuilder.name);
 
-
     private readonly issuerPublicKey: PublicSignatureKey;
     constructor(
         private readonly request: InitChainRequest,
         private readonly dummyPrivateKey: PrivateSignatureKey,
         private readonly issuerPrivateKey: PrivateSignatureKey,
-        private readonly blockchain: Blockchain
+        private readonly blockchain: Blockchain,
     ) {
         this.issuerPublicKey = this.issuerPrivateKey.getPublicKey();
     }
-
-
 
     public getValidatorPublicKeyFromRequest() {
         // The init chain request should contain exactly one validator in the validator set.
@@ -71,9 +68,8 @@ export class InitialBlockchainStateBuilder {
         return { genesisNodePublicKeyType, genesisNodePublicKey };
     }
 
-
     public async createIssuerAccountCreationTransaction() {
-        this.logger.verbose("Creating genesis account creation transaction")
+        this.logger.verbose('Creating genesis account creation transaction');
         const account = await this.blockchain.createGenesisAccount(this.issuerPublicKey);
         const accountVb = account.vb;
         await accountVb.setSignature(this.issuerPrivateKey);
@@ -82,13 +78,13 @@ export class InitialBlockchainStateBuilder {
     }
 
     public async createCarmentisOrganisationCreationTransaction() {
-        this.logger.verbose("Creating organisation creation transaction")
+        this.logger.verbose('Creating organisation creation transaction');
         const organisation = await this.blockchain.createOrganization();
         await organisation.setDescription({
-            name: "Carmentis",
-            countryCode: "FR",
-            city: "Paris",
-            website: "https://carmentis.io"
+            name: 'Carmentis',
+            countryCode: 'FR',
+            city: 'Paris',
+            website: 'https://carmentis.io',
         });
         const organisationVb = organisation.vb;
         await organisationVb.setSignature(this.issuerPrivateKey);
@@ -103,7 +99,11 @@ export class InitialBlockchainStateBuilder {
         return { organizationId, organisationCreationTransaction };
     }
 
-    public async createGenesisNodeDeclarationTransaction(organizationId: Hash, genesisNodePublicKey: string, genesisNodePublicKeyType: string) {
+    public async createGenesisNodeDeclarationTransaction(
+        organizationId: Hash,
+        genesisNodePublicKey: string,
+        genesisNodePublicKeyType: string,
+    ) {
         // We now declare the running node as the genesis node.
         const genesisNode = await this.blockchain.createValidatorNode(organizationId);
         await genesisNode.setDescription({
@@ -121,22 +121,18 @@ export class InitialBlockchainStateBuilder {
             genesisNodeMicroBlockBody,
         );
 
-        return {genesisNodeId: validatorNodeId, genesisNodeDeclarationTransaction};
+        return { genesisNodeId: validatorNodeId, genesisNodeDeclarationTransaction };
     }
 
     public async createGenesisNodeValidatorGrantTransaction(genesisNodeId: Hash) {
         // We now load the genesis validator node and set the voting power to 10.
         const loadedNode = await this.blockchain.loadValidatorNode(genesisNodeId);
         await loadedNode.setNetworkIntegration({
-            votingPower: 10
+            votingPower: 10,
         });
         const vb = loadedNode.vb;
         await vb.setSignature(this.dummyPrivateKey);
         const serializedMb = vb.currentMicroblock.serialize();
-        return Utils.binaryFrom(
-            serializedMb.headerData,
-            serializedMb.bodyData,
-        );
+        return Utils.binaryFrom(serializedMb.headerData, serializedMb.bodyData);
     }
-
 }

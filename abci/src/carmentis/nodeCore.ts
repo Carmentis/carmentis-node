@@ -32,9 +32,8 @@ import {
     PrepareProposalRequest,
     ProcessProposalRequest,
     ProcessProposalStatus,
-    Snapshot,
-    VerifyVoteExtensionRequest,
     Snapshot as SnapshotProto,
+    VerifyVoteExtensionRequest
 } from '../proto-ts/cometbft/abci/v1/types';
 
 import {
@@ -46,20 +45,22 @@ import {
     CryptographicHash,
     CryptoSchemeFactory,
     ECO,
-    Economics, EncoderFactory,
+    Economics,
+    EncoderFactory,
+    GenesisSnapshotDTO,
     Hash,
     KeyedProvider,
     MessageSerializer,
     MessageUnserializer,
-    Microblock,
     MicroblockImporter,
-    NullNetworkProvider, PrivateSignatureKey,
+    NetworkProvider,
+    NullNetworkProvider,
+    PrivateSignatureKey,
     Provider,
     PublicSignatureKey,
-    SCHEMAS, Secp256k1PrivateSignatureKey,
-    SECTIONS, StringSignatureEncoder,
-    Utils, VirtualBlockchain,
-    VirtualBlockchainType,
+    SCHEMAS,
+    SECTIONS,
+    Utils
 } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 import { QueryCallback } from './types/QueryCallback';
@@ -69,6 +70,9 @@ import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
 import { KeyManagementService } from '../key-management.service';
 import { InitialBlockchainStateBuilder } from './InitialBlockchainStateBuilder';
 import { AccountInformation } from './types/AccountInformation';
+import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
+import { ConfigService } from '@nestjs/config';
+import { GenesisSnapshotStorageService } from './genesis-snapshot-storage.service';
 
 const APP_VERSION = 1;
 
@@ -119,12 +123,23 @@ export class NodeCore {
 
     // The KMS is used to handle private keys.
     private kms: KeyManagementService;
+    private readonly cometConfig: CometBFTNodeConfigService;
 
-    constructor(logger: Logger, abciStoragePath: string, kms: KeyManagementService) {
+    constructor(
+        logger: Logger,
+        private readonly config: ConfigService,
+        cometConfig: CometBFTNodeConfigService,
+        kms: KeyManagementService,
+        private readonly genesisSnapshotStorage: GenesisSnapshotStorageService
+    ) {
+
         this.logger = logger;
         this.kms = kms;
+        this.cometConfig = cometConfig;
 
         // define the paths where are stored the database, the storage and the snapshots.
+        const abciStoragePath = config.getOrThrow<string>('NODE_ABCI_STORAGE');
+        this.logger.debug(`Node storage (ABCI): ${abciStoragePath}`);
         this.dbPath = path.join(abciStoragePath, 'db');
         this.storagePath = path.join(abciStoragePath, 'microblocks');
         this.snapshotPath = path.join(abciStoragePath, 'snapshots');
@@ -144,7 +159,7 @@ export class NodeCore {
         this.accountManager = new AccountManager(this.db, this.tokenRadix);
 
         // Set up the ABCI query handler
-        this.abciQueryHandler = new ABCIQueryHandler(this.blockchain, this.db, this.accountManager);
+        this.abciQueryHandler = new ABCIQueryHandler(this.blockchain, this.db, this.accountManager, this.genesisSnapshotStorage);
 
         // instantiate radix trees
         this.vbRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_VB_RADIX);
@@ -353,7 +368,7 @@ export class NodeCore {
         this.logger.log(`info`);
         this.importedSnapshot = null;
 
-        const chainInfoObject = <any>(
+        const { height: last_block_height } = <any>(
             await this.db.getObject(
                 NODE_SCHEMAS.DB_CHAIN_INFORMATION,
                 NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
@@ -362,17 +377,32 @@ export class NodeCore {
             height: 0,
         };
 
+
+        if (last_block_height === 0) {
+            this.logger.log(`(Info) Aborting info request because the chain is empty.`);
+            return InfoResponse.create({
+                version: '1',
+                data: 'Carmentis ABCI application',
+                app_version: APP_VERSION,
+                last_block_height,
+            });
+        }
+
         const { appHash } = await this.computeApplicationHash(
             this.tokenRadix,
             this.vbRadix,
             this.storage,
         );
 
+        const hex = EncoderFactory.bytesToHexEncoder();
+        this.logger.log(`(Info) last_block_height: ${last_block_height}`);
+        this.logger.log(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
+
         return InfoResponse.create({
             version: '1',
             data: 'Carmentis ABCI application',
             app_version: APP_VERSION,
-            last_block_height: chainInfoObject.height,
+            last_block_height,
             last_block_app_hash: appHash,
         });
     }
@@ -383,35 +413,62 @@ export class NodeCore {
         await this.clearStorage();
         await this.clearSnapshots();
 
-
         // depending on if the current node is a genesis node or not
-        const isGenesisNode = await this.isGenesisNode();
+        const isGenesisNode = this.isGenesisNode(request);
         if (isGenesisNode) {
+            this.logger.log(`This node is the genesis node.`);
             const appHash = await this.initChainAsGenesis(request);
             return this.createInitChainResponse(appHash);
         } else {
+            this.logger.log(`This node is not the genesis node.`);
             const appHash = await this.initChainAsNode(request);
-            return this.createInitChainResponse(appHash)
+            return this.createInitChainResponse(appHash);
         }
     }
 
-
-    private async isGenesisNode() {
-        // TODO: to be implemented
+    /**
+     * Checks whether the current node is a genesis node or not.
+     *
+     * A node is considered a genesis node if it belongs to the initial validator set (assumed to contain exactly one validator).
+     * @private
+     */
+    private isGenesisNode(request: InitChainRequest) {
+        // NOTE: I have identified a difference between the public key type provided by the InitChainRequest and the one
+        // inside the cometbft config. For this reason, I ignore the public key type for the moment.
+        // Hence, I assume that the types of both keys are identical.
+        const currentNodePublicKey = this.cometConfig.getPublicKey();
+        const initialValidatorSet = request.validators;
+        for (const validator of initialValidatorSet) {
+            const base64 = EncoderFactory.bytesToBase64Encoder();
+            const validatorPublicKeyValue = base64.encode(validator.pub_key_bytes);
+            const validatorPublicKeyType = validator.pub_key_type;
+            const isPublicKeyValueMatching = validatorPublicKeyValue === currentNodePublicKey.value;
+            const isPublicKeyTypeMatching = validatorPublicKeyType === currentNodePublicKey.type;
+            const isGenesisNode = isPublicKeyValueMatching;
+            if (isGenesisNode) {
+                return true;
+            }
+        }
         return false;
     }
 
     private async initChainAsNode(request: InitChainRequest) {
-        //
-        const genesisSnapshot = await this.searchGenesisSnapshotFromNetwork();
+        const genesisSnapshot = await this.searchGenesisSnapshotFromGenesisNode();
         await this.saveReceivedGenesisSnapshot(genesisSnapshot);
-        const {appHash} = await this.computeApplicationHash(this.tokenRadix, this.vbRadix, this.storage);
+        const { appHash } = await this.computeApplicationHash(
+            this.tokenRadix,
+            this.vbRadix,
+            this.storage,
+        );
         return appHash;
     }
 
-    private async saveReceivedGenesisSnapshot(genesisSnapshot: Uint8Array[]) {
-        await this.snapshot.loadReceivedChunk(this.storage, 0, genesisSnapshot[0]);
-        await this.snapshot.loadReceivedChunk(this.storage, 1, genesisSnapshot[1]);
+    private async saveReceivedGenesisSnapshot(genesisSnapshotChunks: Uint8Array[]) {
+        for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++ ) {
+            const chunk = genesisSnapshotChunks[chunkIndex];
+            const isLastChunk = chunkIndex === genesisSnapshotChunks.length - 1;
+            await this.snapshot.loadReceivedChunk(this.storage, chunkIndex, chunk, isLastChunk);
+        }
     }
 
     private async initChainAsGenesis(request: InitChainRequest) {
@@ -420,47 +477,44 @@ export class NodeCore {
 
         // we construct a keyed blockchain client equipped with a dummy, static private key
         const issuerPrivateKey = this.kms.getIssuerPrivateKey();
-        const staticEncodedPrivateKey = "SIG:SECP256K1:SK{dec3278ad230e1912b988b818ecfb7371443d4fc288436925a074ecac3fa7ca3}";
-        const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
-        const dummyPrivateSignatureKey = encoder.decodePrivateKey(staticEncodedPrivateKey);
         const internalProvider = new NodeProvider(this.db, this.storage);
-        const provider = new KeyedProvider(issuerPrivateKey, internalProvider, new NullNetworkProvider());
+        const provider = new KeyedProvider(
+            issuerPrivateKey,
+            internalProvider,
+            new NullNetworkProvider(),
+        );
         const blockchain = new Blockchain(provider);
-
 
         this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
         const appHash = await this.publishInitialBlockchainState(
             blockchain,
             issuerPrivateKey,
-            request
+            request,
         );
 
-
         // we create the genesis state snapshot and export it.
-        await this.storeGenesisStateSnapshot();
-        await this.exportGenesisStateAsSnapshot();
+        await this.storeGenesisStateSnapshotInSnapshotsFolder();
+        await this.saveGenesisSnapshotInDisk();
 
         return appHash;
-
     }
 
-    private async storeGenesisStateSnapshot() {
+    private async storeGenesisStateSnapshotInSnapshotsFolder() {
         this.logger.log(`Creating genesis snapshot`);
         await this.snapshot.create();
     }
 
-
-    private async searchGenesisSnapshotFromNetwork() {
-        // TODO: we currently return it
+    private async searchGenesisSnapshotFromGenesisNode() {
+        const genesisNodeUrl = this.config.getOrThrow<string>('COMET_GENESIS_NODE_URL');
+        this.logger.verbose(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`)
+        const provider = new NetworkProvider(genesisNodeUrl);
+        const snapshot = await provider.getGenesisSnapshot();
         const encoder = EncoderFactory.bytesToBase64Encoder();
-        const snapshot = {
-            "firstChunk": "AAAAAAACAAAAAwAAABYAABPQAAAXwv8AABEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5/wAAOwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAO3/AACDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAzP8AAPMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAClAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADKkAAAAAAAAAAAypAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAHKkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYf",
-            "secondChunk": "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"
-        }
-        return [encoder.decode(snapshot.firstChunk), encoder.decode(snapshot.secondChunk)];
+        const genesisSnapshotChunks = snapshot.base64EncodedChunks.map((chunk) => encoder.decode(chunk));
+        return genesisSnapshotChunks;
     }
 
-    private async exportGenesisStateAsSnapshot() {
+    private async saveGenesisSnapshotInDisk() {
         // we assume that after the genesis state, the chain contains three blocks (starting at zero).
         const chainHeightAfterGenesis = 2;
 
@@ -468,15 +522,19 @@ export class NodeCore {
         const base64Encoder = EncoderFactory.bytesToBase64Encoder();
 
         // we generate and export the genesis state as a snapshot
-        const firstChunk = await this.snapshot.getChunk(this.storage, chainHeightAfterGenesis, 0);
-        const secondChunk = await this.snapshot.getChunk(this.storage, chainHeightAfterGenesis, 1);
-        const genesisState = {
-            firstChunk: base64Encoder.encode(firstChunk),
-            secondChunk: base64Encoder.encode(secondChunk),
+        const numberOfChunksToExport = 4;
+        const genesisChunks = [];
+        for (let chunkIndexToExport = 0; chunkIndexToExport < numberOfChunksToExport; chunkIndexToExport++ ) {
+            this.logger.verbose("Exporting genesis snapshot chunk " + chunkIndexToExport + "")
+            const chunk = await this.snapshot.getChunk(this.storage, chainHeightAfterGenesis, chunkIndexToExport);
+            genesisChunks.push(chunk);
+        }
+
+        const genesisState: GenesisSnapshotDTO = {
+            base64EncodedChunks: genesisChunks.map((chunk) => base64Encoder.encode(chunk)),
         };
 
-        // we now display the genesis state
-        console.log(JSON.stringify(genesisState, null, 2));
+        await this.genesisSnapshotStorage.writeGenesisSnapshotInDisk(genesisState);
     }
 
     private createInitChainResponse(appHash: Uint8Array) {
@@ -543,7 +601,11 @@ export class NodeCore {
         }
     }
 
-    private async publishInitialBlockchainState(blockchain: Blockchain, dummyPrivateSignatureKey: PrivateSignatureKey, request: InitChainRequest) {
+    private async publishInitialBlockchainState(
+        blockchain: Blockchain,
+        dummyPrivateSignatureKey: PrivateSignatureKey,
+        request: InitChainRequest,
+    ) {
         // we first create a blockchain client equipped with the key of the
         const issuerPrivateKey = this.kms.getIssuerPrivateKey();
         const stateBuilder = new InitialBlockchainStateBuilder(
@@ -554,14 +616,21 @@ export class NodeCore {
         );
 
         // we first publish the issuer account creation transaction and carmentis organisation creation transaction
-        const issuerAccountCreationTransaction = await stateBuilder.createIssuerAccountCreationTransaction();
-        const { organizationId, organisationCreationTransaction } = await stateBuilder.createCarmentisOrganisationCreationTransaction();
-        const transactionsPublishedInFirstBlock = [ issuerAccountCreationTransaction, organisationCreationTransaction ];
+        const issuerAccountCreationTransaction =
+            await stateBuilder.createIssuerAccountCreationTransaction();
+        const { organizationId, organisationCreationTransaction } =
+            await stateBuilder.createCarmentisOrganisationCreationTransaction();
+        const transactionsPublishedInFirstBlock = [
+            issuerAccountCreationTransaction,
+            organisationCreationTransaction,
+        ];
         await this.publishGenesisTransactions(transactionsPublishedInFirstBlock, 0);
 
         // in the second block, we publish the genesis node declaration transaction
-        const { genesisNodePublicKey, genesisNodePublicKeyType } = stateBuilder.getValidatorPublicKeyFromRequest();
-        const { genesisNodeId, genesisNodeDeclarationTransaction } = await stateBuilder.createGenesisNodeDeclarationTransaction(
+        const { genesisNodePublicKey, genesisNodePublicKeyType } =
+            stateBuilder.getValidatorPublicKeyFromRequest();
+        const { genesisNodeId, genesisNodeDeclarationTransaction } =
+            await stateBuilder.createGenesisNodeDeclarationTransaction(
                 organizationId,
                 genesisNodePublicKey,
                 genesisNodePublicKeyType,
@@ -569,7 +638,8 @@ export class NodeCore {
         await this.publishGenesisTransactions([genesisNodeDeclarationTransaction], 1);
 
         // finally, in the third block, we publish the grant to be a validator for the genesis node
-        const genesisNodeValidatorGrantTransaction = await stateBuilder.createGenesisNodeValidatorGrantTransaction(genesisNodeId);
+        const genesisNodeValidatorGrantTransaction =
+            await stateBuilder.createGenesisNodeValidatorGrantTransaction(genesisNodeId);
         return await this.publishGenesisTransactions([genesisNodeValidatorGrantTransaction], 2);
     }
 
@@ -579,9 +649,8 @@ export class NodeCore {
     ) {
         // Since we are publishing transactions at the genesis, publication timestamp is at the lowest possible value.
         // The proposer address is undefined since we do not have published this node.
-        const blockTimestamp =  Math.floor(Date.now() / 1000);
+        const blockTimestamp = Math.floor(Date.now() / 1000);
         const proposerAddress = new Uint8Array(32);
-
 
         const cache = this.getCacheInstance(transactions);
         const processBlockResult = await this.processBlock(
@@ -598,7 +667,7 @@ export class NodeCore {
             blockTimestamp,
             proposerAddress,
             processBlockResult.blockSize,
-            transactions.length
+            transactions.length,
         );
         await this.setBlockContent(cache, publishedBlockHeight, processBlockResult.microblocks);
 
@@ -826,105 +895,6 @@ export class NodeCore {
         }
     }
 
-    async processGenesisBlock(
-        cache: any,
-        blockHeight: number,
-        timestamp: number,
-        txs: { microBlockType: VirtualBlockchainType; tx: Uint8Array }[],
-    ) {
-        this.logger.log(`processGenesisBlock`);
-
-        const txResults = [];
-        const microblocks = [];
-        let blockSize = 0;
-
-        for (const txId in txs) {
-            const { microBlockType, tx } = txs[txId];
-            const importer: MicroblockImporter = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(tx));
-            console.log("Checking microblock")
-            const success = await this.checkMicroblock(
-                cache,
-                importer,
-                timestamp,
-                false,
-            );
-
-            console.log("get vb")
-            const vb: VirtualBlockchain<any> = await importer.getVirtualBlockchain();
-
-
-            blockSize += tx.length;
-
-            this.logger.log(`Storing microblock ${Utils.binaryToHexa(vb.currentMicroblock.hash)}`);
-            await importer.store();
-
-            const mb = vb.currentMicroblock;
-            const type = vb.type;
-            const sectionCount = mb.sections.length;
-            microblocks.push({
-                hash: mb.hash,
-                vbIdentifier: mb.hash,
-                vbType: type,
-                height: 1, // every block we are creating are genesis microblocks
-                size: tx.length,
-                sectionCount,
-            });
-
-            await cache.storage.writeMicroblock(0, txId);
-
-            const stateData =
-                await cache.blockchain.provider.getVirtualBlockchainStateInternal(vb.identifier);
-            const stateHash = Crypto.Hashes.sha256AsBinary(stateData);
-            await cache.vbRadix.set(vb.identifier, stateHash);
-
-            txResults.push(
-                ExecTxResult.create({
-                    code: 0,
-                    data: new Uint8Array(),
-                    log: '',
-                    info: '',
-                    gas_wanted: 0,
-                    gas_used: 0,
-                    events: [],
-                    codespace: 'app',
-                }),
-            );
-        }
-
-        const chainInfoObject = (await cache.db.getObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-        )) || {
-            microblockCount: 0,
-            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0),
-        };
-
-        chainInfoObject.height = blockHeight;
-        chainInfoObject.lastBlockTimestamp = timestamp;
-        chainInfoObject.microblockCount += txs.length;
-        chainInfoObject.objectCounts = chainInfoObject.objectCounts.map((count, ndx) => count);
-        await cache.db.putObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            chainInfoObject,
-        );
-
-        const { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash } =
-            await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
-
-        this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
-        this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
-        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
-        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
-        this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
-
-        return {
-            txResults,
-            appHash,
-            blockSize,
-            microblocks,
-        };
-    }
 
     async processBlock(
         cache: any,
@@ -1083,15 +1053,23 @@ export class NodeCore {
     }
 
     async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: Storage) {
+        this.logger.warn("Storage is ignored during application hash computation");
         const tokenRadixHash = await tokenRadix.getRootHash();
         const vbRadixHash = await vbRadix.getRootHash();
         const radixHash = Crypto.Hashes.sha256AsBinary(
             Utils.binaryFrom(vbRadixHash, tokenRadixHash),
         );
+        const finalAppHash = radixHash;
         const storageHash = await storage.processChallenge(radixHash);
         const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
 
-        return { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash };
+        this.logger.verbose(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
+        this.logger.verbose(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
+        this.logger.verbose(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
+        this.logger.verbose(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
+        this.logger.verbose(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
+
+        return { tokenRadixHash, vbRadixHash, appHash: finalAppHash, storageHash, radixHash };
     }
 
     async commit(request: CommitRequest) {

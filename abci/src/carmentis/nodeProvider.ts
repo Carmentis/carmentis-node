@@ -46,10 +46,18 @@ export class NodeProvider {
         // ignored
     }
 
-    async setMicroblock(identifier: Uint8Array, expirationDay: number, headerData: Uint8Array, bodyData: Uint8Array) {
+    async setMicroblock(
+        identifier: Uint8Array,
+        expirationDay: number,
+        headerData: Uint8Array,
+        bodyData: Uint8Array,
+    ) {
         const data = Utils.binaryFrom(headerData, bodyData);
         const fileOffset = await this.storage.writeMicroblock(expirationDay, data);
-        return await this.db.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier, { expirationDay, fileOffset });
+        return await this.db.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier, {
+            expirationDay,
+            fileOffset,
+        });
     }
 
     async setVirtualBlockchainState(identifier: Uint8Array, data: Uint8Array) {

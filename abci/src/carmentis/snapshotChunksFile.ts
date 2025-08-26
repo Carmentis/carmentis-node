@@ -3,9 +3,7 @@ import stream from 'node:stream/promises';
 import { FileHandle, open } from 'node:fs/promises';
 import path from 'path';
 
-import {
-    Utils
-} from '@cmts-dev/carmentis-sdk/server';
+import { Utils } from '@cmts-dev/carmentis-sdk/server';
 
 const CHUNK_HEIGHT_LENGTH = 6;
 const CHUNK_COUNT_LENGTH = 4;
@@ -23,8 +21,8 @@ export class SnapshotChunksFile {
     }
 
     /**
-      * Creates a new chunks file, given a height and a list of chunks.
-      */
+     * Creates a new chunks file, given a height and a list of chunks.
+     */
     async create(height: number, chunks: any[]) {
         const handle = await open(this.filePath, 'w');
 
@@ -35,14 +33,14 @@ export class SnapshotChunksFile {
         // write the index
         let pointer = CHUNK_HEIGHT_LENGTH + CHUNK_COUNT_LENGTH + chunks.length * CHUNK_INDEX_LENGTH;
 
-        for(const chunk of chunks) {
+        for (const chunk of chunks) {
             await handle.write(new Uint8Array(Utils.intToByteArray(pointer, CHUNK_INDEX_LENGTH)));
             pointer += chunk.length * CHUNK_RECORD_LENGTH;
         }
 
         // write the records
-        for(const chunk of chunks) {
-            for(const record of chunk) {
+        for (const chunk of chunks) {
+            for (const record of chunk) {
                 await handle.write(record);
             }
         }
@@ -51,8 +49,8 @@ export class SnapshotChunksFile {
     }
 
     /**
-      * Gets information about the chunks file: height, chunks count and file size.
-      */
+     * Gets information about the chunks file: height, chunks count and file size.
+     */
     async getInformation() {
         const handle = await open(this.filePath, 'r');
         const fileSize = (await handle.stat()).size;
@@ -61,14 +59,16 @@ export class SnapshotChunksFile {
         await handle.close();
 
         const height = Utils.byteArrayToInt([...buffer.slice(0, CHUNK_HEIGHT_LENGTH)]);
-        const chunksCount = Utils.byteArrayToInt([...buffer.slice(CHUNK_HEIGHT_LENGTH, CHUNK_HEIGHT_LENGTH + CHUNK_COUNT_LENGTH)]);
+        const chunksCount = Utils.byteArrayToInt([
+            ...buffer.slice(CHUNK_HEIGHT_LENGTH, CHUNK_HEIGHT_LENGTH + CHUNK_COUNT_LENGTH),
+        ]);
 
         return { height, chunksCount, fileSize };
     }
 
     /**
-      * Gets the full content of the chunks file.
-      */
+     * Gets the full content of the chunks file.
+     */
     async getFullContent() {
         const { fileSize } = await this.getInformation();
         const handle = await open(this.filePath, 'r');
@@ -80,8 +80,8 @@ export class SnapshotChunksFile {
     }
 
     /**
-      * Invokes a callback function on each record of a given chunk.
-      */
+     * Invokes a callback function on each record of a given chunk.
+     */
     async processChunk(
         index: number,
         callback: (fileIdentifier: number, offset: number, size: number) => Promise<void>,
@@ -97,16 +97,15 @@ export class SnapshotChunksFile {
 
         let maxPointer;
 
-        if(index == info.chunksCount - 1) {
+        if (index == info.chunksCount - 1) {
             maxPointer = info.fileSize;
-        }
-        else {
+        } else {
             await handle.read(buffer, 0, CHUNK_INDEX_LENGTH, indexPointer + CHUNK_INDEX_LENGTH);
             maxPointer = Utils.byteArrayToInt([...buffer.slice(0, CHUNK_INDEX_LENGTH)]);
         }
 
         // read the chunk records
-        for(; pointer < maxPointer; pointer += CHUNK_RECORD_LENGTH) {
+        for (; pointer < maxPointer; pointer += CHUNK_RECORD_LENGTH) {
             await handle.read(buffer, 0, CHUNK_RECORD_LENGTH, pointer);
             const { fileIdentifier, offset, size } = SnapshotChunksFile.decodeChunkRecord(buffer);
             await callback(fileIdentifier, offset, size);
@@ -115,21 +114,30 @@ export class SnapshotChunksFile {
     }
 
     /**
-      * Encodes a chunk record.
-      */
+     * Encodes a chunk record.
+     */
     static encodeChunkRecord(fileIdentifier: number, offset: number, size: number) {
         const record = new Uint8Array(CHUNK_RECORD_LENGTH);
 
-        record.set(new Uint8Array(Utils.intToByteArray(fileIdentifier, CHUNK_FILE_IDENTIFIER_LENGTH)), 0);
-        record.set(new Uint8Array(Utils.intToByteArray(offset, CHUNK_OFFSET_LENGTH)), CHUNK_FILE_IDENTIFIER_LENGTH);
-        record.set(new Uint8Array(Utils.intToByteArray(size, CHUNK_SIZE_LENGTH)), CHUNK_FILE_IDENTIFIER_LENGTH + CHUNK_OFFSET_LENGTH);
+        record.set(
+            new Uint8Array(Utils.intToByteArray(fileIdentifier, CHUNK_FILE_IDENTIFIER_LENGTH)),
+            0,
+        );
+        record.set(
+            new Uint8Array(Utils.intToByteArray(offset, CHUNK_OFFSET_LENGTH)),
+            CHUNK_FILE_IDENTIFIER_LENGTH,
+        );
+        record.set(
+            new Uint8Array(Utils.intToByteArray(size, CHUNK_SIZE_LENGTH)),
+            CHUNK_FILE_IDENTIFIER_LENGTH + CHUNK_OFFSET_LENGTH,
+        );
 
         return record;
     }
 
     /**
-      * Decodes a chunk record.
-      */
+     * Decodes a chunk record.
+     */
     static decodeChunkRecord(record: Uint8Array) {
         let pointer = 0;
         /*
@@ -138,9 +146,17 @@ export class SnapshotChunksFile {
         const size = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_SIZE_LENGTH)]);
         */
 
-        const fileIdentifier = this.readSubsetOfBinaryAsInt(record, pointer, pointer += CHUNK_FILE_IDENTIFIER_LENGTH);
-        const offset = this.readSubsetOfBinaryAsInt(record, pointer, pointer += CHUNK_OFFSET_LENGTH);
-        const size = this.readSubsetOfBinaryAsInt(record, pointer, pointer += CHUNK_SIZE_LENGTH);
+        const fileIdentifier = this.readSubsetOfBinaryAsInt(
+            record,
+            pointer,
+            (pointer += CHUNK_FILE_IDENTIFIER_LENGTH),
+        );
+        const offset = this.readSubsetOfBinaryAsInt(
+            record,
+            pointer,
+            (pointer += CHUNK_OFFSET_LENGTH),
+        );
+        const size = this.readSubsetOfBinaryAsInt(record, pointer, (pointer += CHUNK_SIZE_LENGTH));
 
         return { fileIdentifier, offset, size };
     }

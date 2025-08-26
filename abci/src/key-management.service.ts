@@ -10,15 +10,14 @@ import {
     StringSignatureEncoder,
 } from '@cmts-dev/carmentis-sdk/server';
 
-
 /**
  * This service is responsible for managing the critical keys
  * used by the ABCI server.
  */
 @Injectable()
 export class KeyManagementService implements OnModuleInit {
-    private static KEY_FILENAME = "node-key.json";
-    private static KEY_PATH_VAR_ENV_NAME = "NODE_ABCI_KEY_PATH";
+    private static KEY_FILENAME = 'node-key.json';
+    private static KEY_PATH_VAR_ENV_NAME = 'NODE_ABCI_KEY_PATH';
 
     private logger = new Logger(KeyManagementService.name);
     private keyFolderPath: string;
@@ -38,7 +37,9 @@ export class KeyManagementService implements OnModuleInit {
         // load or generate key pair for the issuer
         this.privateKey = this.loadKeysFromKeyFile();
         const publicKey = this.privateKey.getPublicKey();
-        this.logger.log(`Node keys are ready (publicKey length=${publicKey.getPublicKeyAsBytes().length} bytes).`);
+        this.logger.log(
+            `Node keys are ready (publicKey length=${publicKey.getPublicKeyAsBytes().length} bytes).`,
+        );
     }
 
     getIssuerPrivateKey(): PrivateSignatureKey {
@@ -56,17 +57,28 @@ export class KeyManagementService implements OnModuleInit {
                 const parsed = JSON.parse(content);
                 const privateKey: unknown = parsed?.privateKey;
                 const publicKey: unknown = parsed?.publicKey;
-                if (typeof privateKey === 'string' && typeof publicKey === 'string' && privateKey.length > 0 && publicKey.length > 0) {
+                if (
+                    typeof privateKey === 'string' &&
+                    typeof publicKey === 'string' &&
+                    privateKey.length > 0 &&
+                    publicKey.length > 0
+                ) {
                     const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
                     return encoder.decodePrivateKey(privateKey);
                 } else {
-                    this.logger.warn(`Key file found but missing required fields 'privateKey'/'publicKey' or invalid format. Regenerating keys.`);
+                    this.logger.warn(
+                        `Key file found but missing required fields 'privateKey'/'publicKey' or invalid format. Regenerating keys.`,
+                    );
                 }
             } else {
-                this.logger.warn(`Key file does not exist. It will be created with a new key pair.`);
+                this.logger.warn(
+                    `Key file does not exist. It will be created with a new key pair.`,
+                );
             }
         } catch (e) {
-            this.logger.error(`Error while reading/parsing key file: ${(e as Error).message}. A new pair will be generated.`);
+            this.logger.error(
+                `Error while reading/parsing key file: ${(e as Error).message}. A new pair will be generated.`,
+            );
         }
 
         // fallback: generate and save new keys
@@ -80,22 +92,27 @@ export class KeyManagementService implements OnModuleInit {
         const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
 
         // export key pair in JSON
-        const payload = JSON.stringify({
-            privateKey: encoder.encodePrivateKey(privateKey),
-            publicKey: encoder.encodePublicKey(publicKey),
-        }, null, 2);
+        const payload = JSON.stringify(
+            {
+                privateKey: encoder.encodePrivateKey(privateKey),
+                publicKey: encoder.encodePublicKey(publicKey),
+            },
+            null,
+            2,
+        );
         writeFileSync(keyFilePath, payload, { encoding: 'utf8' });
         this.logger.log(`New key pair generated and saved to ${keyFilePath}`);
         return privateKey;
     }
-    
+
     private getKeyFolderPath() {
         // The path where keys are retrieved/stored is defined by the most specialized input, namely
         // the NODE_ABCI_KEY_PATH environment variable. If not defined, then a new folder is used
         const defaultKeyFolderPath = this.getDefaultKeyFolderPath();
-        return this.config.get<string>(KeyManagementService.KEY_PATH_VAR_ENV_NAME) ??
-            defaultKeyFolderPath;
-            
+        return (
+            this.config.get<string>(KeyManagementService.KEY_PATH_VAR_ENV_NAME) ??
+            defaultKeyFolderPath
+        );
     }
 
     private getDefaultKeyFolderPath() {
@@ -105,6 +122,4 @@ export class KeyManagementService implements OnModuleInit {
             homedir();
         return join(homePath, '.carmentis', 'keys');
     }
-
-
 }

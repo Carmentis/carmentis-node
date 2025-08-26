@@ -39,6 +39,8 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NodeCore } from './carmentis/nodeCore';
 import { ConfigService } from '@nestjs/config';
 import { KeyManagementService } from './key-management.service';
+import { CometBFTNodeConfigService } from './carmentis/CometBFTNodeConfigService';
+import { GenesisSnapshotStorageService } from './carmentis/genesis-snapshot-storage.service';
 
 @Injectable()
 export class AbciService implements OnModuleInit {
@@ -47,17 +49,13 @@ export class AbciService implements OnModuleInit {
 
     constructor(
         private config: ConfigService,
+        private readonly cometConfig: CometBFTNodeConfigService,
         private kms: KeyManagementService,
+        private genesisSnapshotHandler: GenesisSnapshotStorageService
     ) {}
 
     onModuleInit() {
-        const abciStoragePath = this.config.getOrThrow<string>('NODE_ABCI_STORAGE');
-        this.logger.debug(`Node storage (ABCI): ${abciStoragePath}`);
-        this.nodeCore = new NodeCore(
-            this.logger,
-            abciStoragePath,
-            this.kms
-        );
+        this.nodeCore = new NodeCore(this.logger, this.config, this.cometConfig, this.kms, this.genesisSnapshotHandler);
     }
 
     Echo(request: EchoRequest): Promise<EchoResponse> {
