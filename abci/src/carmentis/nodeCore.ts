@@ -525,7 +525,6 @@ export class NodeCore {
         const numberOfChunksToExport = 4;
         const genesisChunks = [];
         for (let chunkIndexToExport = 0; chunkIndexToExport < numberOfChunksToExport; chunkIndexToExport++ ) {
-            this.logger.verbose("Exporting genesis snapshot chunk " + chunkIndexToExport + "")
             const chunk = await this.snapshot.getChunk(this.storage, chainHeightAfterGenesis, chunkIndexToExport);
             genesisChunks.push(chunk);
         }
