@@ -104,4 +104,11 @@ export class NodeConfigService {
         if (!isGenesisSectionSpecified) return unspecifiedPrivateKeyRetrievalMethod;
         return genesisSection.private_key;
     }
+
+    /**
+     * This method retrieves the RPC endpoint for the genesis snapshot from the node configuration.
+     */
+    getGenesisSnapshotRpcEndpoint() {
+        return this.nodeConfig.genesis_snapshot.rpc_endpoint;
+    }
 }

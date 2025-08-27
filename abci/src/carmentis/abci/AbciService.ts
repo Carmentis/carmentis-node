@@ -126,7 +126,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     // storage paths
 
     constructor(
-        private config: ConfigService,
         private readonly nodeConfig: NodeConfigService,
         private readonly cometConfig: CometBFTNodeConfigService,
         private readonly kms: KeyManagementService,
@@ -526,7 +525,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async searchGenesisSnapshotFromGenesisNode() {
-        const genesisNodeUrl = this.config.getOrThrow<string>('COMET_GENESIS_NODE_URL');
+        const genesisNodeUrl = this.nodeConfig.getGenesisSnapshotRpcEndpoint();
         this.logger.verbose(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`);
         const provider = new NetworkProvider(genesisNodeUrl);
         const snapshot = await provider.getGenesisSnapshot();
