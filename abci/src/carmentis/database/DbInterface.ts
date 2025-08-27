@@ -1,7 +1,7 @@
 export interface DbInterface {
     getTableCount(): number;
     getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array>;
-    getObject(tableId: number, key: Uint8Array): Promise<any>;
+    getObject(tableId: number, key: Uint8Array): Promise<object>;
     putRaw(tableId: number, key: Uint8Array, data: Uint8Array): Promise<boolean>;
     putObject(tableId: number, key: Uint8Array, object: any): Promise<boolean>;
     getKeys(tableId: number): Promise<Uint8Array[]>;

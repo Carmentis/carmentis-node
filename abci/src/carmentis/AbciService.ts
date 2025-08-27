@@ -848,7 +848,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         });
     }
 
-    async payValidators(cache: any, votes: any, blockHeight: number, blockTimestamp: number) {
+    async payValidators(cache: Cache, votes: any, blockHeight: number, blockTimestamp: number) {
         this.logger.log(`payValidators`);
 
         /**
