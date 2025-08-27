@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import stream from 'node:stream/promises';
 import { FileHandle, access, mkdir, open, rename, readdir, rm } from 'node:fs/promises';
 import { LevelDb } from './database/LevelDb';
-import { Storage } from './storage';
+import { Storage } from './Storage';
 import { SnapshotChunksFile } from './SnapshotChunksFile';
 import { NODE_SCHEMAS } from './constants/constants';
 

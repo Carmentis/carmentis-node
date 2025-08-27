@@ -1,5 +1,5 @@
 import { CachedLevelDb } from '../database/CachedLevelDb';
-import { Storage } from '../storage';
+import { Storage } from '../Storage';
 import { Blockchain } from '@cmts-dev/carmentis-sdk/server';
 import { AccountManager } from '../AccountManager';
 import { RadixTree } from '../RadixTree';

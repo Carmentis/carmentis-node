@@ -43,7 +43,7 @@ import { KeyManagementService } from '../key-management.service';
 import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { CachedLevelDb } from './database/CachedLevelDb';
-import { Storage } from './storage';
+import { Storage } from './Storage';
 import {
     Base64,
     Blockchain,

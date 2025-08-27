@@ -1,6 +1,6 @@
 import { NODE_SCHEMAS } from './constants/constants';
 import { DbInterface } from './database/DbInterface';
-import { Storage } from './storage';
+import { Storage } from './Storage';
 
 export class NodeProvider {
     db: DbInterface;
