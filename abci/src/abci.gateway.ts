@@ -6,7 +6,7 @@ import {
     WebSocketGateway,
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
-import { AbciService } from './carmentis/abci.service';
+import { AbciService } from './carmentis/AbciService';
 import {
     EchoRequest,
     EchoResponse,

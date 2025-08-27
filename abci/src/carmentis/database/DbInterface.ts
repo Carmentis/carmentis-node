@@ -1,4 +1,4 @@
-export interface dbInterface {
+export interface DbInterface {
     getTableCount(): number;
     getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array>;
     getObject(tableId: number, key: Uint8Array): Promise<any>;

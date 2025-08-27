@@ -1,4 +1,6 @@
 import { RADIX_CST, RadixUtils, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { LevelDb } from './database/LevelDb';
+import { DbInterface } from './database/DbInterface';
 
 function debug(array: any) {
     return [...array].map((n) => n.toString(16).toUpperCase().padStart(2, 0)).join('');
@@ -30,10 +32,10 @@ function debug(array: any) {
       identical up to the penultimate nibble, which is almost as unlikely as a full hash collision.)
 */
 export class RadixTree {
-    db: any;
-    tableId: any;
+    db: DbInterface;
+    tableId: number;
 
-    constructor(db: any, tableId: any) {
+    constructor(db: DbInterface, tableId: number) {
         this.db = db;
         this.tableId = tableId;
     }
@@ -41,7 +43,7 @@ export class RadixTree {
     /**
     Sets a (key, value) pair
   */
-    async set(key: any, value: any) {
+    async set(key: any, value: Uint8Array) {
         const rootHash = await this.getRootHash();
         const newRootHash = await this.write(key, value, rootHash, 0);
 
@@ -103,10 +105,10 @@ export class RadixTree {
             return a.map((v: any) => v.toString(16).toUpperCase().padStart(2, 0)).join('');
         }
 
-        const iterator = this.db.query(this.tableId);
+        const iterator = await this.db.query(this.tableId);
         const list = [];
 
-        for await (const e of iterator) {
+        for  (const e of iterator) {
             const msk = (e[1][0] << 8) | e[1][1];
 
             list.push(

@@ -31,9 +31,9 @@ import {
 import { Logger } from '@nestjs/common';
 import { SectionCallback } from './types/SectionCallback';
 import { QueryCallback } from './types/QueryCallback';
-import { LevelDb } from './levelDb';
-import { AccountManager } from './accountManager';
-import { GenesisSnapshotStorageService } from './genesis-snapshot-storage.service';
+import { LevelDb } from './database/LevelDb';
+import { AccountManager } from './AccountManager';
+import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 
 export class ABCIQueryHandler {
     private logger: Logger;

@@ -1,9 +1,9 @@
 import { Level } from 'level';
-import { NODE_SCHEMAS } from './constants/constants';
+import { NODE_SCHEMAS } from '../constants/constants';
 import { CHAIN, SchemaSerializer, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
-import { dbInterface } from './dbInterface';
+import { DbInterface } from './DbInterface';
 
-export class LevelDb implements dbInterface {
+export class LevelDb implements DbInterface {
     db: any;
     path: string;
     sub: any;

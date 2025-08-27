@@ -1,12 +1,13 @@
 import {
     ApplySnapshotChunkRequest,
-    ApplySnapshotChunkResponse, ApplySnapshotChunkResult,
+    ApplySnapshotChunkResponse,
+    ApplySnapshotChunkResult,
     CheckTxRequest,
-    CheckTxResponse,
     CommitRequest,
     CommitResponse,
     EchoRequest,
-    EchoResponse, ExecTxResult,
+    EchoResponse,
+    ExecTxResult,
     ExtendVoteRequest,
     ExtendVoteResponse,
     FinalizeBlockRequest,
@@ -22,11 +23,13 @@ import {
     LoadSnapshotChunkRequest,
     LoadSnapshotChunkResponse,
     OfferSnapshotRequest,
-    OfferSnapshotResponse, OfferSnapshotResult,
+    OfferSnapshotResponse,
+    OfferSnapshotResult,
     PrepareProposalRequest,
     PrepareProposalResponse,
     ProcessProposalRequest,
-    ProcessProposalResponse, ProcessProposalStatus,
+    ProcessProposalResponse,
+    ProcessProposalStatus,
     QueryRequest,
     QueryResponse,
     Snapshot as SnapshotProto,
@@ -35,12 +38,11 @@ import {
 } from '../proto-ts/cometbft/abci/v1/types';
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { NodeCore } from './nodeCore';
 import { ConfigService } from '@nestjs/config';
 import { KeyManagementService } from '../key-management.service';
 import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
-import { GenesisSnapshotStorageService } from './genesis-snapshot-storage.service';
-import { CachedLevelDb } from './cachedLevelDb';
+import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
+import { CachedLevelDb } from './database/CachedLevelDb';
 import { Storage } from './storage';
 import {
     Base64,
@@ -56,29 +58,33 @@ import {
     GenesisSnapshotDTO,
     Hash,
     KeyedProvider,
+    MessageSerializer,
+    MessageUnserializer,
     MicroblockImporter,
     NetworkProvider,
     NullNetworkProvider,
     PrivateSignatureKey,
     Provider,
     PublicSignatureKey,
+    SCHEMAS,
     SECTIONS,
-    Utils,
+    Utils, VirtualBlockchain,
 } from '@cmts-dev/carmentis-sdk/server';
-import { AccountManager } from './accountManager';
-import { RadixTree } from './radixTree';
-import { LevelDb } from './levelDb';
-import { SnapshotsManager } from './snapshotsManager';
+import { AccountManager } from './AccountManager';
+import { RadixTree } from './RadixTree';
+import { LevelDb } from './database/LevelDb';
+import { SnapshotsManager } from './SnapshotsManager';
 import { SectionCallback } from './types/SectionCallback';
-import { MessageSerializer, MessageUnserializer, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
-import path from 'node:path';
 import { NodeProvider } from './nodeProvider';
 import { NODE_SCHEMAS } from './constants/constants';
 import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
 import { InitialBlockchainStateBuilder } from './InitialBlockchainStateBuilder';
 import { AccountInformation } from './types/AccountInformation';
 import { AbciHandlerInterface } from '../AbciHandlerInterface';
+import { NodeConfigService } from './config/services/NodeConfigService';
+import { Cache } from './types/Cache';
+
 const APP_VERSION = 1;
 
 const nodeConfig = {
@@ -86,18 +92,6 @@ const nodeConfig = {
     blockHistoryBeforeSnapshot: 0,
     maxSnapshots: 3,
 };
-
-
-
-interface Cache {
-    db: CachedLevelDb;
-    storage: Storage;
-    blockchain: Blockchain;
-    accountManager: AccountManager;
-    vbRadix: RadixTree;
-    tokenRadix: RadixTree;
-    validatorSetUpdate: any[];
-}
 
 const SNAPSHOT_PERIOD = 1;
 
@@ -129,21 +123,26 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     // The ABCI query handler is used to handle queries sent to the application via the abci_query method.
     private abciQueryHandler: ABCIQueryHandler;
 
-
     // storage paths
 
     constructor(
         private config: ConfigService,
+        private readonly nodeConfig: NodeConfigService,
         private readonly cometConfig: CometBFTNodeConfigService,
         private readonly kms: KeyManagementService,
         private genesisSnapshotStorage: GenesisSnapshotStorageService,
     ) {
         // define the paths where are stored the database, the storage and the snapshots.
-        const abciStoragePath = config.getOrThrow<string>('NODE_ABCI_STORAGE');
-        this.logger.debug(`Node storage (ABCI): ${abciStoragePath}`);
-        this.dbPath = path.join(abciStoragePath, 'db');
-        this.storagePath = path.join(abciStoragePath, 'microblocks');
-        this.snapshotPath = path.join(abciStoragePath, 'snapshots');
+        const {
+            rootStoragePath: abciStoragePath,
+            dbStoragePath,
+            microblocksStoragePath,
+            snapshotStoragePath,
+        } = this.nodeConfig.getStoragePaths();
+        this.logger.log(`ABCI storage at ${abciStoragePath}`);
+        this.dbPath = dbStoragePath;
+        this.storagePath = microblocksStoragePath;
+        this.snapshotPath = snapshotStoragePath;
 
         // Create and initialize the database.
         this.db = new LevelDb(this.dbPath, NODE_SCHEMAS.DB);
@@ -160,7 +159,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.accountManager = new AccountManager(this.db, this.tokenRadix);
 
         // Set up the ABCI query handler
-        this.abciQueryHandler = new ABCIQueryHandler(this.blockchain, this.db, this.accountManager, this.genesisSnapshotStorage);
+        this.abciQueryHandler = new ABCIQueryHandler(
+            this.blockchain,
+            this.db,
+            this.accountManager,
+            this.genesisSnapshotStorage,
+        );
 
         // instantiate radix trees
         this.vbRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_VB_RADIX);
@@ -176,7 +180,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.registerSectionCallbacks();
     }
 
-
     private registerSectionCallbacks() {
         this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
             [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
@@ -190,10 +193,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         ]);
     }
 
-
-    onModuleInit() {
-    }
-
+    onModuleInit() {}
 
     /**
      Account callbacks
@@ -369,8 +369,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             height: 0,
             codespace: 'Carmentis',
         });
-
-
     }
 
     private async forwardAbciQueryToHandler(serializedQuery: Uint8Array) {
@@ -400,7 +398,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         ) || {
             height: 0,
         };
-
 
         if (last_block_height === 0) {
             this.logger.log(`(Info) Aborting info request because the chain is empty.`);
@@ -488,7 +485,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async saveReceivedGenesisSnapshot(genesisSnapshotChunks: Uint8Array[]) {
-        for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++ ) {
+        for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++) {
             const chunk = genesisSnapshotChunks[chunkIndex];
             const isLastChunk = chunkIndex === genesisSnapshotChunks.length - 1;
             await this.snapshot.loadReceivedChunk(this.storage, chunkIndex, chunk, isLastChunk);
@@ -530,11 +527,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     private async searchGenesisSnapshotFromGenesisNode() {
         const genesisNodeUrl = this.config.getOrThrow<string>('COMET_GENESIS_NODE_URL');
-        this.logger.verbose(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`)
+        this.logger.verbose(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`);
         const provider = new NetworkProvider(genesisNodeUrl);
         const snapshot = await provider.getGenesisSnapshot();
         const encoder = EncoderFactory.bytesToBase64Encoder();
-        const genesisSnapshotChunks = snapshot.base64EncodedChunks.map((chunk) => encoder.decode(chunk));
+        const genesisSnapshotChunks = snapshot.base64EncodedChunks.map((chunk) =>
+            encoder.decode(chunk),
+        );
         return genesisSnapshotChunks;
     }
 
@@ -548,8 +547,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // we generate and export the genesis state as a snapshot
         const numberOfChunksToExport = 4;
         const genesisChunks = [];
-        for (let chunkIndexToExport = 0; chunkIndexToExport < numberOfChunksToExport; chunkIndexToExport++ ) {
-            const chunk = await this.snapshot.getChunk(this.storage, chainHeightAfterGenesis, chunkIndexToExport);
+        for (
+            let chunkIndexToExport = 0;
+            chunkIndexToExport < numberOfChunksToExport;
+            chunkIndexToExport++
+        ) {
+            const chunk = await this.snapshot.getChunk(
+                this.storage,
+                chainHeightAfterGenesis,
+                chunkIndexToExport,
+            );
             genesisChunks.push(chunk);
         }
 
@@ -750,7 +757,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
 
         return PrepareProposalResponse.create({
-            txs: proposedTxs
+            txs: proposedTxs,
         });
     }
 
@@ -779,7 +786,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         return ProcessProposalResponse.create({
-            status: ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT
+            status: ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT,
         });
     }
 
@@ -928,12 +935,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
     }
 
-
     async processBlock(
-        cache: any,
+        cache: Cache,
         blockHeight: number,
         timestamp: number,
-        txs: any,
+        txs: Uint8Array[],
         executedDuringGenesis = false,
     ) {
         this.logger.log(`processBlock`);
@@ -945,7 +951,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         let blockSize = 0;
         let blockSectionCount = 0;
 
-        for (const txId in txs) {
+        for (let txId = 0; txId < txs.length; txId++) {
             const tx = txs[txId];
             const importer = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(tx));
             const success = await this.checkMicroblock(
@@ -955,8 +961,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 executedDuringGenesis,
             );
 
-            const vb: any = await importer.getVirtualBlockchain();
-
+            const vb: VirtualBlockchain<unknown> = await importer.getVirtualBlockchain();
             if (vb.height == 1) {
                 newObjects[vb.type]++;
             }
@@ -965,7 +970,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
             const fees = Math.floor(
                 (vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice) /
-                ECO.GAS_UNIT,
+                    ECO.GAS_UNIT,
             );
             const feesPayerAccount = vb.currentMicroblock.getFeesPayerAccount();
 
@@ -978,7 +983,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
             await importer.store();
 
-            const sectionCount = vb.currentMicroblock.sections.length;
+            const sectionCount: number = vb.currentMicroblock.sections.length;
 
             microblocks.push({
                 hash: vb.currentMicroblock.hash,
@@ -996,6 +1001,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const stateData = await cache.blockchain.provider.getVirtualBlockchainStateInternal(
                 importer.vb.identifier,
             );
+            // @ts-expect-error stateData has an invalid type
             const stateHash = Crypto.Hashes.sha256AsBinary(stateData);
             await cache.vbRadix.set(importer.vb.identifier, stateHash);
 
@@ -1086,7 +1092,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: Storage) {
-        this.logger.warn("Storage is ignored during application hash computation");
+        this.logger.warn('Storage is ignored during application hash computation');
         const tokenRadixHash = await tokenRadix.getRootHash();
         const vbRadixHash = await vbRadix.getRootHash();
         const radixHash = Crypto.Hashes.sha256AsBinary(
@@ -1095,12 +1101,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const finalAppHash = radixHash;
         const storageHash = await storage.processChallenge(radixHash);
         const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
-
-        this.logger.verbose(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
-        this.logger.verbose(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
-        this.logger.verbose(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
-        this.logger.verbose(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
-        this.logger.verbose(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
         return { tokenRadixHash, vbRadixHash, appHash: finalAppHash, storageHash, radixHash };
     }
@@ -1422,6 +1422,4 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
      */
-
-
 }

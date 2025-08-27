@@ -1,7 +1,7 @@
 import fs, { mkdirSync } from 'node:fs';
 import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
-import { dbInterface } from './dbInterface';
+import { DbInterface } from './database/DbInterface';
 import { NODE_SCHEMAS } from './constants/constants';
 
 import { SCHEMAS, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
@@ -18,12 +18,12 @@ const CHALLENGE_PARTS_PER_FILE = 256;
 const CHALLENGE_BYTES_PER_PART = 1024;
 
 export class Storage {
-    db: dbInterface;
+    db: DbInterface;
     path: string;
     txs: Uint8Array[];
     cache: Map<number, any>;
 
-    constructor(db: dbInterface, path: string, txs: Uint8Array[]) {
+    constructor(db: DbInterface, path: string, txs: Uint8Array[]) {
         this.db = db;
         this.path = path;
         this.txs = txs;

@@ -4,45 +4,62 @@ import { WsAdapter } from '@nestjs/platform-ws';
 import { ReflectionService } from '@grpc/reflection';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { join } from 'path';
+import getPort from 'get-port';
 
 import { Logger } from '@nestjs/common';
+import { RestABCIQueryModule } from './carmentis/rest-abci-query/RestABCIQueryModule';
+import { NodeConfigModule } from './carmentis/config/NodeConfigModule';
+import { NodeConfigService } from './carmentis/config/services/NodeConfigService';
 
-const grpc = true;
 
 const logger = new Logger('Carmentis Node/ABCI');
 async function bootstrap() {
-    let app;
+    // we start by instantiating the NodeConfigModule containing the configuration for the node.
+    const nodeConfigModule = await NestFactory.create(NodeConfigModule);
+    const nodeConfigService = nodeConfigModule.get(NodeConfigService);
 
-    if (grpc) {
-        const grpcPort = Number.parseInt(process.env.NODE_ABCI_GRPC_PORT ?? '26658');
-        const grpcUrl = `0.0.0.0:${grpcPort}`;
-        logger.log(`Configuring GRPC at ${grpcUrl}`);
-        app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
-            transport: Transport.GRPC,
-            options: {
-                package: 'cometbft.abci.v1',
-                protoPath: 'cometbft/abci/v1/service.proto',
-                loader: {
-                    includeDirs: [join(__dirname, '../proto')],
-                    keepCase: true,
-                    longs: String,
-                    enums: String,
-                    defaults: true,
-                    oneofs: true,
-                },
+    // define the port used by GRPC to communicate with CometBFT
+    const defaultGrpcPort = await getPort({ port: 26658 });
+    const grpcPort = nodeConfigService.getGrpcPortOrDefault(defaultGrpcPort);
 
-                url: grpcUrl,
-                onLoadPackageDefinition: (pkg, server) => {
-                    new ReflectionService(pkg).addToServer(server);
-                },
+    // define the port used by the REST ABCI Query service
+    const defaultRestAbciQueryPort = await getPort({ port: 26659 });
+    const restAbciQueryPort = nodeConfigService.getRestAbciQueryPortOrDefault(
+        defaultRestAbciQueryPort
+    );
+
+    // log the chosen ports for the services
+    logger.log(`GRPC listening at ${grpcPort}`);
+    logger.log(`REST ABCI Query listening at ${restAbciQueryPort}`);
+
+    const grpcUrl = `0.0.0.0:${grpcPort}`;
+    const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
+        transport: Transport.GRPC,
+        options: {
+            package: 'cometbft.abci.v1',
+            protoPath: 'cometbft/abci/v1/service.proto',
+            loader: {
+                includeDirs: [join(__dirname, '../proto')],
+                keepCase: true,
+                longs: String,
+                enums: String,
+                defaults: true,
+                oneofs: true,
             },
-        });
 
-        await app.listen();
-    } else {
-        app = await NestFactory.create(AppModule);
-        app.useWebSocketAdapter(new WsAdapter(app));
-        await app.listen(3000);
-    }
+            url: grpcUrl,
+            onLoadPackageDefinition: (pkg, server) => {
+                new ReflectionService(pkg).addToServer(server);
+            },
+        },
+    });
+
+    const restAbciQuery = await NestFactory.create(RestABCIQueryModule);
+    await Promise.all([
+        app.listen(),
+        restAbciQuery.listen(restAbciQueryPort),
+    ]);
 }
+
+
 bootstrap();

@@ -32,7 +32,7 @@ import {
 import { EncoderFactory, IllegalParameterError } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 import { NodeProvider } from './nodeProvider';
-import { LevelDb } from './levelDb';
+import { LevelDb } from './database/LevelDb';
 import { Storage } from './storage';
 
 export class InitialBlockchainStateBuilder {

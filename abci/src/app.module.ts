@@ -1,17 +1,21 @@
 import { Module } from '@nestjs/common';
-import { AbciGateway } from './abci.gateway';
-import { AbciService } from './carmentis/abci.service';
+import { AbciService } from './carmentis/AbciService';
 import { GrpcAbciController } from './GrpcAbciController';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
-import { KeyManagementService } from './key-management.service';
-import { CometBFTNodeConfigService } from './carmentis/CometBFTNodeConfigService';
-import { EnvService } from './carmentis/EnvService';
-import { GenesisSnapshotStorageService } from './carmentis/genesis-snapshot-storage.service';
+import { RestABCIQueryModule } from './carmentis/rest-abci-query/RestABCIQueryModule';
+import { NodeConfigModule } from './carmentis/config/NodeConfigModule';
+import { AbciModule } from './carmentis/AbciModule';
 
 @Module({
-    imports: [HttpModule, ConfigModule.forRoot()],
-    controllers: [GrpcAbciController],
-    providers: [EnvService, GenesisSnapshotStorageService, CometBFTNodeConfigService, KeyManagementService, AbciService, AbciGateway],
+    imports: [
+        ConfigModule.forRoot({
+            isGlobal: true,
+        }),
+        RestABCIQueryModule,
+        HttpModule,
+        AbciModule,
+    ],
+    exports: [],
 })
 export class AppModule {}

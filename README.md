@@ -35,7 +35,7 @@ carmentis-node/
 │   ├── src/               # Source code
 │   │   ├── carmentis/     # Carmentis-specific business logic
 │   │   ├── proto-ts/      # Protocol buffer definitions
-│   │   ├── abci.service.ts # ABCI protocol implementation
+│   │   ├── AbciService.ts # ABCI protocol implementation
 │   │   └── ...
 │   ├── Dockerfile         # Docker configuration for ABCI server
 │   └── ...

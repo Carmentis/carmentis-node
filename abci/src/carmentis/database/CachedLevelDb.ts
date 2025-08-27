@@ -1,8 +1,8 @@
-import { LevelDb } from './levelDb';
+import { LevelDb } from './LevelDb';
 import { Utils } from '@cmts-dev/carmentis-sdk/server';
-import { dbInterface } from './dbInterface';
+import { DbInterface } from './DbInterface';
 
-export class CachedLevelDb implements dbInterface {
+export class CachedLevelDb implements DbInterface {
     db: LevelDb;
     updateCache: any;
     deletionCache: any;

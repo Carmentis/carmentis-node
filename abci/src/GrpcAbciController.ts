@@ -35,15 +35,13 @@ import {
     VerifyVoteExtensionResponse,
     VerifyVoteExtensionStatus,
 } from './proto-ts/cometbft/abci/v1/types';
-import { AbciService } from './carmentis/abci.service';
+import { AbciService } from './carmentis/AbciService';
 
 @Controller()
 export class GrpcAbciController {
     private logger = new Logger('AbciController');
 
-    constructor(private readonly abciService: AbciService) {
-        this.logger.debug('AbciController initialized');
-    }
+    constructor(private readonly abciService: AbciService) {}
 
     @GrpcMethod('ABCIService', 'Echo')
     async Echo(request: EchoRequest): Promise<EchoResponse> {

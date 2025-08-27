@@ -1,24 +1,20 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { EnvService } from './EnvService';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { GenesisSnapshotDTO } from '@cmts-dev/carmentis-sdk/server';
+import { NodeConfigService } from './config/services/NodeConfigService';
 
 @Injectable()
 export class GenesisSnapshotStorageService {
 
     private logger: Logger = new Logger(GenesisSnapshotStorageService.name);
-    private readonly genesisSnapshotFileName: string  = 'genesis-snapshot.json';
     private readonly genesisSnapshotPath: string;
 
     constructor(
-        env: EnvService,
+        nodeConfig: NodeConfigService,
     ) {
-        this.genesisSnapshotPath = path.join(
-            env.getDefaultStorageFolderPath(),
-            this.genesisSnapshotFileName
-        );
+        const {genesisSnapshotFilePath} = nodeConfig.getStoragePaths();
+        this.genesisSnapshotPath = genesisSnapshotFilePath;
     }
     
     async writeGenesisSnapshotInDisk(data: GenesisSnapshotDTO) {

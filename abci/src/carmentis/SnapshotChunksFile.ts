@@ -140,12 +140,6 @@ export class SnapshotChunksFile {
      */
     static decodeChunkRecord(record: Uint8Array) {
         let pointer = 0;
-        /*
-        const fileIdentifier = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_FILE_IDENTIFIER_LENGTH)]);
-        const offset = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_OFFSET_LENGTH)]);
-        const size = Utils.byteArrayToInt([...record.slice(pointer, pointer += CHUNK_SIZE_LENGTH)]);
-        */
-
         const fileIdentifier = this.readSubsetOfBinaryAsInt(
             record,
             pointer,

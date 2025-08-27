@@ -3,9 +3,9 @@ import path from 'path';
 import crypto from 'node:crypto';
 import stream from 'node:stream/promises';
 import { FileHandle, access, mkdir, open, rename, readdir, rm } from 'node:fs/promises';
-import { LevelDb } from './levelDb';
+import { LevelDb } from './database/LevelDb';
 import { Storage } from './storage';
-import { SnapshotChunksFile } from './snapshotChunksFile';
+import { SnapshotChunksFile } from './SnapshotChunksFile';
 import { NODE_SCHEMAS } from './constants/constants';
 
 import { SCHEMAS, SchemaUnserializer, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
