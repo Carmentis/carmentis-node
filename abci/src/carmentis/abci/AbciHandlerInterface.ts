@@ -32,7 +32,7 @@ import {
     Snapshot as SnapshotProto,
     VerifyVoteExtensionRequest,
     VerifyVoteExtensionResponse,
-} from './proto-ts/cometbft/abci/v1/types';
+} from '../../proto-ts/cometbft/abci/v1/types';
 
 
 export interface AbciHandlerInterface {

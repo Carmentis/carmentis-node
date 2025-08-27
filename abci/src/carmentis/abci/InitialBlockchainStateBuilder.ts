@@ -8,7 +8,7 @@ import {
     ProcessProposalRequest,
     ProcessProposalStatus,
     VerifyVoteExtensionRequest,
-} from '../proto-ts/cometbft/abci/v1/types';
+} from '../../proto-ts/cometbft/abci/v1/types';
 import {
     Blockchain,
     CHAIN,

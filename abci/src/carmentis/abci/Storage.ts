@@ -51,7 +51,7 @@ export class Storage {
         const filePath = this.getFilePath(fileIdentifier);
         const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
 
-        const dataFileObject = (await this.db.getObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey)) || {
+        const dataFileObject: any = (await this.db.getObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey)) || {
             fileSize: 0,
             microblockCount: 0,
         };
@@ -194,7 +194,7 @@ export class Storage {
      * Reads a full microblock, microblock header or microblock body from its hash.
      */
     private async readMicroblock(hash: Uint8Array, partType: number) {
-        const storageInfo = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, hash);
+        const storageInfo: any = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, hash);
 
         if (!storageInfo) {
             return new Uint8Array();

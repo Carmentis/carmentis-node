@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { GenesisSnapshotDTO } from '@cmts-dev/carmentis-sdk/server';
-import { NodeConfigService } from './config/services/NodeConfigService';
+import { NodeConfigService } from '../config/services/NodeConfigService';
 
 @Injectable()
 export class GenesisSnapshotStorageService {

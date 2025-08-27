@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { NodeConfigService } from './config/services/NodeConfigService';
+import { NodeConfigService } from '../config/services/NodeConfigService';
 
 export interface TendermintPublicKey {
     type: string;

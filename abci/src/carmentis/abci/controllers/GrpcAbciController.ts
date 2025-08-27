@@ -34,8 +34,8 @@ import {
     VerifyVoteExtensionRequest,
     VerifyVoteExtensionResponse,
     VerifyVoteExtensionStatus,
-} from './proto-ts/cometbft/abci/v1/types';
-import { AbciService } from './carmentis/AbciService';
+} from '../../../proto-ts/cometbft/abci/v1/types';
+import { AbciService } from '../AbciService';
 
 @Controller()
 export class GrpcAbciController {

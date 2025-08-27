@@ -5,7 +5,7 @@ import {
     Secp256k1PrivateSignatureKey,
     StringSignatureEncoder,
 } from '@cmts-dev/carmentis-sdk/server';
-import { NodeConfigService } from '../config/services/NodeConfigService';
+import { NodeConfigService } from '../../config/services/NodeConfigService';
 
 /**
  * This service is responsible for managing the critical keys

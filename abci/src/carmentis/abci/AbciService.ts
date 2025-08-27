@@ -35,7 +35,7 @@ import {
     Snapshot as SnapshotProto,
     VerifyVoteExtensionRequest,
     VerifyVoteExtensionResponse,
-} from '../proto-ts/cometbft/abci/v1/types';
+} from '../../proto-ts/cometbft/abci/v1/types';
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -81,8 +81,8 @@ import { NODE_SCHEMAS } from './constants/constants';
 import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
 import { InitialBlockchainStateBuilder } from './InitialBlockchainStateBuilder';
 import { AccountInformation } from './types/AccountInformation';
-import { AbciHandlerInterface } from '../AbciHandlerInterface';
-import { NodeConfigService } from './config/services/NodeConfigService';
+import { AbciHandlerInterface } from './AbciHandlerInterface';
+import { NodeConfigService } from '../config/services/NodeConfigService';
 import { Cache } from './types/Cache';
 
 const APP_VERSION = 1;
