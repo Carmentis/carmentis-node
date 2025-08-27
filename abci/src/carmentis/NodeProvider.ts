@@ -1,11 +1,12 @@
 import { NODE_SCHEMAS } from './constants/constants';
-import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { DbInterface } from './database/DbInterface';
+import { Storage } from './storage';
 
 export class NodeProvider {
-    db: any;
-    storage: any;
+    db: DbInterface;
+    storage: Storage;
 
-    constructor(db: any, storage: any) {
+    constructor(db: DbInterface, storage: Storage) {
         this.db = db;
         this.storage = storage;
     }
@@ -46,6 +47,7 @@ export class NodeProvider {
         // ignored
     }
 
+    /*
     async setMicroblock(
         identifier: Uint8Array,
         expirationDay: number,
@@ -59,6 +61,7 @@ export class NodeProvider {
             fileOffset,
         });
     }
+     */
 
     async setVirtualBlockchainState(identifier: Uint8Array, data: Uint8Array) {
         return await this.set(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, identifier, data);
