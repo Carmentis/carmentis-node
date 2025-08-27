@@ -474,8 +474,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async initChainAsNode(request: InitChainRequest) {
-        const genesisSnapshot = await this.searchGenesisSnapshotFromGenesisNode();
-        await this.saveReceivedGenesisSnapshot(genesisSnapshot);
+        const genesisSnapshot = await this.searchGenesisSnapshotChunksFromGenesisNode();
+        await this.loadReceivedGenesisSnapshotChunks(genesisSnapshot);
+        await this.genesisSnapshotStorage.writeGenesisSnapshotChunksInDiskFromEncodedChunks(
+            genesisSnapshot,
+        );
         const { appHash } = await this.computeApplicationHash(
             this.tokenRadix,
             this.vbRadix,
@@ -484,7 +487,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         return appHash;
     }
 
-    private async saveReceivedGenesisSnapshot(genesisSnapshotChunks: Uint8Array[]) {
+    private async loadReceivedGenesisSnapshotChunks(genesisSnapshotChunks: Uint8Array[]) {
+        // we load the chunks using the SnapshotManager
         for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++) {
             const chunk = genesisSnapshotChunks[chunkIndex];
             const isLastChunk = chunkIndex === genesisSnapshotChunks.length - 1;
@@ -524,7 +528,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await this.snapshot.create();
     }
 
-    private async searchGenesisSnapshotFromGenesisNode() {
+    private async searchGenesisSnapshotChunksFromGenesisNode() {
         const genesisNodeUrl = this.nodeConfig.getGenesisSnapshotRpcEndpoint();
         this.logger.verbose(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`);
         const provider = new NetworkProvider(genesisNodeUrl);

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { GenesisSnapshotDTO } from '@cmts-dev/carmentis-sdk/server';
+import { EncoderFactory, GenesisSnapshotDTO } from '@cmts-dev/carmentis-sdk/server';
 import { NodeConfigService } from '../config/services/NodeConfigService';
 
 @Injectable()
@@ -16,6 +16,15 @@ export class GenesisSnapshotStorageService {
         const {genesisSnapshotFilePath} = nodeConfig.getStoragePaths();
         this.genesisSnapshotPath = genesisSnapshotFilePath;
     }
+
+    async writeGenesisSnapshotChunksInDiskFromEncodedChunks(chunks: Uint8Array[]) {
+        const base64Encoder = EncoderFactory.bytesToBase64Encoder();
+        const genesisSnapshot : GenesisSnapshotDTO = {
+            base64EncodedChunks: chunks.map((chunk) => base64Encoder.encode(chunk)),
+        }
+        return await this.writeGenesisSnapshotInDisk(genesisSnapshot);
+    }
+
     
     async writeGenesisSnapshotInDisk(data: GenesisSnapshotDTO) {
         this.logger.verbose(`Writing genesis snapshot to ${this.genesisSnapshotPath}`);
