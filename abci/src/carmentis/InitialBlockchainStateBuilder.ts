@@ -41,7 +41,6 @@ export class InitialBlockchainStateBuilder {
     private readonly issuerPublicKey: PublicSignatureKey;
     constructor(
         private readonly request: InitChainRequest,
-        private readonly dummyPrivateKey: PrivateSignatureKey,
         private readonly issuerPrivateKey: PrivateSignatureKey,
         private readonly blockchain: Blockchain,
     ) {
@@ -131,7 +130,7 @@ export class InitialBlockchainStateBuilder {
             votingPower: 10,
         });
         const vb = loadedNode.vb;
-        await vb.setSignature(this.dummyPrivateKey);
+        await vb.setSignature(this.issuerPrivateKey);
         const serializedMb = vb.currentMicroblock.serialize();
         return Utils.binaryFrom(serializedMb.headerData, serializedMb.bodyData);
     }

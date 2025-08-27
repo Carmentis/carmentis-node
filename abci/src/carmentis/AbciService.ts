@@ -39,7 +39,7 @@ import {
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { KeyManagementService } from '../key-management.service';
+import { KeyManagementService } from './services/KeyManagementService';
 import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { CachedLevelDb } from './database/CachedLevelDb';
@@ -438,7 +438,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const isGenesisNode = this.isGenesisNode(request);
         if (isGenesisNode) {
             this.logger.log(`This node is the genesis node.`);
-            const appHash = await this.initChainAsGenesis(request);
+            const issuerPrivateKey = this.kms.getIssuerPrivateKey();
+            const appHash = await this.initChainAsGenesis(request, issuerPrivateKey);
             return this.createInitChainResponse(appHash);
         } else {
             this.logger.log(`This node is not the genesis node.`);
@@ -492,12 +493,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
     }
 
-    private async initChainAsGenesis(request: InitChainRequest) {
+    private async initChainAsGenesis(request: InitChainRequest, issuerPrivateKey: PrivateSignatureKey) {
         //
         await this.storeInitialValidatorSet(request);
 
         // we construct a keyed blockchain client equipped with a dummy, static private key
-        const issuerPrivateKey = this.kms.getIssuerPrivateKey();
         const internalProvider = new NodeProvider(this.db, this.storage);
         const provider = new KeyedProvider(
             issuerPrivateKey,
@@ -633,14 +633,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     private async publishInitialBlockchainState(
         blockchain: Blockchain,
-        dummyPrivateSignatureKey: PrivateSignatureKey,
+        issuerPrivateKey: PrivateSignatureKey,
         request: InitChainRequest,
     ) {
         // we first create a blockchain client equipped with the key of the
-        const issuerPrivateKey = this.kms.getIssuerPrivateKey();
         const stateBuilder = new InitialBlockchainStateBuilder(
             request,
-            dummyPrivateSignatureKey,
             issuerPrivateKey,
             blockchain,
         );

@@ -64,20 +64,44 @@ export class NodeConfigService {
     getStoragePaths() {
         const specifiedPaths = this.nodeConfig.paths;
         const rootStoragePath = specifiedPaths.storage;
-        const snapshotStoragePath = join(rootStoragePath, specifiedPaths.storage_relative_snapshots_folder);
+        const snapshotStoragePath = join(
+            rootStoragePath,
+            specifiedPaths.storage_relative_snapshots_folder,
+        );
         const dbStoragePath = join(rootStoragePath, specifiedPaths.storage_relative_db_folder);
-        const microblocksStoragePath = join(rootStoragePath, specifiedPaths.storage_relative_microblocks_folder);
-        const genesisSnapshotFilePath = join(rootStoragePath, specifiedPaths.storage_relative_genesis_snapshot_file);
+        const microblocksStoragePath = join(
+            rootStoragePath,
+            specifiedPaths.storage_relative_microblocks_folder,
+        );
+        const genesisSnapshotFilePath = join(
+            rootStoragePath,
+            specifiedPaths.storage_relative_genesis_snapshot_file,
+        );
+
         return {
             rootStoragePath,
             snapshotStoragePath,
             dbStoragePath,
             microblocksStoragePath,
-            genesisSnapshotFilePath
+            genesisSnapshotFilePath,
         }
     }
 
     getCometBFTHome() {
         return this.nodeConfig.paths.cometbft_home;
+    }
+
+
+    /**
+     * Retrieves the private key retrieval method from the genesis section of the node configuration,
+     * if the genesis section is specified.
+     *
+     */
+    getSpecifiedGenesisPrivateKeyRetrievalMethod(): { sk?: string, path?: string } {
+        const unspecifiedPrivateKeyRetrievalMethod = { sk: undefined, path: undefined };
+        const genesisSection = this.nodeConfig.genesis;
+        const isGenesisSectionSpecified = genesisSection !== undefined;
+        if (!isGenesisSectionSpecified) return unspecifiedPrivateKeyRetrievalMethod;
+        return genesisSection.private_key;
     }
 }
