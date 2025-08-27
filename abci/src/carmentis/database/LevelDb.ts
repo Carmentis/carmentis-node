@@ -173,7 +173,7 @@ export class LevelDb implements DbInterface {
         return obj;
     }
 
-    serialize(tableId: number, object: any) {
+    serialize(tableId: number, object: object) {
         const serializer = new SchemaSerializer(NODE_SCHEMAS.DB[tableId]);
         const data = serializer.serialize(object);
         return data;

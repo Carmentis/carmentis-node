@@ -99,7 +99,7 @@ export class CachedLevelDb implements DbInterface {
         return true;
     }
 
-    serialize(tableId: number, object: any) {
+    serialize(tableId: number, object: object) {
         return this.db.serialize(tableId, object);
     }
 
