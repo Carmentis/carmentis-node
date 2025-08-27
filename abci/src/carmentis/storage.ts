@@ -201,7 +201,7 @@ export class Storage {
         }
 
         const filePath = this.getFilePath(storageInfo.fileIdentifier);
-        let dataBuffer;
+        let dataBuffer: Uint8Array;
 
         try {
             const handle = await open(filePath, 'r');
