@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConfigSchema, NodeConfig } from '../types/NodeConfig';
 import process from 'node:process';
@@ -9,13 +9,17 @@ import * as toml from '@iarna/toml';
 @Injectable()
 export class NodeConfigService {
     private nodeConfig: NodeConfig;
+    private logger = new Logger(NodeConfigService.name);
+
     constructor() {
         // We use the TOML config file by default but allow the user to override it with an environment variable.
         const TOML_CONFIG_FILENAME =
-            process.env['ABCI_CONFIG'] || 'abci-config.toml';
+            process.env['ABCI_CONFIG'] || process.env['NODE_CONFIG'] || 'abci-config.toml';
 
         try {
-            const config = readFileSync(join(process.cwd(), TOML_CONFIG_FILENAME), 'utf8');
+            const configPath = join(process.cwd(), TOML_CONFIG_FILENAME);
+            this.logger.log(`Loading config file from ${configPath}`);
+            const config = readFileSync(configPath, 'utf8');
             const parsedConfig = toml.parse(config) as Record<string, any>;
             this.nodeConfig = ConfigSchema.parse(parsedConfig);
         } catch (e) {
