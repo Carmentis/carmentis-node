@@ -76,7 +76,7 @@ import { LevelDb } from './database/LevelDb';
 import { SnapshotsManager } from './SnapshotsManager';
 import { SectionCallback } from './types/SectionCallback';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
-import { NodeProvider } from './nodeProvider';
+import { NodeProvider } from './NodeProvider';
 import { NODE_SCHEMAS } from './constants/constants';
 import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
 import { InitialBlockchainStateBuilder } from './InitialBlockchainStateBuilder';
