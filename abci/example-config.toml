@@ -1,0 +1,29 @@
+# This section specifies the way to recover the genesis snapshot, crucial to recover the
+# initial chain state before to start the node. One method must be used at a time.
+[genesis_snapshot]
+rpc_endpoint = "http://other-node:36657"
+path = '/path/to/genesis/snapshot' # This method is currently not supported and is under development.
+
+# This section specifies how to access the private key of the issuer.
+# This section SHOULD be used ONLY by the genesis node starting the chain.
+# One method must be used at a time.
+[genesis.private_key]
+path = '/path/to/key/file'
+sk = 'SIG:SECP256K1:SK{...}'
+env = 'ENV_VAR_NAME_CONTAINING_MY_PRIVATE_KEY'
+
+# This section specifies the port where ABCI listens request coming from CometBFT.
+# When omitted, the port 26658 is used when available, otherwise another free port is used.
+[abci.grpc]
+port = 26658
+
+# This section specifies the port where ABCI accepts carmentis-specific queries.
+# Note that this area is still under development and coexists with the /abci_query endpoints.
+# When omitted, the port 26659 is used when available, otherwise another free port is used.
+[abci.query.rest]
+port = 26659
+
+# This section specifies several paths used by the ABCI server.
+[paths]
+cometbft_home = "/path/to/cometbft/home" # Specifies where the CometBFT home is located (used to recover the CometBFT's public key).
+storage = "/path/to/store/abci/data" # Specifies where data are stored.
