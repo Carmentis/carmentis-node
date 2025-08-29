@@ -136,7 +136,7 @@ export class NodeConfigService {
      * if the genesis section is specified.
      *
      */
-    getSpecifiedGenesisPrivateKeyRetrievalMethod(): { sk?: string, path?: string } {
+    getSpecifiedGenesisPrivateKeyRetrievalMethod(): { sk?: string, path?: string, env?: string } {
         const unspecifiedPrivateKeyRetrievalMethod = { sk: undefined, path: undefined };
         const genesisSection = this.nodeConfig.genesis;
         const isGenesisSectionSpecified = genesisSection !== undefined;

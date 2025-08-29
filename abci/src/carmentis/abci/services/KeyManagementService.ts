@@ -6,6 +6,7 @@ import {
     StringSignatureEncoder,
 } from '@cmts-dev/carmentis-sdk/server';
 import { NodeConfigService } from '../../config/services/NodeConfigService';
+import process from 'node:process';
 
 /**
  * This service is responsible for managing the critical keys
@@ -21,12 +22,13 @@ export class KeyManagementService implements OnModuleInit {
 
     onModuleInit() {
         // get the specified private key retrieval method for the genesis private key.
-        const { sk, path } = this.nodeConfig.getSpecifiedGenesisPrivateKeyRetrievalMethod();
+        const { sk, path, env} = this.nodeConfig.getSpecifiedGenesisPrivateKeyRetrievalMethod();
         const specifiedEncodedPrivateKey = sk;
         const specifiedPrivateKeyFilePath = path;
+        const specifiedEnvVarName= env;
 
         // Launch the private key retrieval, either by recovering from specified private key or by loading
-        // the private key from the specified file.
+        // the private key from the specified file, or by loading the private key from the specified environment variable.
         let retrievedPrivateKey: PrivateSignatureKey;
         if (typeof specifiedEncodedPrivateKey === 'string') {
             this.logger.log(`Retrieving private key provided in the config file...`);
@@ -36,6 +38,9 @@ export class KeyManagementService implements OnModuleInit {
         } else if (typeof specifiedPrivateKeyFilePath === 'string') {
             this.logger.log(`Retrieving private key from file ${specifiedPrivateKeyFilePath}...`);
             retrievedPrivateKey = this.loadPrivateKeyFromFilePath(specifiedPrivateKeyFilePath);
+        } else if (typeof specifiedEnvVarName === 'string') {
+            this.logger.log(`Retrieving private key from env variable ${specifiedEnvVarName}...`);
+            retrievedPrivateKey = this.loadPrivateKeyFromEnvVar(specifiedEnvVarName);
         }
 
         // log the success (or not) of the private key retrieval
@@ -51,6 +56,22 @@ export class KeyManagementService implements OnModuleInit {
             this.logger.warn(
                 'Genesis private key retrieval failed: Have you provided a private key retrieval method in the config file?',
             );
+        }
+    }
+
+    private loadPrivateKeyFromEnvVar(envVarName: string): PrivateSignatureKey {
+        const envVarValue = process.env[envVarName];
+        if (envVarValue === undefined) throw new Error(`Cannot load private key from env variable ${envVarName}: undefined value.`);
+        const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
+        try {
+            return encoder.decodePrivateKey(envVarValue);
+        } catch (e) {
+            if (e instanceof Error) {
+                this.logger.error(
+                    `Error while decoding private key from env variable ${envVarName}: ${e.message}.`,
+                );
+            }
+            throw new Error(`Unable to load private key from env variable ${envVarName}.`);
         }
     }
 

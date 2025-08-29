@@ -2,10 +2,17 @@ import * as z from "zod";
 
 export const ConfigSchema = z.object({
     genesis: z.object({
-        private_key: z.object({
-            sk: z.string().optional(),
-            path: z.string().optional(),
-        }),
+        private_key: z.union([
+            z.object({
+                sk: z.string(),
+            }),
+            z.object({
+                path: z.string(),
+            }),
+            z.object({
+                env: z.string(),
+            })
+        ])
     }).optional(),
     genesis_snapshot: z.object({
         path: z.string().optional(),
