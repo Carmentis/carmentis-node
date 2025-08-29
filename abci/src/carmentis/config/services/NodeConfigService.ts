@@ -12,23 +12,58 @@ export class NodeConfigService {
     private logger = new Logger(NodeConfigService.name);
 
     constructor() {
-        // We use the TOML config file by default but allow the user to override it with an environment variable.
-        const TOML_CONFIG_FILENAME =
-            process.env['ABCI_CONFIG'] || process.env['NODE_CONFIG'] || 'abci-config.toml';
+        this.loadConfigFile()
+    }
 
-        try {
-            const configPath = join(process.cwd(), TOML_CONFIG_FILENAME);
-            this.logger.log(`Loading config file from ${configPath}`);
-            const config = readFileSync(configPath, 'utf8');
-            const parsedConfig = toml.parse(config) as Record<string, any>;
-            this.nodeConfig = ConfigSchema.parse(parsedConfig);
-        } catch (e) {
-            if (e instanceof Error) {
-                throw new Error(`Failed to parse config file: ${e.message}`);
-            } else {
-                throw new Error(`Failed to parse config file`);
+    private loadConfigFile() {
+        // for resilience, we search through multiple possible config files.
+        // Some filenames might be undefined due to access to env variables that might be undefined./
+        const candidatesConfigFilenames: (string | undefined)[] = [
+            'config.toml',
+            'abci-config.toml',
+            'node-config.toml',
+            process.env['ABCI_CONFIG_FILENAME'],
+            process.env['NODE_CONFIG_FILENAME'],
+        ];
+
+        // we construct the candidates config file paths.
+        // Be aware that the order of candidates is important since we accept the first valid one, other are ignored.
+        const candidatesConfigFilePaths = [];
+
+        // At the top priority, we check if the user has specified a config file path using an environment variable.
+        const specifiedConfigPath = process.env['ABCI_CONFIG'] || process.env['NODE_CONFIG'] || undefined;
+        if (specifiedConfigPath !== undefined) {
+            candidatesConfigFilePaths.push(specifiedConfigPath);
+        }
+
+
+        // we exclude undefined filenames and appends the current working directory to each filename.
+        const currentWorkDirectory = process.cwd();
+        const filteredCurrentDirectoryCandidatesPaths = candidatesConfigFilenames
+            .filter((filename) => filename !== undefined)
+            .map((filename) => join(currentWorkDirectory, filename));
+        candidatesConfigFilePaths.push(...filteredCurrentDirectoryCandidatesPaths);
+
+
+        // we now search for the first config file that exists.
+        for (const configPath of candidatesConfigFilePaths) {
+            try {
+                this.logger.log(`Loading config file from ${configPath}`);
+                const config = readFileSync(configPath, 'utf8');
+                const parsedConfig = toml.parse(config) as Record<string, any>;
+                this.nodeConfig = ConfigSchema.parse(parsedConfig);
+                return;
+            } catch (e) {
+                if (e instanceof Error) {
+                    this.logger.warn(`Failed to load config file from ${configPath}: ${e.message}`);
+                }
             }
         }
+
+        // if we reach this point, we have not found a valid config file.
+        // we throw an error.
+        const formattedSearchedCandidates = candidatesConfigFilePaths.join(', ');
+        throw new Error(`Failed to load config file from any of the following paths: ${formattedSearchedCandidates}`);
     }
 
 
