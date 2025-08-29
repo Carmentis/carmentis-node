@@ -74,7 +74,7 @@ export class NodeConfigService {
      * @return {number} The gRPC port from the configuration, or the provided default port if the configuration does not specify a valid port.
      */
     getGrpcPortOrDefault(defaultPort: number): number {
-        const specifiedGrpcPort = this.nodeConfig.abci.grpc.port;
+        const specifiedGrpcPort = this.nodeConfig.abci?.grpc?.port;
         return typeof specifiedGrpcPort === 'number' ? specifiedGrpcPort : defaultPort;
     }
 
@@ -85,7 +85,7 @@ export class NodeConfigService {
      * @return {number} The configured REST ABCI query port, or the provided default port.
      */
     getRestAbciQueryPortOrDefault(defaultPort: number): number {
-        const specifiedPort = this.nodeConfig.abci.query.rest.port;
+        const specifiedPort = this.nodeConfig.abci?.query?.rest?.port;
         return typeof specifiedPort === 'number' ? specifiedPort : defaultPort;
     }
 
@@ -136,7 +136,7 @@ export class NodeConfigService {
      * if the genesis section is specified.
      *
      */
-    getSpecifiedGenesisPrivateKeyRetrievalMethod(): { sk?: string, path?: string, env?: string } {
+    getSpecifiedGenesisPrivateKeyRetrievalMethod(): { sk?: string; path?: string; env?: string } {
         const unspecifiedPrivateKeyRetrievalMethod = { sk: undefined, path: undefined };
         const genesisSection = this.nodeConfig.genesis;
         const isGenesisSectionSpecified = genesisSection !== undefined;

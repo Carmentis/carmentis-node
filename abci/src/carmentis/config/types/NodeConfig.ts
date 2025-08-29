@@ -21,12 +21,12 @@ export const ConfigSchema = z.object({
     abci: z.object({
         grpc: z.object({
             port: z.number().optional(),
-        }),
+        }).optional(),
         query: z.object({
             rest: z.object({
                 port: z.number().optional(),
-            }),
-        }),
+            }).optional(),
+        }).optional(),
     }),
     paths: z.object({
         cometbft_home: z.string(),
