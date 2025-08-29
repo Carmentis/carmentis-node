@@ -1,7 +1,8 @@
 # This section specifies the way to recover the genesis snapshot, crucial to recover the
 # initial chain state before to start the node. One method must be used at a time.
+# This method should be used ONLY by nodes joining a network (i.e., all the nodes except the genesis nodes).
 [genesis_snapshot]
-rpc_endpoint = "http://other-node:36657"
+rpc_endpoint = "http://other-node:26657"
 path = '/path/to/genesis/snapshot' # This method is currently not supported and is under development.
 
 # This section specifies how to access the private key of the issuer.
