@@ -102,12 +102,16 @@ export class InitialBlockchainStateBuilder {
         organizationId: Hash,
         genesisNodePublicKey: string,
         genesisNodePublicKeyType: string,
+        genesisNodeCometbftRpcEndpoint: string,
     ) {
         // We now declare the running node as the genesis node.
         const genesisNode = await this.blockchain.createValidatorNode(organizationId);
         await genesisNode.setDescription({
             cometPublicKey: genesisNodePublicKey,
             cometPublicKeyType: genesisNodePublicKeyType,
+        });
+        await genesisNode.setRpcEndpoint({
+            rpcEndpoint: genesisNodeCometbftRpcEndpoint,
         });
         const validatorNodeVb = genesisNode.vb;
         await validatorNodeVb.setSignature(this.issuerPrivateKey);

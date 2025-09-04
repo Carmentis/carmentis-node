@@ -5,6 +5,7 @@ import process from 'node:process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import * as toml from '@iarna/toml';
+import * as url from 'node:url';
 
 @Injectable()
 export class NodeConfigService {
@@ -87,6 +88,15 @@ export class NodeConfigService {
     getRestAbciQueryPortOrDefault(defaultPort: number): number {
         const specifiedPort = this.nodeConfig.abci?.query?.rest?.port;
         return typeof specifiedPort === 'number' ? specifiedPort : defaultPort;
+    }
+
+    /**
+     * Retrieves the exposed RPC endpoint used by CometBFT.
+     *
+     * The RPC endpoint shows a page listing all operations performed by CometBFT.
+     */
+    getCometbftExposedRpcEndpoint(): string {
+        return this.nodeConfig.cometbft.exposed_rpc_endpoint;
     }
 
 

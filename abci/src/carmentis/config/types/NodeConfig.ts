@@ -18,7 +18,11 @@ export const ConfigSchema = z.object({
         path: z.string().optional(),
         rpc_endpoint: z.string().optional(),
     }).optional(),
+    cometbft: z.object({
+        exposed_rpc_endpoint: z.string(),
+    }),
     abci: z.object({
+        exposed_rpc_endpoint: z.string(),
         grpc: z.object({
             port: z.number().optional(),
         }).optional(),
