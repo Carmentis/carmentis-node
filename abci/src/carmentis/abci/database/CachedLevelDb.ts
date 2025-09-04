@@ -81,14 +81,28 @@ export class CachedLevelDb implements DbInterface {
         return await this.putRaw(tableId, key, data);
     }
 
-    async getKeys(tableId: number) {
-        // TODO: should also use the cache
-        return this.db.getKeys(tableId);
+    async getKeys(tableId: number): Promise<Uint8Array[]> {
+        // TODO: should use the cache
+        throw `getKeys() is not implemented on CachedLevelDb`;
     }
 
     async query(tableId: number, query?: any) {
         // TODO: should also use the cache
-        return this.db.query(tableId, query);
+        throw `query() is not implemented on CachedLevelDb`;
+    }
+
+    async getFullTable(tableId: number) {
+        const committedData = await this.db.getFullTable(tableId);
+
+        if(committedData === null) {
+            return null;
+        }
+
+        const cachedData = [...this.updateCache[tableId].entries()].map(([ key, value ]) => {
+            return [ Utils.binaryFromHexa(key), value ];
+        });
+
+        return [ ...cachedData, ...committedData ];
     }
 
     async del(tableId: number, key: Uint8Array) {

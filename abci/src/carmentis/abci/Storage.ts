@@ -1,6 +1,7 @@
 import fs, { mkdirSync } from 'node:fs';
 import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
+import { ChallengeFile } from './ChallengeFile';
 import { DbInterface } from './database/DbInterface';
 import { NODE_SCHEMAS } from './constants/constants';
 
@@ -254,19 +255,21 @@ export class Storage {
         let prngCounter = 0;
         let hash: Uint8Array = Utils.getNullHash();
 
-        const iterator = await this.db.query(NODE_SCHEMAS.DB_DATA_FILE);
+        const dataFileTable = await this.db.getFullTable(NODE_SCHEMAS.DB_DATA_FILE);
 
-        if (iterator === null) {
+        if (dataFileTable === null) {
             return hash;
         }
 
-        // fileEntries[] is the list of all pairs [ fileIdentifier, fileSize ]
-        const fileEntries = (await iterator.all()).map(([key, value]) => {
+        // fileEntries[] is the list of all pairs [ fileIdentifier, fileSize ],
+        // sorted by file identifiers in ascending order
+        const fileEntries = dataFileTable.map(([key, value]) => {
             return [
                 key.reduce((t, n) => t * 0x100 + n, 0),
                 value.slice(0, 6).reduce((t, n) => t * 0x100 + n, 0),
             ];
-        });
+        })
+        .sort(([key0], [key1]) => key0 - key1);
 
         const filesCount = fileEntries.length;
 
@@ -278,7 +281,15 @@ export class Storage {
             const fileRank = getRandom48() % filesCount;
             const [fileIdentifier, fileSize] = fileEntries[fileRank];
             const filePath = this.getFilePath(fileIdentifier);
-            const handle = await open(filePath, 'r');
+
+            const pendingTxs =
+                this.cache.has(fileIdentifier) ?
+                    this.cache.get(fileIdentifier).txIds.map((txId) => this.txs[txId])
+                :
+                    [];
+
+            const challengeFile = new ChallengeFile(filePath, pendingTxs);
+            await challengeFile.open();
             let bufferOffset = 0;
 
             for (let partNdx = 0; partNdx < CHALLENGE_PARTS_PER_FILE; partNdx++) {
@@ -286,22 +297,22 @@ export class Storage {
                 let fileOffset = getRandom48() % fileSize;
 
                 while (remainingBytes) {
-                    const readSize = Math.min(fileSize - fileOffset, remainingBytes);
-                    const rd = await handle.read(buffer, bufferOffset, readSize, fileOffset);
+                    const sizeToRead = Math.min(fileSize - fileOffset, remainingBytes);
+                    const rd = await challengeFile.read(buffer, bufferOffset, sizeToRead, fileOffset);
 
-                    if (rd.bytesRead < readSize) {
+                    if (rd.bytesRead < sizeToRead) {
                         throw new Error(
                             `PANIC - Failed to read enough bytes from '${filePath}' during storage challenge`,
                         );
                     }
 
-                    bufferOffset += readSize;
-                    fileOffset += readSize;
+                    bufferOffset += sizeToRead;
+                    fileOffset += sizeToRead;
                     fileOffset %= fileSize;
-                    remainingBytes -= readSize;
+                    remainingBytes -= sizeToRead;
                 }
             }
-            await handle.close();
+            await challengeFile.close();
 
             const newHash = Crypto.Hashes.sha256AsBinary(buffer);
             hash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
