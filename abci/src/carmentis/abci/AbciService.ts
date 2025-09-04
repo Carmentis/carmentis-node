@@ -658,11 +658,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // in the second block, we publish the genesis node declaration transaction
         const { genesisNodePublicKey, genesisNodePublicKeyType } =
             stateBuilder.getValidatorPublicKeyFromRequest();
+        const genesisNodeCometbftRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
         const { genesisNodeId, genesisNodeDeclarationTransaction } =
             await stateBuilder.createGenesisNodeDeclarationTransaction(
                 organizationId,
                 genesisNodePublicKey,
                 genesisNodePublicKeyType,
+                genesisNodeCometbftRpcEndpoint
             );
         await this.publishGenesisTransactions([genesisNodeDeclarationTransaction], 1);
 

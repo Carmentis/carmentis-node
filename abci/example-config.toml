@@ -13,6 +13,10 @@ path = '/path/to/key/file'
 sk = 'SIG:SECP256K1:SK{...}'
 env = 'ENV_VAR_NAME_CONTAINING_MY_PRIVATE_KEY'
 
+# This section specifies information about the CometBFT configuration (such that exposed RPC endpoint)
+[cometbft]
+exposed_rpc_endpoint = 'https://exposed-rpc-endpoint-host:port'
+
 # This section specifies the port where ABCI listens request coming from CometBFT.
 # When omitted, the port 26658 is used when available, otherwise another free port is used.
 [abci.grpc]
