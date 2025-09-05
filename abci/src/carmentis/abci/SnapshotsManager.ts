@@ -131,7 +131,7 @@ export class SnapshotsManager {
         // compute the total chunk size
         let chunkSize = 0;
 
-        // TODO replace chunck callback
+        // TODO replace chunk callback
         await chunksFile.processChunk(index - 1, async (fileIdentifier, offset, size) => {
             chunkSize += size;
         });

@@ -6,6 +6,7 @@ export interface DbInterface {
     putObject(tableId: number, key: Uint8Array, object: any): Promise<boolean>;
     getKeys(tableId: number): Promise<Uint8Array[]>;
     query(tableId: number, query?: any): Promise<any>;
+    getFullTable(tableId: number): Promise<any>;
     del(tableId: number, key: Uint8Array): Promise<boolean>;
     serialize(tableId: number, object: object): Uint8Array;
     unserialize(tableId: number, data: Uint8Array): any;

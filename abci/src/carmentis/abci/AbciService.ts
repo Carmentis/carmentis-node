@@ -93,8 +93,6 @@ const nodeConfig = {
     maxSnapshots: 3,
 };
 
-const SNAPSHOT_PERIOD = 1;
-
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private logger = new Logger(AbciService.name);
@@ -646,7 +644,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             blockchain,
         );
 
-        // we first publish the issuer account creation transaction and carmentis organisation creation transaction
+        // we first publish the issuer account creation transaction and Carmentis organization creation transaction
         const issuerAccountCreationTransaction =
             await stateBuilder.createIssuerAccountCreationTransaction();
         const { organizationId, organisationCreationTransaction } =
@@ -696,7 +694,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await this.setBlockInformation(
             cache,
             publishedBlockHeight,
-            appHash,
+            Utils.getNullHash(),
             blockTimestamp,
             proposerAddress,
             processBlockResult.blockSize,
@@ -1057,12 +1055,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash } =
             await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
 
-        this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
-        this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
-        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
-        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
-        this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
-
         return {
             txResults,
             totalFees,
@@ -1095,17 +1087,22 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: Storage) {
-        this.logger.warn('Storage is ignored during application hash computation');
         const tokenRadixHash = await tokenRadix.getRootHash();
         const vbRadixHash = await vbRadix.getRootHash();
         const radixHash = Crypto.Hashes.sha256AsBinary(
             Utils.binaryFrom(vbRadixHash, tokenRadixHash),
         );
-        const finalAppHash = radixHash;
+        //const finalAppHash = radixHash;
         const storageHash = await storage.processChallenge(radixHash);
         const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
 
-        return { tokenRadixHash, vbRadixHash, appHash: finalAppHash, storageHash, radixHash };
+        this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
+        this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
+        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
+        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
+        this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
+
+        return { tokenRadixHash, vbRadixHash, appHash, storageHash, radixHash };
     }
 
     async Commit(request: CommitRequest) {

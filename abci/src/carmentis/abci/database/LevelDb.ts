@@ -128,6 +128,11 @@ export class LevelDb implements DbInterface {
         }
     }
 
+    async getFullTable(tableId: number) {
+        const iterator = await this.query(tableId);
+        return await iterator.all();
+    }
+
     async del(tableId: number, key: Uint8Array) {
         try {
             await this.sub[tableId].del(key);
