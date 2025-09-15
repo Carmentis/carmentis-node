@@ -13,6 +13,12 @@ path = '/path/to/key/file'
 sk = 'SIG:SECP256K1:SK{...}'
 env = 'ENV_VAR_NAME_CONTAINING_MY_PRIVATE_KEY'
 
+# This section specifies configuration for the snapshot management.
+[snapshots]
+snapshot_block_period = 1 # Period after which a snapshot is generated. (Default: 1)
+block_history_before_snapshot = 0 # Number of blocks ahead not included in the snapshot. (Default: 0)
+max_snapshots = 3 # Maximum number of snapshots preserved by the node. (Default: 3)
+
 # This section specifies information about the CometBFT configuration (such that exposed RPC endpoint)
 [cometbft]
 exposed_rpc_endpoint = 'https://exposed-rpc-endpoint-host:port'
