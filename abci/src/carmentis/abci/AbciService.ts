@@ -87,12 +87,6 @@ import { Cache } from './types/Cache';
 
 const APP_VERSION = 1;
 
-const nodeConfig = {
-    snapshotBlockPeriod: 1,
-    blockHistoryBeforeSnapshot: 0,
-    maxSnapshots: 3,
-};
-
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private logger = new Logger(AbciService.name);
@@ -1128,19 +1122,22 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // the right period to generate snapshots.
         let retainedHeight = 0;
         const isNotImportingSnapshot = this.importedSnapshot === null;
+        const snapshotBlockPeriod = this.nodeConfig.getSnapshotBlockPeriod();
         const isTimeToGenerateSnapshot =
-            chainInfoObject.height % nodeConfig.snapshotBlockPeriod == 0;
+            chainInfoObject.height % snapshotBlockPeriod == 0;
         if (isNotImportingSnapshot && isTimeToGenerateSnapshot) {
             this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
-            await this.snapshot.clear(nodeConfig.maxSnapshots - 1);
+            const maxSnapshots = this.nodeConfig.getMaxSnapshots();
+            await this.snapshot.clear(maxSnapshots - 1);
             await this.snapshot.create();
             this.logger.log(`Done creating snapshot`);
 
             // We preserve a certain amount of blocks that are not put in a snapshot.
-            if (nodeConfig.blockHistoryBeforeSnapshot) {
+            const blockHistoryBeforeSnapshot = this.nodeConfig.getBlockHistoryBeforeSnapshot();
+            if (blockHistoryBeforeSnapshot) {
                 retainedHeight = Math.max(
                     0,
-                    chainInfoObject.height - nodeConfig.blockHistoryBeforeSnapshot,
+                    chainInfoObject.height - blockHistoryBeforeSnapshot,
                 );
             }
         }

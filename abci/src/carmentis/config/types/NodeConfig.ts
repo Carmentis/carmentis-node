@@ -21,7 +21,7 @@ export const ConfigSchema = z.object({
     snapshots: z.object({
         snapshot_block_period: z.number().default(1),
         block_history_before_snapshot: z.number().default(0),
-        max_Snapshots: z.number().default(3),
+        max_snapshots: z.number().default(3),
     }).optional(),
     cometbft: z.object({
         exposed_rpc_endpoint: z.string(),

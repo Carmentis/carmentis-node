@@ -160,4 +160,16 @@ export class NodeConfigService {
     getGenesisSnapshotRpcEndpoint() {
         return this.nodeConfig.genesis_snapshot.rpc_endpoint;
     }
+
+    getSnapshotBlockPeriod() {
+        return this.nodeConfig.snapshots.snapshot_block_period;
+    }
+
+    getMaxSnapshots() {
+        return this.nodeConfig.snapshots.max_snapshots;
+    }
+
+    getBlockHistoryBeforeSnapshot() {
+        return this.nodeConfig.snapshots.block_history_before_snapshot
+    }
 }
