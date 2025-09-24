@@ -44,6 +44,7 @@ import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { CachedLevelDb } from './database/CachedLevelDb';
 import { Storage } from './Storage';
+
 import {
     Base64,
     Blockchain,
@@ -70,6 +71,7 @@ import {
     SECTIONS,
     Utils, VirtualBlockchain,
 } from '@cmts-dev/carmentis-sdk/server';
+
 import { AccountManager } from './AccountManager';
 import { RadixTree } from './RadixTree';
 import { LevelDb } from './database/LevelDb';
@@ -86,6 +88,10 @@ import { NodeConfigService } from '../config/services/NodeConfigService';
 import { Cache } from './types/Cache';
 
 const APP_VERSION = 1;
+
+const KEY_TYPE_MAPPING = {
+  'tendermint/PubKeyEd25519': 'ed25519'
+};
 
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
@@ -273,22 +279,28 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             context.vb.identifier,
         );
 
-        context.cache.validatorSetUpdate.push({
-            power: networkIntegration.votingPower,
-            pub_key_type: context.section.object.cometPublicKeyType,
-            pub_key_bytes: cometPublicKeyBytes,
-        });
+        if(networkIntegration.votingPower) {
+            const validatorSetUpdateEntry = {
+                power: networkIntegration.votingPower,
+                pub_key_type: KEY_TYPE_MAPPING[context.section.object.cometPublicKeyType],
+                pub_key_bytes: cometPublicKeyBytes,
+            };
+
+            context.cache.validatorSetUpdate.push(validatorSetUpdateEntry);
+        }
     }
 
     async validatorNodeNetworkIntegrationCallback(context: any) {
         const description = await context.object.getDescription();
         const cometPublicKeyBytes = Base64.decodeBinary(description.cometPublicKey);
 
-        context.cache.validatorSetUpdate.push({
+        const validatorSetUpdateEntry = {
             power: context.section.object.votingPower,
-            pub_key_type: description.cometPublicKeyType,
+            pub_key_type: KEY_TYPE_MAPPING[description.cometPublicKeyType],
             pub_key_bytes: cometPublicKeyBytes,
-        });
+        };
+
+        context.cache.validatorSetUpdate.push(validatorSetUpdateEntry);
     }
 
     registerSectionPreUpdateCallbacks(
@@ -563,44 +575,49 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private createInitChainResponse(appHash: Uint8Array) {
-        /*
-         consensus_params: {
-                feature: {
-                    vote_extensions_enable_height: 2,
-                    pbts_enable_height: undefined
-                },
-                block: {
-                    max_bytes: 16777216,
-                    max_gas: -1,
-                },
-                evidence: {
-                    max_age_duration: {
-                        seconds: 172800,
-                        nanos: 0
-                    },
-                    max_bytes: 2097152,
-                    max_age_num_blocks: 100000
-                },
-                validator: {
-                    pub_key_types: ['ed25519']
-                },
-                version: {
-                    app: 1
-                },
-                abci: undefined,
-                synchrony: {
-                    precision: {
-                        seconds: 172800,
-                        nanos: 0
-                    },
-                    message_delay: {
-                        seconds: 172800,
-                        nanos: 0
-                    }
-                }
+        const consensusParams = {
+            validator: {
+                pub_key_types: ['ed25519'] // ['tendermint/PubKeyEd25519']
             },
-         */
-        const consensusParams = {};
+        };
+        /*
+          consensus_params: {
+              feature: {
+                  vote_extensions_enable_height: 2,
+                  pbts_enable_height: undefined
+              },
+              block: {
+                  max_bytes: 16777216,
+                  max_gas: -1,
+              },
+              evidence: {
+                  max_age_duration: {
+                      seconds: 172800,
+                      nanos: 0
+                  },
+                  max_bytes: 2097152,
+                  max_age_num_blocks: 100000
+              },
+              validator: {
+                  pub_key_types: ['ed25519']
+              },
+              version: {
+                  app: 1
+              },
+              abci: undefined,
+              synchrony: {
+                  precision: {
+                      seconds: 172800,
+                      nanos: 0
+                  },
+                  message_delay: {
+                      seconds: 172800,
+                      nanos: 0
+                  }
+              }
+          },
+        */
+//      const consensusParams = {};
         return InitChainResponse.create({
             consensus_params: consensusParams,
             validators: [],
@@ -706,7 +723,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      Incoming transaction
      */
     async CheckTx(request: CheckTxRequest) {
-        this.logger.log(`checkTx`);
+        this.logger.log(`EVENT: checkTx`);
 
         const cache = this.getCacheInstance([]);
         const importer = cache.blockchain.getMicroblockImporter(
@@ -744,7 +761,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      Executed by the proposer
      */
     async PrepareProposal(request: PrepareProposalRequest) {
-        this.logger.log(`prepareProposal: ${request.txs.length} txs`);
+        this.logger.log(`EVENT: prepareProposal (${request.txs.length} txs)`);
 
         const proposedTxs = [];
         for (const tx of request.txs) {
@@ -764,7 +781,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
      */
     async ProcessProposal(request: ProcessProposalRequest) {
-        this.logger.log(`processProposal: ${request.txs.length} txs`);
+        this.logger.log(`EVENT: processProposal (${request.txs.length} txs)`);
 
         const cache = this.getCacheInstance(request.txs);
         const blockHeight = +request.height;
@@ -794,14 +811,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async FinalizeBlock(request: FinalizeBlockRequest) {
+        const numberOfTransactionsInBlock = request.txs.length;
+
+        this.logger.log(`EVENT: finalizeBlock (${numberOfTransactionsInBlock} txs)`);
+
         // raise a warning if finalizedBlock() called before commit()
         if (this.finalizedBlockCache !== null) {
             this.logger.warn(`finalizeBlock() called before the previous commit()`);
         }
         this.finalizedBlockCache = this.getCacheInstance(request.txs);
-
-        const numberOfTransactionsInBlock = request.txs.length;
-        this.logger.log(`finalizeBlock: ${numberOfTransactionsInBlock} txs`);
 
         // Extract height and timestamp of the block being published, as well as the votes
         // of validator involved in the publishing of this block. We proceed to the payment of the
@@ -836,11 +854,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             processBlockResult.microblocks,
         );
 
+        this.finalizedBlockCache.validatorSetUpdate.forEach((entry) => {
+            this.logger.log(`validatorSet update: pub_key=[${entry.pub_key_type}]${Base64.encodeBinary(entry.pub_key_bytes)}, power=${entry.power}`);
+        });
+
         return FinalizeBlockResponse.create({
             tx_results: processBlockResult.txResults,
             app_hash: processBlockResult.appHash,
             events: [],
-            validator_updates: [], //this.finalizedBlockCache.validatorSetUpdate,
+            validator_updates: this.finalizedBlockCache.validatorSetUpdate,
             consensus_param_updates: undefined,
         });
     }
@@ -963,17 +985,18 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
             blockSize += tx.length;
 
+            this.logger.log(`gas = ${vb.currentMicroblock.header.gas}, gas price = ${vb.currentMicroblock.header.gasPrice / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
+
             const fees = Math.floor(
-                (vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice) /
-                    ECO.GAS_UNIT,
+                (vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice) / ECO.GAS_UNIT,
             );
             const feesPayerAccount = vb.currentMicroblock.getFeesPayerAccount();
 
             totalFees += fees;
 
-            this.logger.log(`Storing microblock ${Utils.binaryToHexa(vb.currentMicroblock.hash)}`);
+            this.logger.log(`Confirmed microblock ${Utils.binaryToHexa(vb.currentMicroblock.hash)}`);
             this.logger.log(
-                `Fees: ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}, paid by ${cache.accountManager.getShortAccountString(feesPayerAccount)}`,
+                `fees = ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}, paid by ${cache.accountManager.getShortAccountString(feesPayerAccount)}`,
             );
 
             await importer.store();
@@ -1100,8 +1123,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async Commit(request: CommitRequest) {
+        this.logger.log(`EVENT: commit`);
+
         if (this.finalizedBlockCache === null) {
-            throw new Error(`nothing to commit`);
+            this.logger.warn(`nothing to commit`);
+            return;
         }
 
         await this.finalizedBlockCache.db.commit();
@@ -1165,6 +1191,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.log(`listSnapshots`);
 
         const list = await this.snapshot.getList();
+
+        this.logger.log(`snapshot.getList()`, list.length);
+        list.forEach((object) => console.log({
+            height: object.height,
+            format: object.format,
+            chunks: object.chunks,
+            hash: Utils.binaryFromHexa(object.hash),
+        }));
 
         return ListSnapshotsResponse.create({
             snapshots: list.map((object) => {
@@ -1258,7 +1292,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 section,
                 timestamp,
             };
-            await this.invokeSectionPostUpdateCallback(importer.vb.type, section.type, context);
+            try {
+                await this.invokeSectionPostUpdateCallback(importer.vb.type, section.type, context);
+            }
+            catch (error) {
+                this.logger.error(error);
+                this.logger.error(`Rejected`);
+                return false;
+            }
         }
 
         const indexTableId = this.getIndexTableId(importer.vb.type);
@@ -1341,82 +1382,4 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     Flush(request: FlushRequest): Promise<FlushResponse> {
         return Promise.resolve(undefined);
     }
-
-    /*
-    async Info(request: InfoRequest): Promise<InfoResponse> {
-        return Promise.resolve(await this.nodeCore.info(request));
-    }
-
-    async InitChain(request: InitChainRequest): Promise<InitChainResponse> {
-        return Promise.resolve(await this.nodeCore.initChain(request));
-    }
-
-    async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
-        this.logger.debug(`CheckTx: ${request.tx.length} bytes`);
-
-        const resultCheck = await this.nodeCore.checkTx(request);
-
-        return Promise.resolve({
-            code: resultCheck.success ? 0 : 1,
-            log: '',
-            data: new Uint8Array(request.tx),
-            gas_wanted: 0,
-            gas_used: 0,
-            info: !resultCheck.success ? resultCheck.error : '',
-            events: [],
-            codespace: 'app',
-        });
-    }
-
-    async PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
-        return Promise.resolve({
-            txs: await this.nodeCore.prepareProposal(request),
-        });
-    }
-
-    async ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
-        return Promise.resolve({
-            status: await this.nodeCore.processProposal(request),
-        });
-    }
-
-    async FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
-        const response = await this.nodeCore.finalizeBlock(request);
-
-        return Promise.resolve(response);
-    }
-
-    async Commit(request: CommitRequest): Promise<CommitResponse> {
-        const response = await this.nodeCore.commit(request);
-
-        return Promise.resolve(response);
-    }
-
-    async ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
-        return await this.nodeCore.listSnapshots(request);
-    }
-
-    async LoadSnapshotChunk(request: LoadSnapshotChunkRequest): Promise<LoadSnapshotChunkResponse> {
-        return await this.nodeCore.loadSnapshotChunk(request);
-    }
-
-    async OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
-        return await this.nodeCore.offerSnapshot(request);
-    }
-
-    async ApplySnapshotChunk(
-        request: ApplySnapshotChunkRequest,
-    ): Promise<ApplySnapshotChunkResponse> {
-        return await this.nodeCore.applySnapshotChunk(request);
-    }
-
-    ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    VerifyVoteExtension(request: VerifyVoteExtensionRequest): Promise<VerifyVoteExtensionResponse> {
-        return Promise.resolve(undefined);
-    }
-
-     */
 }

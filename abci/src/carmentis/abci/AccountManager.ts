@@ -25,6 +25,9 @@ export class AccountManager {
         let payeeBalance;
         let payerBalance;
 
+        const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
+        const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
+
         if (transfer.payerAccount === null) {
             payerBalance = null;
         } else {
@@ -37,7 +40,11 @@ export class AccountManager {
             payerBalance = payerInfo.state.balance;
 
             if (payerBalance < transfer.amount) {
-                throw `insufficient funds`;
+                throw (
+                  `insufficient funds to transfer ${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} ` +
+                  `from ${shortPayerAccountString} to ${shortPayeeAccountString}: ` +
+                  `the current payer balance is ${payerBalance / ECO.TOKEN} ${ECO.TOKEN_NAME}`
+                );
             }
         }
 
@@ -62,9 +69,6 @@ export class AccountManager {
 
             payeeBalance = payeeInfo.state.balance;
         }
-
-        const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
-        const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
 
         if (payerBalance !== null) {
             await this.update(

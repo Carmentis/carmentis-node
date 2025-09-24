@@ -168,6 +168,8 @@ export class SnapshotsManager {
      * Called from ApplySnapshotChunk.
      */
     async loadReceivedChunk(storage: Storage, index: number, buffer: Uint8Array, isLast: boolean) {
+        await this.createPath();
+
         const chunksFilePath = path.join(this.path, IMPORTED_CHUNKS_FILENAME);
 
         // the very first chunk contains the chunks description file
@@ -260,11 +262,7 @@ export class SnapshotsManager {
      *   -> meta information about the snapshot, used to answer ListSnapshots
      */
     async create() {
-        try {
-            await access(this.path, fs.constants.F_OK);
-        } catch (error) {
-            await mkdir(this.path, { recursive: true });
-        }
+        await this.createPath();
 
         const { height, files, earliestFileDate, dbFilePath } = await this.createDbFile();
         const { chunks, chunksFilePath } = await this.createChunksFile(height, files);
@@ -480,5 +478,16 @@ export class SnapshotsManager {
     private async getSnapshotEntriesFromDirectory() {
         await mkdir(this.path, { recursive: true });
         return await readdir(this.path, { withFileTypes: true });
+    }
+
+    /**
+     * Creates the path to snapshots (if it doesn't exist yet)
+     */
+    async createPath() {
+        try {
+            await access(this.path, fs.constants.F_OK);
+        } catch (error) {
+            await mkdir(this.path, { recursive: true });
+        }
     }
 }

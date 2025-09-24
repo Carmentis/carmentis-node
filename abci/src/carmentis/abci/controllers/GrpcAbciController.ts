@@ -78,14 +78,34 @@ export class GrpcAbciController {
         return await this.abciService.Commit(request);
     }
 
-    ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
-        return Promise.resolve(undefined);
-    }
-
     @GrpcMethod('ABCIService', 'CheckTx')
     async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
         this.logger.debug('Called CheckTx');
         return await this.abciService.CheckTx(request);
+    }
+
+    @GrpcMethod('ABCIService', 'ApplySnapshotChunk')
+    async ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
+        this.logger.debug('Called ApplySnapshotChunk');
+        return await this.abciService.ApplySnapshotChunk(request);
+    }
+
+    @GrpcMethod('ABCIService', 'ListSnapshots')
+    async ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
+        this.logger.debug('Called ListSnapshots');
+        return await this.abciService.ListSnapshots(request);
+    }
+
+    @GrpcMethod('ABCIService', 'LoadSnapshotChunk')
+    async LoadSnapshotChunk(request: LoadSnapshotChunkRequest): Promise<LoadSnapshotChunkResponse> {
+        this.logger.debug('Called LoadSnapshotChunk');
+        return await this.abciService.LoadSnapshotChunk(request);
+    }
+
+    @GrpcMethod('ABCIService', 'OfferSnapshot')
+    async OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
+        this.logger.debug('Called OfferSnapshot');
+        return await this.abciService.OfferSnapshot(request);
     }
 
     @GrpcMethod('ABCIService', 'ExtendVote')
@@ -104,18 +124,6 @@ export class GrpcAbciController {
 
     @GrpcMethod('ABCIService', 'Flush')
     Flush(request: FlushRequest): Promise<FlushResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    LoadSnapshotChunk(request: LoadSnapshotChunkRequest): Promise<LoadSnapshotChunkResponse> {
-        return Promise.resolve(undefined);
-    }
-
-    OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
         return Promise.resolve(undefined);
     }
 
