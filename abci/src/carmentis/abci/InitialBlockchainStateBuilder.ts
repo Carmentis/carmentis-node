@@ -47,7 +47,7 @@ export class InitialBlockchainStateBuilder {
         this.issuerPublicKey = this.issuerPrivateKey.getPublicKey();
     }
 
-    public getValidatorPublicKeyFromRequest() {
+    public getValidatorPublicKeyFromRequest(keyTypeMapping: Record<string, string>) {
         // The init chain request should contain exactly one validator in the validator set.
         // The validator, assumed to be this running node, is used to declare the first running node.
         const validators = this.request.validators;
@@ -64,7 +64,15 @@ export class InitialBlockchainStateBuilder {
         const { pub_key_type: genesisNodePublicKeyType, pub_key_bytes } = validators[0];
         const encoder = EncoderFactory.bytesToBase64Encoder();
         const genesisNodePublicKey = encoder.encode(pub_key_bytes);
-        return { genesisNodePublicKeyType, genesisNodePublicKey };
+        const translatedGenesisNodePublicKeyType = Object.keys(keyTypeMapping).find((key) => keyTypeMapping[key] == genesisNodePublicKeyType);
+
+        if (!translatedGenesisNodePublicKeyType) {
+            throw new IllegalParameterError(
+                `Unexpected key type '${genesisNodePublicKeyType}'`,
+            );
+        }
+
+        return { genesisNodePublicKeyType: translatedGenesisNodePublicKeyType, genesisNodePublicKey };
     }
 
     public async createIssuerAccountCreationTransaction() {

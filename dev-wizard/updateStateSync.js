@@ -2,9 +2,15 @@ const fs = require('fs');
 const path = require('path');
 const TOML = require('@iarna/toml');
 
+/*
 const PERSISTENT_PEERS = [ 1, 2, 3 ];
 const RPC_SERVERS = [ 1, 2, 3 ];
 const NODES_TO_SYNC = [ 4 ];
+*/
+const PERSISTENT_PEERS = [ 1, 2 ];
+const RPC_SERVERS = [ 1, 2 ];
+const NODES_TO_SYNC = [ 3 ];
+
 const TRUSTED_NODE = 1;
 const TRUSTED_HEIGHT = 3;
 

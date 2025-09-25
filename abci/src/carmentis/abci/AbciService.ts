@@ -90,7 +90,7 @@ import { Cache } from './types/Cache';
 const APP_VERSION = 1;
 
 const KEY_TYPE_MAPPING = {
-  'tendermint/PubKeyEd25519': 'ed25519'
+    'tendermint/PubKeyEd25519': 'ed25519'
 };
 
 @Injectable()
@@ -263,8 +263,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     /**
-     Validator node callbacks
-     */
+      Validator node callbacks
+    */
     async validatorNodeDescriptionCallback(context: any) {
         const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
         const cometAddress =
@@ -280,13 +280,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         if(networkIntegration.votingPower) {
-            const validatorSetUpdateEntry = {
-                power: networkIntegration.votingPower,
-                pub_key_type: KEY_TYPE_MAPPING[context.section.object.cometPublicKeyType],
-                pub_key_bytes: cometPublicKeyBytes,
-            };
-
-            context.cache.validatorSetUpdate.push(validatorSetUpdateEntry);
+            this.storeValidatorSetUpdateEntry(
+                context.cache.validatorSetUpdate,
+                networkIntegration.votingPower,
+                context.section.object.cometPublicKeyType,
+                cometPublicKeyBytes
+            );
         }
     }
 
@@ -294,13 +293,30 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const description = await context.object.getDescription();
         const cometPublicKeyBytes = Base64.decodeBinary(description.cometPublicKey);
 
+        this.storeValidatorSetUpdateEntry(
+            context.cache.validatorSetUpdate,
+            context.section.object.votingPower,
+            description.cometPublicKeyType,
+            cometPublicKeyBytes
+        );
+    }
+
+    storeValidatorSetUpdateEntry(validatorSetUpdate: any, votingPower: number, pubKeyType: string, pubKeyBytes: Uint8Array) {
+        const translatedPubKeyType = KEY_TYPE_MAPPING[pubKeyType];
+
+        if(!translatedPubKeyType) {
+            this.logger.error(`invalid key type '${pubKeyType}' for validator set update`);
+            return false;
+        }
+
         const validatorSetUpdateEntry = {
-            power: context.section.object.votingPower,
-            pub_key_type: KEY_TYPE_MAPPING[description.cometPublicKeyType],
-            pub_key_bytes: cometPublicKeyBytes,
+            power: votingPower,
+            pub_key_type: translatedPubKeyType,
+            pub_key_bytes: pubKeyBytes
         };
 
-        context.cache.validatorSetUpdate.push(validatorSetUpdateEntry);
+        validatorSetUpdate.push(validatorSetUpdateEntry);
+        return true;
     }
 
     registerSectionPreUpdateCallbacks(
@@ -432,6 +448,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async InitChain(request: InitChainRequest) {
+        this.logger.log(`EVENT: initChain`);
+
         // we start by cleaning database, snapshots and storage
         await this.clearDatabase();
         await this.clearStorage();
@@ -668,7 +686,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         // in the second block, we publish the genesis node declaration transaction
         const { genesisNodePublicKey, genesisNodePublicKeyType } =
-            stateBuilder.getValidatorPublicKeyFromRequest();
+            stateBuilder.getValidatorPublicKeyFromRequest(KEY_TYPE_MAPPING);
         const genesisNodeCometbftRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
         const { genesisNodeId, genesisNodeDeclarationTransaction } =
             await stateBuilder.createGenesisNodeDeclarationTransaction(
