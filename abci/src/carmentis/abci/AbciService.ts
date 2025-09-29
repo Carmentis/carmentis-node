@@ -146,7 +146,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.db.initialize();
 
         // Create and initialize file storage management and snapshot management.
-        this.storage = new Storage(this.db, this.storagePath, []);
+        this.storage = new Storage(this.db, this.storagePath, [], this.logger);
         this.snapshot = new SnapshotsManager(this.db, this.snapshotPath, this.logger);
 
         // Create unauthenticated blockchain client
@@ -1364,7 +1364,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     private getCacheInstance(txs: Uint8Array[]): Cache {
         const db = new CachedLevelDb(this.db);
-        const storage = new Storage(db, this.storagePath, txs);
+        const storage = new Storage(db, this.storagePath, txs, this.logger);
         const cachedInternalProvider = new NodeProvider(db, storage);
         const cachedProvider = new Provider(cachedInternalProvider, new NullNetworkProvider());
         const blockchain = new Blockchain(cachedProvider);

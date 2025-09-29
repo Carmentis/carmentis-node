@@ -5,6 +5,7 @@ import stream from 'node:stream/promises';
 import { FileHandle, access, mkdir, open, rename, readdir, rm } from 'node:fs/promises';
 import { LevelDb } from './database/LevelDb';
 import { Storage } from './Storage';
+import { SnapshotDataCopyManager } from './SnapshotDataCopyManager';
 import { SnapshotChunksFile } from './SnapshotChunksFile';
 import { NODE_SCHEMAS } from './constants/constants';
 
@@ -55,7 +56,7 @@ export class SnapshotsManager {
      */
     async getList() {
         const entries = await this.getSnapshotEntriesFromDirectory();
-        //const entries = await readdir(this.path, { withFileTypes: true});
+
         // FIXME: The '\\' before ${JSON_SUFFIX} is for the '.' of '.json' and is temporary.
         // Once we've switched to Node 24, we should use this cleaner and safer version:
         // const regex = new RegExp(`^${RegExp.escape(SNAPSHOT_PREFIX)}\\d{9}${RegExp.escape(JSON_SUFFIX)}$`);
@@ -212,16 +213,10 @@ export class SnapshotsManager {
         fileOffset: number,
         size: number,
     ) {
+        const copyManager = new SnapshotDataCopyManager(this.logger);
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        const handle = await open(dbFilePath, 'r');
-        const rd = await handle.read(buffer, bufferOffset, size, fileOffset);
-        await handle.close();
 
-        if (rd.bytesRead < size) {
-            throw new Error(
-                `Encountered end of file while reading ${size} bytes from '${dbFilePath}' at offset ${fileOffset}`,
-            );
-        }
+        await copyManager.copyFileToBuffer(dbFilePath, buffer, bufferOffset, fileOffset, size);
     }
 
     /**
@@ -235,20 +230,10 @@ export class SnapshotsManager {
         size: number,
     ) {
         // open database in writing mode
+        const copyManager = new SnapshotDataCopyManager(this.logger);
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        const handle = await open(dbFilePath, fileOffset ? 'a+' : 'w+');
-        const stats = await handle.stat();
-        const fileSize = stats.size;
 
-        if (fileSize != fileOffset) {
-            await handle.close();
-            throw new Error(
-                `copyBufferToDbFile(): argument fileOffset (${fileOffset}) doesn't match the current file size (${fileSize})`,
-            );
-        }
-
-        await handle.write(buffer, bufferOffset, size);
-        await handle.close();
+        await copyManager.copyBufferToFile(dbFilePath, buffer, bufferOffset, fileOffset, size);
     }
 
     /**
