@@ -1,12 +1,13 @@
 import fs, { mkdirSync } from 'node:fs';
 import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
+import { NodeCrypto } from './crypto/NodeCrypto';
 import { ChallengeFile } from './ChallengeFile';
 import { SnapshotDataCopyManager } from './SnapshotDataCopyManager';
 import { DbInterface } from './database/DbInterface';
 import { NODE_SCHEMAS } from './constants/constants';
 
-import { SCHEMAS, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { FileIdentifier } from './types/FileIdentifier';
 import { Logger } from '@nestjs/common';
 
@@ -51,7 +52,7 @@ export class Storage {
     async writeMicroblock(expirationDay: number, txId: number): Promise<boolean> {
         const content = this.txs[txId];
         const size = content.length;
-        const hash = Crypto.Hashes.sha256AsBinary(content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE));
+        const hash = NodeCrypto.Hashes.sha256AsBinary(content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE));
         const fileIdentifier = this.getFileIdentifier(expirationDay, hash);
         const filePath = this.getFilePath(fileIdentifier);
         const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
@@ -300,8 +301,8 @@ export class Storage {
             }
             await challengeFile.close();
 
-            const newHash = Crypto.Hashes.sha256AsBinary(buffer);
-            hash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
+            const newHash = NodeCrypto.Hashes.sha256AsBinary(buffer);
+            hash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
         }
 
         return hash;
@@ -311,7 +312,7 @@ export class Storage {
             const index = (prngCounter++ % 5) * 6;
 
             if (index == 0) {
-                prngValue = Crypto.Hashes.sha256AsBinary(prngValue);
+                prngValue = NodeCrypto.Hashes.sha256AsBinary(prngValue);
             }
             return prngValue.slice(index, index + 6).reduce((t, n) => t * 0x100 + n, 0);
         }

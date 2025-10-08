@@ -1,7 +1,9 @@
 import { NODE_SCHEMAS } from './constants/constants';
-
-import { Crypto, ECO, Economics, SchemaSerializer, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { NodeCrypto } from './crypto/NodeCrypto';
+import { ECO, Economics, SchemaSerializer, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { AccountInformation } from './types/AccountInformation';
+import { Logger } from '@nestjs/common';
+import { Performance } from './Performance';
 
 interface Transfer {
     type: number;
@@ -13,13 +15,19 @@ interface Transfer {
 export class AccountManager {
     db: any;
     radix: any;
+    perf: Performance;
+    logger: Logger;
 
-    constructor(db: any, radix: any) {
+    constructor(db: any, radix: any, logger: Logger) {
         this.db = db;
         this.radix = radix;
+        this.logger = logger;
+        this.perf = new Performance(logger, true);
     }
 
-    async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: number, logger: any) {
+    async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: number) {
+        const perfMeasure = this.perf.start('tokenTransfer');
+
         const accountCreation =
             transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
         let payeeBalance;
@@ -70,6 +78,8 @@ export class AccountManager {
             payeeBalance = payeeInfo.state.balance;
         }
 
+        perfMeasure.event('before updates');
+
         if (payerBalance !== null) {
             await this.update(
                 transfer.type,
@@ -92,9 +102,11 @@ export class AccountManager {
             );
         }
 
-        logger.log(
+        this.logger.log(
             `${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
         );
+
+        perfMeasure.end();
     }
 
     async loadInformation(accountHash: Uint8Array): Promise<AccountInformation> {
@@ -140,10 +152,9 @@ export class AccountManager {
         );
 
         const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, state);
-        const stateHash = Crypto.Hashes.sha256AsBinary(record);
+        const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.radix.set(accountHash, stateHash);
-
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash, record);
     }
 
@@ -196,7 +207,7 @@ export class AccountManager {
         };
 
         const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, entry);
-        const hash = this.getHistoryEntryHash(accountHash, Crypto.Hashes.sha256AsBinary(record));
+        const hash = this.getHistoryEntryHash(accountHash, NodeCrypto.Hashes.sha256AsBinary(record));
 
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, hash, record);
 
@@ -204,11 +215,11 @@ export class AccountManager {
     }
 
     getHistoryEntryHash(accountHash: any, recordHash: any) {
-        return Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(accountHash, recordHash));
+        return NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(accountHash, recordHash));
     }
 
     async testPublicKeyAvailability(publicKey: Uint8Array) {
-        const keyHash = Crypto.Hashes.sha256AsBinary(publicKey);
+        const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKey);
 
         const accountHash = await this.db.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash);
 
@@ -218,7 +229,7 @@ export class AccountManager {
     }
 
     async saveAccountByPublicKey(accountHash: Uint8Array, publicKey: Uint8Array) {
-        const keyHash = Crypto.Hashes.sha256AsBinary(publicKey);
+        const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKey);
 
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash, accountHash);
     }

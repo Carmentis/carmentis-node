@@ -17,16 +17,16 @@ export class GenesisSnapshotStorageService {
         this.genesisSnapshotPath = genesisSnapshotFilePath;
     }
 
-    async writeGenesisSnapshotChunksInDiskFromEncodedChunks(chunks: Uint8Array[]) {
+    async writeGenesisSnapshotChunksToDiskFromEncodedChunks(chunks: Uint8Array[]) {
         const base64Encoder = EncoderFactory.bytesToBase64Encoder();
         const genesisSnapshot : GenesisSnapshotDTO = {
             base64EncodedChunks: chunks.map((chunk) => base64Encoder.encode(chunk)),
         }
-        return await this.writeGenesisSnapshotInDisk(genesisSnapshot);
+        return await this.writeGenesisSnapshotToDisk(genesisSnapshot);
     }
 
     
-    async writeGenesisSnapshotInDisk(data: GenesisSnapshotDTO) {
+    async writeGenesisSnapshotToDisk(data: GenesisSnapshotDTO) {
         this.logger.verbose(`Writing genesis snapshot to ${this.genesisSnapshotPath}`);
         try {
             const dir = path.dirname(this.genesisSnapshotPath);
