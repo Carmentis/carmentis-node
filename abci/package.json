@@ -22,7 +22,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "gen:proto": "node scripts/gen-proto.js"
+    "gen:proto": "node scripts/gen-proto.js",
+    "gen:config:md": "ts-node scripts/generate-config-doc.ts"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",
