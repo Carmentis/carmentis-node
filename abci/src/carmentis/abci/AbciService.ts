@@ -179,6 +179,23 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.registerSectionCallbacks();
 
         this.perf = new Performance(this.logger, true);
+////////////////////////////
+// TEST CODE ///////////////
+////////////////////////////
+//      const account = new Account;
+//      
+//      account.addSpendableTokens(1000);
+//      account.addVestedTokens(500, 0, 5, 20);
+//      account.addEscrowedTokens(250, new Uint8Array(32), null);
+//      //account.setStake(1500, new Uint8Array(32));
+//      
+//      console.log(account.getBreakdown());
+//      
+//      for(let time = 0; time <= 30; time++) {
+//        account.applyLinearVesting(time);
+//        console.log(time, JSON.stringify(account.getBreakdown()));
+//      }
+////////////////////////////
     }
 
     private registerSectionCallbacks() {

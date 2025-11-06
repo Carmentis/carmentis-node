@@ -101,12 +101,6 @@ export class AccountManager {
         );
     }
 
-    async escrowDeposit(contractName: string, contractParameters: string) {
-        const perfMeasure = this.perf.start('escrowDeposit');
-
-        perfMeasure.end();
-    }
-
     async loadInformation(accountHash: Uint8Array): Promise<AccountInformation> {
         const type = Economics.getAccountTypeFromIdentifier(accountHash);
         let state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash);
