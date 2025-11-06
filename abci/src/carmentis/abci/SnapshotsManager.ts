@@ -2,13 +2,15 @@ import fs from 'node:fs';
 import path from 'path';
 import crypto from 'node:crypto';
 import stream from 'node:stream/promises';
+import { NodeCrypto } from './crypto/NodeCrypto';
 import { FileHandle, access, mkdir, open, rename, readdir, rm } from 'node:fs/promises';
 import { LevelDb } from './database/LevelDb';
 import { Storage } from './Storage';
+import { SnapshotDataCopyManager } from './SnapshotDataCopyManager';
 import { SnapshotChunksFile } from './SnapshotChunksFile';
 import { NODE_SCHEMAS } from './constants/constants';
 
-import { SCHEMAS, SchemaUnserializer, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { SCHEMAS, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 
 const FORMAT = 1;
@@ -55,7 +57,7 @@ export class SnapshotsManager {
      */
     async getList() {
         const entries = await this.getSnapshotEntriesFromDirectory();
-        //const entries = await readdir(this.path, { withFileTypes: true});
+
         // FIXME: The '\\' before ${JSON_SUFFIX} is for the '.' of '.json' and is temporary.
         // Once we've switched to Node 24, we should use this cleaner and safer version:
         // const regex = new RegExp(`^${RegExp.escape(SNAPSHOT_PREFIX)}\\d{9}${RegExp.escape(JSON_SUFFIX)}$`);
@@ -212,16 +214,10 @@ export class SnapshotsManager {
         fileOffset: number,
         size: number,
     ) {
+        const copyManager = new SnapshotDataCopyManager(this.logger);
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        const handle = await open(dbFilePath, 'r');
-        const rd = await handle.read(buffer, bufferOffset, size, fileOffset);
-        await handle.close();
 
-        if (rd.bytesRead < size) {
-            throw new Error(
-                `Encountered end of file while reading ${size} bytes from '${dbFilePath}' at offset ${fileOffset}`,
-            );
-        }
+        await copyManager.copyFileToBuffer(dbFilePath, buffer, bufferOffset, fileOffset, size);
     }
 
     /**
@@ -235,20 +231,10 @@ export class SnapshotsManager {
         size: number,
     ) {
         // open database in writing mode
+        const copyManager = new SnapshotDataCopyManager(this.logger);
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        const handle = await open(dbFilePath, fileOffset ? 'a+' : 'w+');
-        const stats = await handle.stat();
-        const fileSize = stats.size;
 
-        if (fileSize != fileOffset) {
-            await handle.close();
-            throw new Error(
-                `copyBufferToDbFile(): argument fileOffset (${fileOffset}) doesn't match the current file size (${fileSize})`,
-            );
-        }
-
-        await handle.write(buffer, bufferOffset, size);
-        await handle.close();
+        await copyManager.copyBufferToFile(dbFilePath, buffer, bufferOffset, fileOffset, size);
     }
 
     /**
@@ -268,7 +254,7 @@ export class SnapshotsManager {
         const { chunks, chunksFilePath } = await this.createChunksFile(height, files);
         const dbFileSha256 = await this.getFileSha256(dbFilePath);
         const chunksFileSha256 = await this.getFileSha256(chunksFilePath);
-        const hash = Crypto.Hashes.sha256(Utils.binaryFrom(dbFileSha256, chunksFileSha256));
+        const hash = NodeCrypto.Hashes.sha256(Utils.binaryFrom(dbFileSha256, chunksFileSha256));
 
         const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + JSON_SUFFIX);
 
@@ -361,12 +347,15 @@ export class SnapshotsManager {
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
         this.logger.verbose(`Importing db file ${dbFilePath}`);
         const handle = await open(dbFilePath, 'r');
+        const stats = await handle.stat();
+        const fileSize = stats.size;
 
         const sizeBuffer = new Uint8Array(2);
         let batch = this.db.getBatch();
         let fileOffset = 0;
         let size;
         let rd;
+        let batchIndex = 0;
 
         await this.db.clear();
 
@@ -375,6 +364,11 @@ export class SnapshotsManager {
             fileOffset += 2;
 
             if (!rd.bytesRead || batchSize == DB_BATCH_SIZE) {
+                batchIndex++;
+
+                const pct = fileOffset / fileSize * 100;
+                this.logger.verbose(`DB import in progress: batch #${batchIndex} (${pct.toFixed(2)}%)`);
+
                 await batch.write();
                 batchSize = 0;
 

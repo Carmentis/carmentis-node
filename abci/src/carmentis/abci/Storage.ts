@@ -1,12 +1,15 @@
 import fs, { mkdirSync } from 'node:fs';
 import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
+import { NodeCrypto } from './crypto/NodeCrypto';
 import { ChallengeFile } from './ChallengeFile';
+import { SnapshotDataCopyManager } from './SnapshotDataCopyManager';
 import { DbInterface } from './database/DbInterface';
 import { NODE_SCHEMAS } from './constants/constants';
 
-import { SCHEMAS, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { FileIdentifier } from './types/FileIdentifier';
+import { Logger } from '@nestjs/common';
 
 const ENDLESS_DIRECTORY_NAME = 'endless';
 
@@ -21,12 +24,14 @@ const CHALLENGE_BYTES_PER_PART = 1024;
 export class Storage {
     db: DbInterface;
     path: string;
+    logger: Logger;
     txs: Uint8Array[];
     cache: Map<number, any>;
 
-    constructor(db: DbInterface, path: string, txs: Uint8Array[]) {
+    constructor(db: DbInterface, path: string, txs: Uint8Array[], logger: Logger) {
         this.db = db;
         this.path = path;
+        this.logger = logger;
         this.txs = txs;
         this.cache = new Map();
     }
@@ -47,7 +52,7 @@ export class Storage {
     async writeMicroblock(expirationDay: number, txId: number): Promise<boolean> {
         const content = this.txs[txId];
         const size = content.length;
-        const hash = Crypto.Hashes.sha256AsBinary(content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE));
+        const hash = NodeCrypto.Hashes.sha256AsBinary(content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE));
         const fileIdentifier = this.getFileIdentifier(expirationDay, hash);
         const filePath = this.getFilePath(fileIdentifier);
         const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
@@ -129,16 +134,10 @@ export class Storage {
         fileOffset: number,
         size: number,
     ) {
+        const copyManager = new SnapshotDataCopyManager(this.logger);
         const filePath = this.getFilePath(fileIdentifier);
-        const handle = await open(filePath, 'r');
-        const rd = await handle.read(buffer, bufferOffset, size, fileOffset);
-        await handle.close();
 
-        if (rd.bytesRead < size) {
-            throw new Error(
-                `Encountered end of file while reading ${size} bytes from '${filePath}' at offset ${fileOffset}`,
-            );
-        }
+        await copyManager.copyFileToBuffer(filePath, buffer, bufferOffset, fileOffset, size);
     }
 
     /**
@@ -152,22 +151,10 @@ export class Storage {
         fileOffset: number,
         size: number,
     ) {
+        const copyManager = new SnapshotDataCopyManager(this.logger);
         const filePath = this.getFilePath(fileIdentifier);
-        const isWritingOnEmptyFile = fileOffset == 0;
-        const fileAccessMode = isWritingOnEmptyFile ? 'a+' : 'w+';
-        const handle = await open(filePath, fileAccessMode);
-        const stats = await handle.stat();
-        const fileSize = stats.size;
 
-        if (fileSize != fileOffset) {
-            await handle.close();
-            throw new Error(
-                `copyBufferToFile(): argument fileOffset (${fileOffset}) doesn't match the current file size (${fileSize})`,
-            );
-        }
-
-        await handle.write(buffer, bufferOffset, size);
-        await handle.close();
+        await copyManager.copyBufferToFile(filePath, buffer, bufferOffset, fileOffset, size);
     }
 
     /**
@@ -314,8 +301,8 @@ export class Storage {
             }
             await challengeFile.close();
 
-            const newHash = Crypto.Hashes.sha256AsBinary(buffer);
-            hash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
+            const newHash = NodeCrypto.Hashes.sha256AsBinary(buffer);
+            hash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
         }
 
         return hash;
@@ -325,7 +312,7 @@ export class Storage {
             const index = (prngCounter++ % 5) * 6;
 
             if (index == 0) {
-                prngValue = Crypto.Hashes.sha256AsBinary(prngValue);
+                prngValue = NodeCrypto.Hashes.sha256AsBinary(prngValue);
             }
             return prngValue.slice(index, index + 6).reduce((t, n) => t * 0x100 + n, 0);
         }

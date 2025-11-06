@@ -1,5 +1,4 @@
 import { LevelDb } from './LevelDb';
-import { Utils } from '@cmts-dev/carmentis-sdk/server';
 import { DbInterface } from './DbInterface';
 
 export class CachedLevelDb implements DbInterface {
@@ -9,14 +8,6 @@ export class CachedLevelDb implements DbInterface {
 
     constructor(db: LevelDb) {
         this.db = db;
-        this.resetCache();
-    }
-
-    getTableCount() {
-        return this.db.getTableCount();
-    }
-
-    resetCache() {
         this.updateCache = [];
         this.deletionCache = [];
 
@@ -28,6 +19,19 @@ export class CachedLevelDb implements DbInterface {
         }
     }
 
+    getTableCount() {
+        return this.db.getTableCount();
+    }
+
+    resetCache() {
+        const nTable = this.db.getTableCount();
+
+        for (let tableId = 0; tableId < nTable; tableId++) {
+            this.updateCache[tableId].clear();
+            this.deletionCache[tableId].clear();
+        }
+    }
+
     async commit() {
         const batch = this.db.getBatch();
         const nTable = this.db.getTableCount();
@@ -35,13 +39,13 @@ export class CachedLevelDb implements DbInterface {
         for (let tableId = 0; tableId < nTable; tableId++) {
             const putList = [];
             for (const [keyStr, value] of this.updateCache[tableId]) {
-                putList.push([Utils.binaryFromHexa(keyStr), value]);
+                putList.push([CachedLevelDb.decodeKey(keyStr), value]);
             }
             batch.put(tableId, putList);
 
             const delList = [];
             for (const keyStr of this.deletionCache[tableId]) {
-                delList.push(Utils.binaryFromHexa(keyStr));
+                delList.push(CachedLevelDb.decodeKey(keyStr));
             }
             batch.del(tableId, delList);
         }
@@ -51,7 +55,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async getRaw(tableId: number, key: Uint8Array) {
-        const keyStr = Utils.binaryToHexa(key);
+        const keyStr = CachedLevelDb.encodeKey(key);
 
         if (this.updateCache[tableId].has(keyStr)) {
             return this.updateCache[tableId].get(keyStr);
@@ -69,7 +73,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
-        const keyStr = Utils.binaryToHexa(key);
+        const keyStr = CachedLevelDb.encodeKey(key);
 
         this.deletionCache[tableId].delete(keyStr);
         this.updateCache[tableId].set(keyStr, data);
@@ -82,12 +86,12 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async getKeys(tableId: number): Promise<Uint8Array[]> {
-        // TODO: should use the cache
+        // TODO: if this method is needed, it should use the cache
         throw `getKeys() is not implemented on CachedLevelDb`;
     }
 
     async query(tableId: number, query?: any) {
-        // TODO: should also use the cache
+        // TODO: if this method is needed, it should use the cache
         throw `query() is not implemented on CachedLevelDb`;
     }
 
@@ -99,14 +103,14 @@ export class CachedLevelDb implements DbInterface {
         }
 
         const cachedData = [...this.updateCache[tableId].entries()].map(([ key, value ]) => {
-            return [ Utils.binaryFromHexa(key), value ];
+            return [ CachedLevelDb.decodeKey(key), value ];
         });
 
         return [ ...cachedData, ...committedData ];
     }
 
     async del(tableId: number, key: Uint8Array) {
-        const keyStr = Utils.binaryToHexa(key);
+        const keyStr = CachedLevelDb.encodeKey(key);
 
         this.updateCache[tableId].delete(keyStr);
         this.deletionCache[tableId].add(keyStr);
@@ -119,5 +123,13 @@ export class CachedLevelDb implements DbInterface {
 
     unserialize(tableId: number, data: Uint8Array) {
         return this.db.unserialize(tableId, data);
+    }
+
+    static encodeKey(key: Uint8Array) {
+        return Buffer.from(key).toString('hex');
+    }
+
+    static decodeKey(str: string) {
+        return new Uint8Array(Buffer.from(str, 'hex'));
     }
 }

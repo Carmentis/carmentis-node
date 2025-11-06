@@ -3,8 +3,8 @@ const path = require('path');
 const TOML = require('@iarna/toml');
 
 const N_NODES = 4;
-const BLOCK_INTERVAL = 2;
-const SNAPSHOT_BLOCK_PERIOD = 1;
+const EMPTY_BLOCKS_INTERVAL = 30;
+const SNAPSHOT_BLOCK_PERIOD = 100;
 const BLOCK_HISTORY_BEFORE_SNAPSHOT = 0;
 const MAX_SNAPSHOTS = 20;
 
@@ -81,7 +81,7 @@ for(let n = 1; n <= N_NODES; n++) {
   cometConfig.abci = "grpc";
 
   // [consensus]
-  cometConfig.consensus.create_empty_blocks_interval = `${BLOCK_INTERVAL}s`;
+  cometConfig.consensus.create_empty_blocks_interval = `${EMPTY_BLOCKS_INTERVAL}s`;
 
   // [proxy_app]
   cometConfig.proxy_app = `127.0.0.1:${proxyPort}`;
@@ -112,8 +112,13 @@ for(let n = 1; n <= N_NODES; n++) {
   const cometScript =
     `@echo off\n` +
     `if not "%1"=="r" if not "%1"=="-r" goto run\n` +
+    `setlocal\n` +
+    `:PROMPT\n` +
+    `SET /P AREYOUSURE=Clear all Comet data (Y/[N])? \n` +
+    `IF /I "%AREYOUSURE%" NEQ "Y" GOTO run\n` +
     `cometbft unsafe-reset-all --home ".cometbft/node${n}"\n` +
     `:run\n` +
+    `endlocal\n` +
     `title Node ${n} - Comet\n` +
     `cometbft --home ./.cometbft/node${n} --log_level "debug" start > log${n}.txt 2>&1\n`;
 
@@ -121,10 +126,15 @@ for(let n = 1; n <= N_NODES; n++) {
   const abciScript =
     `@echo off\n` +
     `if not "%1"=="r" if not "%1"=="-r" goto run\n` +
+    `setlocal\n` +
+    `:PROMPT\n` +
+    `SET /P AREYOUSURE=Clear all ABCI data (Y/[N])? \n` +
+    `IF /I "%AREYOUSURE%" NEQ "Y" GOTO run\n` +
     `del /q "${rootPath}\\.carmentis\\node${n}\\*"\n` +
     `rd /s /q "${rootPath}\\.carmentis\\node${n}"\n` +
     `md "${rootPath}\\.carmentis\\node${n}"\n` +
     `:run\n` +
+    `endlocal\n` +
     `title Node ${n} - ABCI\n` +
     `SET NODE_CONFIG=${rootPath}\\abci\\config${n}.toml\n` +
     `npm run start:debug\n`;

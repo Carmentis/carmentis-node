@@ -1,4 +1,5 @@
-import { RADIX_CST, RadixUtils, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { RADIX_CST, RadixUtils, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { NodeCrypto } from './crypto/NodeCrypto';
 import { LevelDb } from './database/LevelDb';
 import { DbInterface } from './database/DbInterface';
 
@@ -217,7 +218,7 @@ export class RadixTree {
             await this.removeFromStorage(depth, nodeHash);
         }
 
-        const newHash = Crypto.Hashes.sha256AsBinary(node).slice(0, RADIX_CST.HASH_SIZE);
+        const newHash = NodeCrypto.Hashes.sha256AsBinary(node).slice(0, RADIX_CST.HASH_SIZE);
         //console.log('hash', debug(newHash), debug(node));
         await this.setToStorage(depth, newHash, node);
 
