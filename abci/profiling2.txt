@@ -1,0 +1,632 @@
+Statistical profiling result from isolate-000001D42F661000-67156-v8.log, (37350 ticks, 52 unaccounted, 0 excluded).
+
+ [Shared libraries]:
+   ticks  total  nonlib   name
+  33790   90.5%          C:\WINDOWS\SYSTEM32\ntdll.dll
+   2134    5.7%          C:\Program Files\nodejs\node.exe
+     26    0.1%          C:\WINDOWS\System32\KERNELBASE.dll
+     15    0.0%          C:\WINDOWS\System32\KERNEL32.DLL
+      2    0.0%          C:\WINDOWS\System32\WS2_32.dll
+
+ [JavaScript]:
+   ticks  total  nonlib   name
+     81    0.2%    5.9%  Builtin: GetProperty
+     63    0.2%    4.6%  Builtin: LoadIC
+     45    0.1%    3.3%  Builtin: NumberPrototypeToString
+     45    0.1%    3.3%  Builtin: ArrayIteratorPrototypeNext
+     44    0.1%    3.2%  JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+     34    0.1%    2.5%  Builtin: ResumeGeneratorTrampoline
+     31    0.1%    2.2%  Builtin: BaselineOutOfLinePrologue
+     30    0.1%    2.2%  Builtin: CreateTypedArray
+     28    0.1%    2.0%  Builtin: CreateShallowObjectLiteral
+     28    0.1%    2.0%  Builtin: CallFunction_ReceiverIsAny
+     25    0.1%    1.8%  Builtin: IterableToList
+     22    0.1%    1.6%  Builtin: FulfillPromise
+     22    0.1%    1.6%  Builtin: ArrayPrototypeJoin
+     21    0.1%    1.5%  Builtin: CallFunction_ReceiverIsNotNullOrUndefined
+     19    0.1%    1.4%  Builtin: KeyedStoreIC_Megamorphic
+     17    0.0%    1.2%  Builtin: CompileLazy
+     15    0.0%    1.1%  JS: *putRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:57:17
+     15    0.0%    1.1%  Builtin: RunMicrotasks
+     14    0.0%    1.0%  Builtin: ResolvePromise
+     13    0.0%    0.9%  JS: *getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:43:17
+     13    0.0%    0.9%  Builtin: KeyedLoadIC_Megamorphic
+     12    0.0%    0.9%  JS: *process C:\www\carmentis-core\dist\server\index.cjs:3264:12
+     12    0.0%    0.9%  Builtin: StoreIC
+     12    0.0%    0.9%  Builtin: KeyedLoadIC
+     12    0.0%    0.9%  Builtin: Call_ReceiverIsNullOrUndefined
+     11    0.0%    0.8%  JS: *next node:internal/per_context/primordials:331:9
+     11    0.0%    0.8%  JS: *fsCall node:internal/fs/promises:454:22
+     10    0.0%    0.7%  JS: *read node:internal/fs/promises:648:20
+     10    0.0%    0.7%  JS: *normalize node:path:358:12
+     10    0.0%    0.7%  Builtin: StringPrototypePadStart
+     10    0.0%    0.7%  Builtin: DefineNamedOwnIC
+     10    0.0%    0.7%  Builtin: CallFunction_ReceiverIsNullOrUndefined
+      9    0.0%    0.7%  Builtin: ToBooleanForBaselineJump
+      9    0.0%    0.7%  Builtin: SetPrototypeDelete
+      9    0.0%    0.7%  Builtin: LoadIC_Megamorphic
+      9    0.0%    0.7%  Builtin: KeyedLoadIC_PolymorphicName
+      9    0.0%    0.7%  Builtin: JSRunMicrotasksEntry
+      9    0.0%    0.7%  Builtin: EnqueueMicrotask
+      9    0.0%    0.7%  Builtin: CEntry_Return1_ArgvOnStack_NoBuiltinExit
+      9    0.0%    0.7%  Builtin: AsyncFunctionAwaitUncaught
+      8    0.0%    0.6%  JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      8    0.0%    0.6%  Builtin: RegExpMatchFast
+      8    0.0%    0.6%  Builtin: LoadICTrampoline
+      8    0.0%    0.6%  Builtin: JSConstructStubGeneric
+      8    0.0%    0.6%  Builtin: Call_ReceiverIsAny
+      8    0.0%    0.6%  Builtin: CallApiCallbackOptimizedNoProfiling
+      7    0.0%    0.5%  Builtin: SetPrototypeAdd
+      7    0.0%    0.5%  Builtin: PromisePrototypeThen
+      7    0.0%    0.5%  Builtin: LoadGlobalIC
+      7    0.0%    0.5%  Builtin: CallWithSpread
+      6    0.0%    0.4%  JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      6    0.0%    0.4%  Builtin: StringAdd_CheckNone
+      6    0.0%    0.4%  Builtin: RecordWriteSaveFP
+      6    0.0%    0.4%  Builtin: PromiseFulfillReactionJob
+      6    0.0%    0.4%  Builtin: KeyedStoreIC
+      6    0.0%    0.4%  Builtin: BaselineLeaveFrame
+      6    0.0%    0.4%  Builtin: ArrayPrototypePush
+      5    0.0%    0.4%  JS: *read C:\www\carmentis-node\abci\dist\src\carmentis\abci\ChallengeFile.js:31:15
+      5    0.0%    0.4%  JS: *printMessages C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:138:18
+      5    0.0%    0.4%  JS: *getObject C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:50:20
+      5    0.0%    0.4%  JS: *del C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:83:14
+      5    0.0%    0.4%  Builtin: TypedArrayPrototypeSlice
+      5    0.0%    0.4%  Builtin: SuspendGeneratorBaseline
+      5    0.0%    0.4%  Builtin: PerformPromiseThen
+      5    0.0%    0.4%  Builtin: JSBuiltinsConstructStub
+      5    0.0%    0.4%  Builtin: FunctionPrototypeCall
+      4    0.0%    0.3%  JS: *unserializeObject C:\www\carmentis-core\dist\server\index.cjs:6963:22
+      4    0.0%    0.3%  JS: *hashC C:\www\carmentis-core\dist\server\index.cjs:2807:19
+      4    0.0%    0.3%  JS: *getRandom48 C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:230:29
+      4    0.0%    0.3%  JS: *<anonymous> node:internal/fs/promises:412:9
+      4    0.0%    0.3%  Builtin: StrictEqual_Baseline
+      4    0.0%    0.3%  Builtin: StoreIC_Megamorphic
+      4    0.0%    0.3%  Builtin: RecordWriteIgnoreFP
+      4    0.0%    0.3%  Builtin: MapPrototypeSet
+      4    0.0%    0.3%  Builtin: LoadICTrampoline_Megamorphic
+      4    0.0%    0.3%  Builtin: FindOrderedHashMapEntry
+      4    0.0%    0.3%  Builtin: FastNewClosure
+      4    0.0%    0.3%  Builtin: Call_ReceiverIsNotNullOrUndefined_Baseline_Compact
+      4    0.0%    0.3%  Builtin: Call_ReceiverIsNotNullOrUndefined
+      4    0.0%    0.3%  Builtin: CallVarargs
+      4    0.0%    0.3%  Builtin: AsyncFunctionEnter
+      4    0.0%    0.3%  Builtin: AsyncFunctionAwaitResolveClosure
+      4    0.0%    0.3%  Builtin: ArrayIncludesSmiOrObject
+      3    0.0%    0.2%  RegExp: ^([\da-f]{2})*$
+      3    0.0%    0.2%  JS: *onSessionHeaders node:internal/http2/core:345:26
+      3    0.0%    0.2%  JS: *log node:internal/console/constructor:380:6
+      3    0.0%    0.2%  JS: *get C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-level.js:302:13
+      3    0.0%    0.2%  JS: *fulfilled C:\www\carmentis-core\dist\server\index.cjs:38:27
+      3    0.0%    0.2%  JS: *createHash node:crypto:138:20
+      3    0.0%    0.2%  JS: *assert node:internal/assert:8:16
+      3    0.0%    0.2%  JS: *_write node:internal/streams/writable:453:16
+      3    0.0%    0.2%  JS: *_channelzHandler C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server.js:936:29
+      3    0.0%    0.2%  Builtin: TypedArrayPrototypeSet
+      3    0.0%    0.2%  Builtin: ResumeGeneratorBaseline
+      3    0.0%    0.2%  Builtin: NewRestArgumentsElements
+      3    0.0%    0.2%  Builtin: LoadJoinElement_FastSmiOrObjectElements_0
+      3    0.0%    0.2%  Builtin: IterableToListWithSymbolLookup
+      3    0.0%    0.2%  Builtin: ForInFilter
+      3    0.0%    0.2%  Builtin: DefineNamedOwnICTrampoline
+      3    0.0%    0.2%  Builtin: CallFunctionTemplate_Generic
+      3    0.0%    0.2%  Builtin: ArrayMap
+      2    0.0%    0.1%  RegExp: ^[\^_`a-zA-Z\-0-9!#$%&'*+.|~]+$
+      2    0.0%    0.1%  RegExp: ..
+      2    0.0%    0.1%  JS: ^getTimerDuration node:internal/timers:402:26
+      2    0.0%    0.1%  JS: ^createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+      2    0.0%    0.1%  JS: *write_string_buffer C:\www\carmentis-node\abci\node_modules\protobufjs\src\writer_buffer.js:69:61
+      2    0.0%    0.1%  JS: *writeSchemaValue C:\www\carmentis-core\dist\server\index.cjs:6566:21
+      2    0.0%    0.1%  JS: *processTicksAndRejections node:internal/process/task_queues:72:35
+      2    0.0%    0.1%  JS: *open node:internal/fs/promises:637:20
+      2    0.0%    0.1%  JS: *noop node:internal/util/debuglog:57:14
+      2    0.0%    0.1%  JS: *log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:50:8
+      2    0.0%    0.1%  JS: *keyEncoding C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-level.js:121:15
+      2    0.0%    0.1%  JS: *handleDataFrame C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server-interceptors.js:579:20
+      2    0.0%    0.1%  JS: *getFromStorage C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:27:25
+      2    0.0%    0.1%  JS: *get node:internal/streams/writable:131:8
+      2    0.0%    0.1%  JS: *get node:internal/streams/readable:132:8
+      2    0.0%    0.1%  JS: *fromHttp2Headers C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\metadata.js:200:28
+      2    0.0%    0.1%  JS: *emit node:events:466:44
+      2    0.0%    0.1%  JS: *createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+      2    0.0%    0.1%  JS: *commit C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:25:17
+      2    0.0%    0.1%  JS: *SchemaUnserializer C:\www\carmentis-core\dist\server\index.cjs:6943:16
+      2    0.0%    0.1%  JS: *<anonymous> C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:235:61
+      2    0.0%    0.1%  JS: *<anonymous> C:\www\carmentis-core\dist\server\index.cjs:7860:58
+      2    0.0%    0.1%  Builtin: Typeof
+      2    0.0%    0.1%  Builtin: ToString
+      2    0.0%    0.1%  Builtin: SubString
+      2    0.0%    0.1%  Builtin: StringEqual
+      2    0.0%    0.1%  Builtin: StoreFastElementIC_InBounds
+      2    0.0%    0.1%  Builtin: RegExpPrototypeTestFast
+      2    0.0%    0.1%  Builtin: NewPromiseCapability
+      2    0.0%    0.1%  Builtin: LoadTypedElement_Uint8Elements_0
+      2    0.0%    0.1%  Builtin: LoadIC_NoFeedback
+      2    0.0%    0.1%  Builtin: LoadICBaseline
+      2    0.0%    0.1%  Builtin: IterableToListMayPreserveHoles
+      2    0.0%    0.1%  Builtin: GeneratorPrototypeNext
+      2    0.0%    0.1%  Builtin: FindOrderedHashSetEntry
+      2    0.0%    0.1%  Builtin: FastNewObject
+      2    0.0%    0.1%  Builtin: CreateGeneratorObject
+      2    0.0%    0.1%  Builtin: CreateEmptyArrayLiteral
+      2    0.0%    0.1%  Builtin: Construct_Baseline
+      2    0.0%    0.1%  Builtin: AsyncFunctionAwaitCaught
+      2    0.0%    0.1%  Builtin: ArrayPrototypeValues
+      2    0.0%    0.1%  Builtin: ArrayPrototypeSlice
+      2    0.0%    0.1%  Builtin: ArrayIncludes
+      2    0.0%    0.1%  Builtin: Add_Baseline
+      1    0.0%    0.1%  RegExp: ^[0-9a-z_.-]+$
+      1    0.0%    0.1%  JS: ~onconnection node:net:2235:22
+      1    0.0%    0.1%  JS: ~fromObject C:\www\carmentis-node\abci\node_modules\protobufjs\src\type.js:562:48
+      1    0.0%    0.1%  JS: ~<anonymous> node:internal/http2/core:1010:42
+      1    0.0%    0.1%  JS: ^writeCallback node:internal/http2/core:2281:27
+      1    0.0%    0.1%  JS: ^write node:internal/fs/promises:721:21
+      1    0.0%    0.1%  JS: ^wrapModuleLoad node:internal/modules/cjs/loader:230:24
+      1    0.0%    0.1%  JS: ^update C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:83:17
+      1    0.0%    0.1%  JS: ^trackWriteState node:internal/http2/core:1923:25
+      1    0.0%    0.1%  JS: ^sha256AsBinary C:\www\carmentis-core\dist\server\index.cjs:7052:24
+      1    0.0%    0.1%  JS: ^setStreamTimeout node:internal/stream_base_commons:236:26
+      1    0.0%    0.1%  JS: ^resolveParamValue C:\www\carmentis-node\abci\node_modules\@nestjs\microservices\context\rpc-context-creator.js:103:39
+      1    0.0%    0.1%  JS: ^resetCache C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:16:15
+      1    0.0%    0.1%  JS: ^realpathSync node:fs:2710:22
+      1    0.0%    0.1%  JS: ^readableAddChunkPushByteMode node:internal/streams/readable:463:38
+      1    0.0%    0.1%  JS: ^process C:\www\carmentis-core\dist\server\index.cjs:3264:12
+      1    0.0%    0.1%  JS: ^prefixKey C:\www\carmentis-node\abci\node_modules\abstract-level\lib\abstract-sublevel.js:72:15
+      1    0.0%    0.1%  JS: ^popAsyncContext node:internal/async_hooks:553:25
+      1    0.0%    0.1%  JS: ^onStreamClose node:internal/http2/core:580:23
+      1    0.0%    0.1%  JS: ^onSessionHeaders node:internal/http2/core:345:26
+      1    0.0%    0.1%  JS: ^next C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-iterator.js:58:14
+      1    0.0%    0.1%  JS: ^getVirtualBlockchainState C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:24:36
+      1    0.0%    0.1%  JS: ^getVirtualBlockchain C:\www\carmentis-core\dist\server\index.cjs:11263:25
+      1    0.0%    0.1%  JS: ^get C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:6:47
+      1    0.0%    0.1%  JS: ^formatValue node:internal/util/inspect:837:21
+      1    0.0%    0.1%  JS: ^emit node:events:466:44
+      1    0.0%    0.1%  JS: ^descriptor.value C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:163:33
+      1    0.0%    0.1%  JS: ^debugStream node:internal/http2/core:204:21
+      1    0.0%    0.1%  JS: ^createDefaultCryptographicHash C:\www\carmentis-core\dist\server\index.cjs:5675:42
+      1    0.0%    0.1%  JS: ^binaryToHexa C:\www\carmentis-core\dist\server\index.cjs:6427:22
+      1    0.0%    0.1%  JS: ^_destroy node:internal/http2/core:2422:11
+      1    0.0%    0.1%  JS: ^SchemaSerializer C:\www\carmentis-core\dist\server\index.cjs:6864:16
+      1    0.0%    0.1%  JS: ^ReadableState node:internal/streams/readable:262:23
+      1    0.0%    0.1%  JS: ^Readable.on node:internal/streams/readable:1127:33
+      1    0.0%    0.1%  JS: ^Query C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:192:16
+      1    0.0%    0.1%  JS: ^Hash node:internal/crypto/hash:88:14
+      1    0.0%    0.1%  JS: ^<anonymous> node:internal/validators:218:41
+      1    0.0%    0.1%  JS: ^<anonymous> C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-iterator.js:258:34
+      1    0.0%    0.1%  JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:8801:58
+      1    0.0%    0.1%  JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:8635:58
+      1    0.0%    0.1%  JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:7888:58
+      1    0.0%    0.1%  JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:11307:58
+      1    0.0%    0.1%  JS: *writeVarint64 C:\www\carmentis-node\abci\node_modules\protobufjs\src\writer.js:242:23
+      1    0.0%    0.1%  JS: *writeBinary C:\www\carmentis-core\dist\server\index.cjs:6643:16
+      1    0.0%    0.1%  JS: *write C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\stream-decoder.js:37:10
+      1    0.0%    0.1%  JS: *wrappedFn node:internal/errors:535:21
+      1    0.0%    0.1%  JS: *trace C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server-interceptors.js:30:15
+      1    0.0%    0.1%  JS: *toHeaderObject node:internal/http2/util:884:24
+      1    0.0%    0.1%  JS: *streamListenerAdded node:internal/http2/core:539:29
+      1    0.0%    0.1%  JS: *slice node:buffer:1185:40
+      1    0.0%    0.1%  JS: *sha256AsBinary C:\www\carmentis-node\abci\dist\src\carmentis\abci\crypto\NodeCrypto.js:18:24
+      1    0.0%    0.1%  JS: *setToStorage C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:40:23
+      1    0.0%    0.1%  JS: *serialize C:\www\carmentis-core\dist\server\index.cjs:6870:14
+      1    0.0%    0.1%  JS: *resetCache C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:16:15
+      1    0.0%    0.1%  JS: *processSectionCallback C:\www\carmentis-core\dist\server\index.cjs:7927:27
+      1    0.0%    0.1%  JS: *processHeader node:internal/http2/util:764:25
+      1    0.0%    0.1%  JS: *previousHashFromHeader C:\www\carmentis-core\dist\server\index.cjs:10681:32
+      1    0.0%    0.1%  JS: *nextTick node:internal/process/task_queues:113:18
+      1    0.0%    0.1%  JS: *next C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-iterator.js:58:14
+      1    0.0%    0.1%  JS: *maybePushNextMessage C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server-interceptors.js:563:25
+      1    0.0%    0.1%  JS: *invokeSectionPostUpdateCallback C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:179:42
+      1    0.0%    0.1%  JS: *intToByteArray C:\www\carmentis-core\dist\server\index.cjs:6510:24
+      1    0.0%    0.1%  JS: *hasHooks node:internal/async_hooks:470:18
+      1    0.0%    0.1%  JS: *getVirtualBlockchainUpdate C:\www\carmentis-core\dist\server\index.cjs:37367:31
+      1    0.0%    0.1%  JS: *getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\LevelDb.js:60:17
+      1    0.0%    0.1%  JS: *getFilePath C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:241:16
+      1    0.0%    0.1%  JS: *get node:internal/streams/readable:1415:8
+      1    0.0%    0.1%  JS: *get node:internal/bootstrap/node:437:8
+      1    0.0%    0.1%  JS: *get closed node:internal/http2/core:2385:13
+      1    0.0%    0.1%  JS: *formatWithOptionsInternal node:internal/util/inspect:2288:35
+      1    0.0%    0.1%  JS: *formatPrimitive node:internal/util/inspect:1715:25
+      1    0.0%    0.1%  JS: *extractValue C:\www\carmentis-node\abci\node_modules\@nestjs\microservices\context\rpc-context-creator.js:97:34
+      1    0.0%    0.1%  JS: *done node:internal/http2/core:2270:18
+      1    0.0%    0.1%  JS: *colorize C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:218:13
+      1    0.0%    0.1%  JS: *checkMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:689:26
+      1    0.0%    0.1%  JS: *checkGas C:\www\carmentis-core\dist\server\index.cjs:11414:13
+      1    0.0%    0.1%  JS: *binaryIsEqual C:\www\carmentis-core\dist\server\index.cjs:6479:23
+      1    0.0%    0.1%  JS: *aexists C:\www\carmentis-core\dist\server\index.cjs:2658:17
+      1    0.0%    0.1%  JS: *addCallStarted C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\channelz.js:178:19
+      1    0.0%    0.1%  JS: *abytes$1 C:\www\carmentis-core\dist\server\index.cjs:2644:18
+      1    0.0%    0.1%  JS: *_addListener node:events:547:22
+      1    0.0%    0.1%  JS: *__awaiter C:\www\carmentis-core\dist\server\index.cjs:35:19
+      1    0.0%    0.1%  JS: *WritableState node:internal/streams/writable:304:23
+      1    0.0%    0.1%  JS: *Writable.end node:internal/streams/writable:808:34
+      1    0.0%    0.1%  JS: *Socket._write node:net:977:35
+      1    0.0%    0.1%  JS: *SafeIterator node:internal/per_context/primordials:328:16
+      1    0.0%    0.1%  JS: *Readable.removeListener node:internal/streams/readable:1159:45
+      1    0.0%    0.1%  JS: *Readable.push node:internal/streams/readable:387:35
+      1    0.0%    0.1%  JS: *Readable.on node:internal/streams/readable:1127:33
+      1    0.0%    0.1%  JS: *Microblock C:\www\carmentis-core\dist\server\index.cjs:7530:16
+      1    0.0%    0.1%  JS: *DescriptorProto$decode :3:39
+      1    0.0%    0.1%  JS: *CheckTx C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:383:18
+      1    0.0%    0.1%  JS: *<anonymous> node:internal/per_context/primordials:334:21
+      1    0.0%    0.1%  JS: *<anonymous> node:internal/http2/core:2089:17
+      1    0.0%    0.1%  JS: *<anonymous> C:\www\carmentis-node\abci\node_modules\@nestjs\microservices\server\server-grpc.js:165:111
+      1    0.0%    0.1%  JS: *<anonymous> C:\www\carmentis-core\dist\server\index.cjs:7840:58
+      1    0.0%    0.1%  JS: *<anonymous> C:\www\carmentis-core\dist\server\index.cjs:6431:27
+      1    0.0%    0.1%  JS: *<anonymous> C:\www\carmentis-core\dist\server\index.cjs:11415:58
+      1    0.0%    0.1%  Builtin: TypedArrayPrototypeReduce
+      1    0.0%    0.1%  Builtin: ToNumber_Baseline
+      1    0.0%    0.1%  Builtin: StringSubstring
+      1    0.0%    0.1%  Builtin: StringSlowFlatten
+      1    0.0%    0.1%  Builtin: StrictEqual
+      1    0.0%    0.1%  Builtin: StoreInArrayLiteralIC
+      1    0.0%    0.1%  Builtin: StoreICBaseline
+      1    0.0%    0.1%  Builtin: SetDataProperties
+      1    0.0%    0.1%  Builtin: PromiseConstructor
+      1    0.0%    0.1%  Builtin: ObjectPrototypeHasOwnProperty
+      1    0.0%    0.1%  Builtin: MathFloor
+      1    0.0%    0.1%  Builtin: MapPrototypeGet
+      1    0.0%    0.1%  Builtin: MapPrototypeDelete
+      1    0.0%    0.1%  Builtin: MapConstructor
+      1    0.0%    0.1%  Builtin: LoadIC_FunctionPrototype
+      1    0.0%    0.1%  Builtin: KeyedLoadICTrampoline_Megamorphic
+      1    0.0%    0.1%  Builtin: KeyedHasIC_PolymorphicName
+      1    0.0%    0.1%  Builtin: KeyedHasIC
+      1    0.0%    0.1%  Builtin: JSEntryTrampoline
+      1    0.0%    0.1%  Builtin: JSEntry
+      1    0.0%    0.1%  Builtin: IterableToListConvertHoles
+      1    0.0%    0.1%  Builtin: Increment_Baseline
+      1    0.0%    0.1%  Builtin: HandleApiCallOrConstruct
+      1    0.0%    0.1%  Builtin: ForInPrepare
+      1    0.0%    0.1%  Builtin: ForInNext
+      1    0.0%    0.1%  Builtin: FindNonDefaultConstructorOrConstruct
+      1    0.0%    0.1%  Builtin: Equal_Baseline
+      1    0.0%    0.1%  Builtin: Decrement_Baseline
+      1    0.0%    0.1%  Builtin: DateConstructor
+      1    0.0%    0.1%  Builtin: CreateDataProperty
+      1    0.0%    0.1%  Builtin: Construct {1}
+      1    0.0%    0.1%  Builtin: CloneObjectIC
+      1    0.0%    0.1%  Builtin: CloneFastJSArrayFillingHoles
+      1    0.0%    0.1%  Builtin: Call_ReceiverIsNullOrUndefined_Baseline_Compact
+      1    0.0%    0.1%  Builtin: CallWithArrayLike
+      1    0.0%    0.1%  Builtin: CallIteratorWithFeedback
+      1    0.0%    0.1%  Builtin: CallFunctionTemplate_CheckCompatibleReceiver
+      1    0.0%    0.1%  Builtin: CallBoundFunction
+      1    0.0%    0.1%  Builtin: CallApiCallbackOptimized
+      1    0.0%    0.1%  Builtin: AsyncGeneratorPrototypeNext
+      1    0.0%    0.1%  Builtin: AsyncFunctionResolve
+      1    0.0%    0.1%  Builtin: ArrayPrototypeShift
+      1    0.0%    0.1%  Builtin: ArrayBufferConstructor
+
+ [C++]:
+   ticks  total  nonlib   name
+
+ [Summary]:
+   ticks  total  nonlib   name
+   1331    3.6%   96.2%  JavaScript
+      0    0.0%    0.0%  C++
+    208    0.6%   15.0%  GC
+  35967   96.3%          Shared libraries
+     52    0.1%          Unaccounted
+
+ [C++ entry points]:
+   ticks    cpp   total   name
+
+ [Bottom up (heavy) profile]:
+  Note: percentage shows a share of a particular caller in the total
+  amount of its parent calls.
+  Callers occupying less than 1.0% are not shown.
+
+   ticks parent  name
+  33790   90.5%  C:\WINDOWS\SYSTEM32\ntdll.dll
+   4201   12.4%    C:\Program Files\nodejs\node.exe
+   2546   60.6%      JS: *read node:internal/fs/promises:648:20
+   2434   95.6%        JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+   2434  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     75    2.9%        JS: *read node:internal/fs/promises:198:7
+     66   88.0%          JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+     66  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      9   12.0%          JS: ^readMicroblockPart C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:166:29
+      9  100.0%            JS: ^readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+     34    1.3%        JS: *read C:\www\carmentis-node\abci\dist\src\carmentis\abci\ChallengeFile.js:31:15
+     34  100.0%          JS: ^processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+     34  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+    471   11.2%      JS: *write node:internal/fs/promises:721:21
+    277   58.8%        JS: *fsCall node:internal/fs/promises:454:22
+    277  100.0%          JS: *createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+    277  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+    100   21.2%        JS: *write node:internal/fs/promises:229:8
+     93   93.0%          JS: ^createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+     93  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      6    6.0%          JS: ^create C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotChunksFile.js:18:17
+      6  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1    1.0%          JS: ^flush C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:101:16
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+     94   20.0%        JS: *createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+     94  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+    315    7.5%      JS: *getFilePath C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:241:16
+    262   83.2%        JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+    262  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     37   11.7%        JS: ^writeMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:71:26
+     37  100.0%          JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+     37  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+     12    3.8%        JS: ^readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+     12  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      4    1.3%        JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+      4  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+    225    5.4%      JS: *handleWriteReq node:internal/stream_base_commons:46:24
+    225  100.0%        JS: *_write node:internal/streams/writable:453:16
+    225  100.0%          JS: *printMessages C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:138:18
+    144   64.0%            JS: *log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:50:8
+     66   29.3%            JS: *debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:78:10
+     15    6.7%            JS: ^debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:78:10
+    196    4.7%      JS: *Socket._write node:net:977:35
+    144   73.5%        JS: *writeOrBuffer node:internal/streams/writable:548:23
+    125   86.8%          JS: *Writable.write node:internal/streams/writable:504:36
+    113   90.4%            JS: *log node:internal/console/constructor:380:6
+     12    9.6%            JS: ^value node:internal/console/constructor:270:20
+     19   13.2%          JS: ^_write node:internal/streams/writable:453:16
+     19  100.0%            JS: *printMessages C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:138:18
+     34   17.3%        JS: *_write node:internal/streams/writable:453:16
+     34  100.0%          JS: *printMessages C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:138:18
+     29   85.3%            JS: *log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:50:8
+      5   14.7%            JS: *debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:78:10
+     18    9.2%        JS: ^writeOrBuffer node:internal/streams/writable:548:23
+     18  100.0%          JS: *Writable.write node:internal/streams/writable:504:36
+     18  100.0%            JS: ^value node:internal/console/constructor:270:20
+    174    4.1%      JS: *get C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-level.js:302:13
+    174  100.0%        JS: *get C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-level.js:302:13
+     54   31.0%          JS: *getObject C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:50:20
+     52   96.3%            JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      1    1.9%            JS: ^readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      1    1.9%            JS: *loadInformation C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:66:26
+     37   21.3%          JS: *get C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:40:14
+     17   45.9%            JS: ^getAccountByPublicKeyHash C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:27:36
+     15   40.5%            JS: ^getMicroblockVbInformation C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:12:37
+      5   13.5%            JS: ^getVirtualBlockchainState C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:24:36
+     35   20.1%          JS: *getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\LevelDb.js:60:17
+     29   82.9%            JS: *getVirtualBlockchainState C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:24:36
+      3    8.6%            JS: ^getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:43:17
+      1    2.9%            JS: ^loadAccountByPublicKeyHash C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:143:37
+      1    2.9%            JS: ^get C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:40:14
+      1    2.9%            JS: *getMicroblockVbInformation C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:12:37
+     31   17.8%          JS: *getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:43:17
+     16   51.6%            JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      9   29.0%            JS: ^getObject C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:50:20
+      6   19.4%            JS: ^get C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:40:14
+      9    5.2%          JS: ^getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\LevelDb.js:60:17
+      8   88.9%            JS: ^getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:43:17
+      1   11.1%            JS: ^get C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:40:14
+      8    4.6%          JS: *getVirtualBlockchainState C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:24:36
+      6   75.0%            JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36460:58
+      2   25.0%            JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36450:58
+     95    2.3%      JS: *open node:internal/fs/promises:637:20
+     92   96.8%        JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+     92  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      2    2.1%        JS: ^open C:\www\carmentis-node\abci\dist\src\carmentis\abci\ChallengeFile.js:20:15
+      2  100.0%          JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+      2  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1    1.1%        JS: ^readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      1  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     69    1.6%      JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+     69  100.0%        Builtin: AsyncFunctionAwaitResolveClosure
+
+   2134    5.7%  C:\Program Files\nodejs\node.exe
+   1245   58.3%    C:\Program Files\nodejs\node.exe
+    529   42.5%      JS: *read node:internal/fs/promises:648:20
+    480   90.7%        JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+    480  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     39    7.4%        Builtin: AsyncFunctionAwaitResolveClosure
+      8    1.5%        JS: *read node:internal/fs/promises:198:7
+      6   75.0%          JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      6  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      2   25.0%          JS: ^readMicroblockPart C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:166:29
+      2  100.0%            JS: ^readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+    106    8.5%      JS: *write node:internal/fs/promises:721:21
+     67   63.2%        JS: *fsCall node:internal/fs/promises:454:22
+     67  100.0%          JS: *createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+     67  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+     17   16.0%        JS: *createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+     17  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     11   10.4%        JS: *write node:internal/fs/promises:229:8
+     10   90.9%          JS: ^createDbFile C:\www\carmentis-node\abci\dist\src\carmentis\abci\SnapshotsManager.js:178:23
+     10  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1    9.1%          JS: ^flush C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:101:16
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+     11   10.4%        Builtin: AsyncFunctionAwaitResolveClosure
+     41    3.3%      JS: *createHash node:crypto:138:20
+     33   80.5%        JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+     33  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      5   12.2%        JS: *sha256AsBinary C:\www\carmentis-node\abci\dist\src\carmentis\abci\crypto\NodeCrypto.js:18:24
+      1   20.0%          JS: ^writeMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:71:26
+      1  100.0%            JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+      1   20.0%          JS: ^update C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:83:17
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1   20.0%          JS: ^getHistoryEntryHash C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:129:24
+      1  100.0%            JS: ^addHistoryEntry C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:112:26
+      1   20.0%          JS: ^addHistoryEntry C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:112:26
+      1  100.0%            JS: ^update C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:83:17
+      1   20.0%          JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      3    7.3%        JS: *getRandom48 C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:230:29
+      3  100.0%          JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+      3  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+     40    3.2%      JS: *printMessages C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:138:18
+     30   75.0%        JS: *log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:50:8
+     28   93.3%          JS: *log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:53:8
+     22   78.6%            JS: *descriptor.value C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:163:33
+      6   21.4%            JS: *CheckTx C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:383:18
+      2    6.7%          JS: ^log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:53:8
+      2  100.0%            JS: *descriptor.value C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:163:33
+      6   15.0%        JS: *debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:78:10
+      5   83.3%          JS: *debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:65:10
+      5  100.0%            JS: *descriptor.value C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:163:33
+      1   16.7%          JS: ^debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:65:10
+      1  100.0%            JS: *descriptor.value C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:163:33
+      3    7.5%        JS: ^debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:78:10
+      3  100.0%          JS: ^debug C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:65:10
+      3  100.0%            JS: *descriptor.value C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:163:33
+      1    2.5%        JS: ^log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\console-logger.service.js:50:8
+      1  100.0%          JS: ^log C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:53:8
+      1  100.0%            JS: *descriptor.value C:\www\carmentis-node\abci\node_modules\@nestjs\common\services\logger.service.js:163:33
+     31    2.5%      JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+     31  100.0%        Builtin: AsyncFunctionAwaitResolveClosure
+     28    2.2%      JS: *putRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:57:17
+     27   96.4%        JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+     27  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      1    3.6%        JS: ^putObject C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:63:20
+      1  100.0%          JS: ^writeMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:71:26
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+     28    2.2%      JS: *open node:internal/fs/promises:637:20
+     28  100.0%        JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+     28  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     25    2.0%      JS: *getRandom48 C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:230:29
+     25  100.0%        JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+     25  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     23    1.8%      JS: *del C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:83:14
+     23  100.0%        JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+     23  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     22    1.8%      JS: *__awaiter C:\www\carmentis-core\dist\server\index.cjs:35:19
+      3   13.6%        JS: ^getVirtualBlockchainStateInternal C:\www\carmentis-core\dist\server\index.cjs:36449:38
+      2   66.7%          JS: ^getVirtualBlockchainUpdate C:\www\carmentis-node\abci\dist\src\carmentis\abci\ABCIQueryHandler.js:81:37
+      2  100.0%            JS: ^handleQuery C:\www\carmentis-node\abci\dist\src\carmentis\abci\ABCIQueryHandler.js:41:16
+      1   33.3%          JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      3   13.6%        JS: ^getAccountByPublicKey C:\www\carmentis-core\dist\server\index.cjs:36368:26
+      3  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:10261:58
+      3  100.0%            Builtin: GeneratorPrototypeNext
+      2    9.1%        JS: ^importMicroblock C:\www\carmentis-core\dist\server\index.cjs:11397:21
+      1   50.0%          JS: ^checkMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:689:26
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1   50.0%          JS: *checkMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:689:26
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      2    9.1%        JS: ^getVirtualBlockchainUpdate C:\www\carmentis-core\dist\server\index.cjs:37367:31
+      2  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36476:58
+      2  100.0%            Builtin: GeneratorPrototypeNext
+      2    9.1%        JS: ^getOrganizationPublicKey C:\www\carmentis-core\dist\server\index.cjs:8885:29
+      2  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:10261:58
+      2  100.0%            Builtin: GeneratorPrototypeNext
+      2    9.1%        JS: ^getMicroblockBodys C:\www\carmentis-core\dist\server\index.cjs:36410:23
+      2  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:7888:58
+      2  100.0%            Builtin: GeneratorPrototypeNext
+      2    9.1%        JS: ^checkHeader C:\www\carmentis-core\dist\server\index.cjs:11282:16
+      2  100.0%          JS: *checkMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:689:26
+      1   50.0%            JS: ^CheckTx C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:383:18
+      1   50.0%            JS: *CheckTx C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:383:18
+      1    4.5%        JS: ^updateVirtualBlockchainState C:\www\carmentis-core\dist\server\index.cjs:36387:33
+      1  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:11438:58
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      1    4.5%        JS: ^signatureAlgorithmCallback C:\www\carmentis-core\dist\server\index.cjs:10200:31
+      1  100.0%          JS: *<anonymous> C:\www\carmentis-core\dist\server\index.cjs:7928:58
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      1    4.5%        JS: ^load C:\www\carmentis-core\dist\server\index.cjs:7839:9
+      1  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:8853:58
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      1    4.5%        JS: ^getVirtualBlockchain C:\www\carmentis-core\dist\server\index.cjs:11263:25
+      1  100.0%          JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1    4.5%        JS: ^channelCreationCallback C:\www\carmentis-core\dist\server\index.cjs:10226:28
+      1  100.0%          JS: *<anonymous> C:\www\carmentis-core\dist\server\index.cjs:7928:58
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      1    4.5%        JS: ^_load C:\www\carmentis-core\dist\server\index.cjs:8692:10
+      1  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:8801:58
+      1  100.0%            Builtin: GeneratorPrototypeNext
+     20    1.6%      JS: *getFilePath C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:241:16
+     15   75.0%        JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+     15  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      2   10.0%        JS: ^writeMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:71:26
+      2  100.0%          JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+      2  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      2   10.0%        JS: ^readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      2  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      1    5.0%        JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+      1  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     17    1.4%      JS: *sha256AsBinary C:\www\carmentis-node\abci\dist\src\carmentis\abci\crypto\NodeCrypto.js:18:24
+      6   35.3%        JS: ^addHistoryEntry C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:112:26
+      6  100.0%          JS: ^update C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:83:17
+      6  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      4   23.5%        JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+      4  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      3   17.6%        JS: ^getHistoryEntryHash C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:129:24
+      3  100.0%          JS: ^addHistoryEntry C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:112:26
+      3  100.0%            JS: ^update C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:83:17
+      2   11.8%        JS: *processChallenge C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:179:27
+      2  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      1    5.9%        JS: ^writeMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:71:26
+      1  100.0%          JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1    5.9%        JS: ^update C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:83:17
+      1  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+     17    1.4%      JS: *get C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-level.js:302:13
+     17  100.0%        JS: *get C:\www\carmentis-node\abci\node_modules\abstract-level\abstract-level.js:302:13
+      7   41.2%          JS: *getObject C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:50:20
+      6   85.7%            JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      1   14.3%            JS: ^processBlock C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:517:23
+      5   29.4%          JS: *get C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:40:14
+      4   80.0%            JS: ^getAccountByPublicKeyHash C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:27:36
+      1   20.0%            JS: ^getMicroblockVbInformation C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:12:37
+      2   11.8%          JS: *getVirtualBlockchainState C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:24:36
+      1   50.0%            JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36460:58
+      1   50.0%            JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36450:58
+      2   11.8%          JS: *getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:43:17
+      2  100.0%            JS: ^get C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:40:14
+      1    5.9%          JS: *getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\LevelDb.js:60:17
+      1  100.0%            JS: *getVirtualBlockchainState C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:24:36
+     16    1.3%      JS: *commit C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:25:17
+     16  100.0%        JS: ^Commit C:\www\carmentis-node\abci\dist\src\carmentis\abci\AbciService.js:611:17
+     16  100.0%          JS: ^Commit C:\www\carmentis-node\abci\dist\src\carmentis\abci\controllers\GrpcAbciController.js:43:17
+      9   56.3%            JS: ^<anonymous> C:\www\carmentis-node\abci\node_modules\@nestjs\microservices\context\rpc-context-creator.js:41:48
+      7   43.8%            JS: *<anonymous> C:\www\carmentis-node\abci\node_modules\@nestjs\microservices\context\rpc-context-creator.js:41:48
+     13    1.0%      JS: *nextTick node:internal/process/task_queues:113:18
+      4   30.8%        JS: *onSessionHeaders node:internal/http2/core:345:26
+      3   23.1%        JS: *onwrite node:internal/streams/writable:615:17
+      3  100.0%          JS: *Socket._write node:net:977:35
+      3  100.0%            JS: *writeOrBuffer node:internal/streams/writable:548:23
+      2   15.4%        JS: ^notifyOnCancel C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server-interceptors.js:451:19
+      2  100.0%          JS: ^<anonymous> C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server-interceptors.js:695:50
+      2  100.0%            JS: ^onceWrapper node:events:628:21
+      1    7.7%        JS: ^onSessionHeaders node:internal/http2/core:345:26
+      1    7.7%        JS: ^onDestroy node:internal/streams/destroy:93:21
+      1  100.0%          JS: ^_destroy node:internal/http2/core:2422:11
+      1  100.0%            JS: ^_destroy node:internal/streams/destroy:90:18
+      1    7.7%        JS: *Readable.resume node:internal/streams/readable:1227:37
+      1  100.0%          JS: *Readable.on node:internal/streams/readable:1127:33
+      1  100.0%            JS: ^BaseServerInterceptingCall C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server-interceptors.js:334:16
+      1    7.7%        JS: *<anonymous> node:internal/http2/core:2238:18
+      1  100.0%          JS: *_write node:internal/streams/writable:453:16
+      1  100.0%            JS: *sendMessage C:\www\carmentis-node\abci\node_modules\@grpc\grpc-js\build\src\server-interceptors.js:637:16
+     25    1.2%    Builtin: ArrayPrototypeJoin
+      7   28.0%      JS: *del C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:83:14
+      7  100.0%        JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      7  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      5   20.0%      JS: *putRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:57:17
+      4   80.0%        JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      4  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      1   20.0%        JS: ^update C:\www\carmentis-node\abci\dist\src\carmentis\abci\AccountManager.js:83:17
+      1  100.0%          Builtin: AsyncFunctionAwaitResolveClosure
+      5   20.0%      JS: *getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:43:17
+      5  100.0%        JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      5  100.0%          JS: *write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      5  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      3   12.0%      JS: ^binaryToHexa C:\www\carmentis-core\dist\server\index.cjs:6427:22
+      2   66.7%        JS: ^getRaw C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:43:17
+      2  100.0%          JS: ^getFromStorage C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:27:25
+      1   50.0%            JS: ^write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      1   50.0%            JS: ^getRootHash C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:46:22
+      1   33.3%        JS: ^del C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:83:14
+      1  100.0%          JS: ^removeFromStorage C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:43:28
+      1  100.0%            JS: ^write C:\www\carmentis-node\abci\dist\src\carmentis\abci\RadixTree.js:75:16
+      2    8.0%      JS: *getObject C:\www\carmentis-node\abci\dist\src\carmentis\abci\database\CachedLevelDb.js:50:20
+      2  100.0%        JS: *readMicroblock C:\www\carmentis-node\abci\dist\src\carmentis\abci\Storage.js:148:25
+      1   50.0%          JS: *getMicroblockHeader C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:15:30
+      1  100.0%            JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36476:58
+      1   50.0%          JS: *<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36411:58
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      2    8.0%      JS: *binaryToHexa C:\www\carmentis-core\dist\server\index.cjs:6427:22
+      2  100.0%        JS: *getVirtualBlockchainState C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:24:36
+      2  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36476:58
+      2  100.0%            Builtin: GeneratorPrototypeNext
+      1    4.0%      JS: *get C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:40:14
+      1  100.0%        JS: ^getAccountByPublicKeyHash C:\www\carmentis-node\abci\dist\src\carmentis\abci\NodeProvider.js:27:36
+      1  100.0%          JS: ^<anonymous> C:\www\carmentis-core\dist\server\index.cjs:36358:58
+      1  100.0%            Builtin: GeneratorPrototypeNext
+

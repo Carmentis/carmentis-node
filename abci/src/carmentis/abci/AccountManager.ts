@@ -2,6 +2,9 @@ import { NODE_SCHEMAS } from './constants/constants';
 
 import { Crypto, ECO, Economics, SchemaSerializer, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { AccountInformation } from './types/AccountInformation';
+import { Account } from './Account';
+import { Logger } from '@nestjs/common';
+import { Performance } from './Performance';
 
 interface Transfer {
     type: number;
@@ -20,8 +23,9 @@ export class AccountManager {
     }
 
     async tokenTransfer(transfer: Transfer, chainReference: any, timestamp: number, logger: any) {
-        const accountCreation =
-            transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
+        const perfMeasure = this.perf.start('tokenTransfer');
+
+        const accountCreation = transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
         let payeeBalance;
         let payerBalance;
 
@@ -95,6 +99,12 @@ export class AccountManager {
         logger.log(
             `${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
         );
+    }
+
+    async escrowDeposit(contractName: string, contractParameters: string) {
+        const perfMeasure = this.perf.start('escrowDeposit');
+
+        perfMeasure.end();
     }
 
     async loadInformation(accountHash: Uint8Array): Promise<AccountInformation> {

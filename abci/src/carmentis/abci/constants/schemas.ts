@@ -12,11 +12,13 @@ export const DB_VIRTUAL_BLOCKCHAIN_STATE = 0x08;
 export const DB_ACCOUNT_STATE = 0x09;
 export const DB_ACCOUNT_HISTORY = 0x0a;
 export const DB_ACCOUNT_BY_PUBLIC_KEY = 0x0b;
-export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0c;
-export const DB_ACCOUNTS = 0x0d;
-export const DB_VALIDATOR_NODES = 0x0e;
-export const DB_ORGANIZATIONS = 0x0f;
-export const DB_APPLICATIONS = 0x10;
+export const DB_ESCROW_CONTRACT = 0x0c;
+export const DB_ESCROW_DEPOSIT = 0x0d;
+export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0e;
+export const DB_ACCOUNTS = 0x0f;
+export const DB_VALIDATOR_NODES = 0x10;
+export const DB_ORGANIZATIONS = 0x11;
+export const DB_APPLICATIONS = 0x12;
 
 export const DB: SCHEMAS.Schema[] = [];
 
@@ -104,6 +106,31 @@ DB[DB_ACCOUNT_HISTORY] = SCHEMAS.ACCOUNT_HISTORY;
 DB[DB_ACCOUNT_BY_PUBLIC_KEY] = {
     label: 'AccountByPublicKey',
     definition: [{ name: 'accountHash', type: DATA.TYPE_BIN256 }],
+};
+
+// escrow contract
+// key: name
+DB[DB_ESCROW_CONTRACT] = {
+    label: 'EscrowContract',
+    definition: [
+        { name: 'parametersDefinition', type: DATA.TYPE_ARRAY_OF | DATA.TYPE_OBJECT, schema: SCHEMAS.CONTRACT_PARAMETER_SCHEMA }
+    ]
+};
+
+// escrow deposit
+// key: microblock hash + section index
+DB[DB_ESCROW_DEPOSIT] = {
+    label: 'EscrowDeposit',
+    definition: [
+        { name: 'sourceAccount', type: DATA.TYPE_BIN256 },
+        { name: 'targetAccount', type: DATA.TYPE_BIN256 },
+        { name: 'depositTimestamp', type: DATA.TYPE_UINT48 },
+        { name: 'initialAmount', type: DATA.TYPE_UINT48 },
+        { name: 'balance', type: DATA.TYPE_UINT48 },
+        { name: 'state', type: DATA.TYPE_UINT8 },
+        { name: 'contractName', type: DATA.TYPE_STRING },
+        { name: 'contractParameters', type: DATA.TYPE_STRING }
+    ]
 };
 
 // Comet address -> validator node VB identifier

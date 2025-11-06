@@ -253,13 +253,16 @@ export class ABCIQueryHandler {
     }
 
     async getObjectList(object: any) {
+console.log('getObjectList', object);
         const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(object.type);
+console.log('indexTableId', indexTableId);
 
         if (indexTableId == -1) {
             throw new Error(`invalid object type ${object.type}`);
         }
 
         const list = await this.db.getKeys(indexTableId);
+console.log('list', list);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_OBJECT_LIST, { list });
     }

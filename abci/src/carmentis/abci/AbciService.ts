@@ -87,6 +87,8 @@ import { AbciHandlerInterface } from './AbciHandlerInterface';
 import { NodeConfigService } from '../config/services/NodeConfigService';
 import { Cache } from './types/Cache';
 
+import { Account } from './Account'; // !!!
+
 const APP_VERSION = 1;
 
 const KEY_TYPE_MAPPING = {
@@ -175,6 +177,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // we register the callbacks for the sections
         this.sectionCallbacks = new Map();
         this.registerSectionCallbacks();
+
+        this.perf = new Performance(this.logger, true);
     }
 
     private registerSectionCallbacks() {
@@ -723,7 +727,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      Incoming transaction
      */
     async CheckTx(request: CheckTxRequest) {
-        this.logger.log(`EVENT: checkTx`);
+        const perfMeasure = this.perf.start('CheckTx');
+
+        this.logger.log(`EVENT: checkTx (${request.tx.length} bytes)`);
 
         const cache = this.getCacheInstance([]);
         const importer = cache.blockchain.getMicroblockImporter(
@@ -734,7 +740,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // In case of microblock check success, we log the content of the microblock
         if (success) {
             this.logger.log(`Type: ${CHAIN.VB_NAME[importer.vb.type]}`);
-            this.logger.log(`Total size: ${request.tx.length} bytes`);
 
             const vb: any = await importer.getVirtualBlockchain();
             for (const section of vb.currentMicroblock.sections) {
@@ -764,9 +769,23 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.log(`EVENT: prepareProposal (${request.txs.length} txs)`);
 
         const proposedTxs = [];
+        const cache = this.getCacheInstance(request.txs);
+
         for (const tx of request.txs) {
-            proposedTxs.push(tx);
+            const importer = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(tx));
+            const success = await this.checkMicroblock(
+                cache,
+                importer,
+                blockTimestamp,
+                false
+            );
+
+            if(success) {
+                proposedTxs.push(tx);
+            }
         }
+
+        this.logger.log(`included ${proposedTxs.length} transaction(s) out of ${request.txs.length}`);
 
         return PrepareProposalResponse.create({
             txs: proposedTxs,
@@ -929,8 +948,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         /**
          split the fees among the validators
          */
-        const feesQuotient = Math.floor(pendingFees / nValidators);
         const feesRest = pendingFees % nValidators;
+        const feesQuotient = (pendingFees - feesRest) / nValidators;
 
         for (const n in validatorAccounts) {
             const paidFees =
