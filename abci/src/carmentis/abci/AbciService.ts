@@ -86,7 +86,7 @@ import { InitialBlockchainStateBuilder } from './InitialBlockchainStateBuilder';
 import { AccountInformation } from './types/AccountInformation';
 import { AbciHandlerInterface } from './AbciHandlerInterface';
 import { NodeConfigService } from '../config/services/NodeConfigService';
-import { Cache } from './types/Cache';
+import { Context } from './types/Context';
 import { MicroblockCheckResult } from './types/MicroblockCheckResult';
 
 const APP_VERSION = 1;
@@ -104,7 +104,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     storage: Storage;
     snapshot: SnapshotsManager;
     sectionCallbacks: Map<number, SectionCallback>;
-    finalizedBlockCache: Cache | null;
+    finalizedBlockContext: Context | null;
     importedSnapshot: SnapshotProto | null;
     perf: Performance;
 
@@ -169,7 +169,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.vbRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_VB_RADIX);
         this.tokenRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_TOKEN_RADIX);
 
-        this.finalizedBlockCache = null;
+        this.finalizedBlockContext = null;
 
         // we do not import snapshot by default
         this.importedSnapshot = null;
@@ -906,18 +906,18 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         // raise a warning if finalizedBlock() is called before commit()
-        if (this.finalizedBlockCache !== null) {
+        if (this.finalizedBlockContext !== null) {
             this.logger.warn(`finalizeBlock() called before the previous commit()`);
         }
-        this.finalizedBlockCache = this.getCacheInstance(request.txs);
+        this.finalizedBlockContext = this.getCacheInstance(request.txs);
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
         const votes = request.decided_last_commit?.votes || [];
-        await this.payValidators(this.finalizedBlockCache, votes, blockHeight, blockTimestamp);
+        await this.payValidators(this.finalizedBlockContext, votes, blockHeight, blockTimestamp);
 
         const processBlockResult = await this.processBlock(
-            this.finalizedBlockCache,
+            this.finalizedBlockContext,
             blockHeight,
             blockTimestamp,
             request.txs,
@@ -926,7 +926,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.log(`Total block fees: ${fees.toString()}`);
 
         await this.setBlockInformation(
-            this.finalizedBlockCache,
+            this.finalizedBlockContext,
             blockHeight,
             request.hash,
             blockTimestamp,
@@ -936,12 +936,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         await this.setBlockContent(
-            this.finalizedBlockCache,
+            this.finalizedBlockContext,
             blockHeight,
             processBlockResult.microblocks,
         );
 
-        this.finalizedBlockCache.validatorSetUpdate.forEach((entry) => {
+        this.finalizedBlockContext.validatorSetUpdate.forEach((entry) => {
             this.logger.log(
                 `validatorSet update: pub_key=[${entry.pub_key_type}]${Base64.encodeBinary(entry.pub_key_bytes)}, power=${entry.power}`,
             );
@@ -953,12 +953,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             tx_results: processBlockResult.txResults,
             app_hash: processBlockResult.appHash,
             events: [],
-            validator_updates: this.finalizedBlockCache.validatorSetUpdate,
+            validator_updates: this.finalizedBlockContext.validatorSetUpdate,
             consensus_param_updates: undefined,
         });
     }
 
-    async payValidators(cache: Cache, votes: any, blockHeight: number, blockTimestamp: number) {
+    async payValidators(cache: Context, votes: any, blockHeight: number, blockTimestamp: number) {
         this.logger.log(`payValidators`);
 
         /**
@@ -1043,7 +1043,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async processBlock(
-        cache: Cache,
+        cache: Context,
         blockHeight: number,
         timestamp: number,
         txs: Uint8Array[],
@@ -1207,7 +1207,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async sendFeesFromFeesPayerAccountToFeesAccount(
-        cache: Cache,
+        cache: Context,
         feesPayerAccount: Uint8Array,
         fees: number,
         chainReference: Uint8Array,
@@ -1254,15 +1254,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     async Commit(request: CommitRequest) {
         this.logger.log(`EVENT: commit`);
 
-        if (this.finalizedBlockCache === null) {
+        if (this.finalizedBlockContext === null) {
             this.logger.warn(`nothing to commit`);
             return;
         }
 
-        await this.finalizedBlockCache.db.commit();
-        await this.finalizedBlockCache.storage.flush();
+        await this.finalizedBlockContext.db.commit();
+        await this.finalizedBlockContext.storage.flush();
 
-        this.finalizedBlockCache = null;
+        this.finalizedBlockContext = null;
 
         this.logger.log(`Commit done`);
 
@@ -1381,7 +1381,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      Checks a microblock and invokes the section callbacks of the node.
      */
     private async checkMicroblock(
-        cache: Cache,
+        cache: Context,
         checker: MicroblockChecker,
         timestamp: number = Utils.getTimestampInSeconds(),
         executedDuringGenesis = false,
@@ -1479,7 +1479,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async setBlockInformation(
-        cache: Cache,
+        cache: Context,
         height: number,
         hash: Uint8Array,
         timestamp: number,
@@ -1496,7 +1496,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         });
     }
 
-    private async setBlockContent(cache: Cache, height: number, microblocks: any[]) {
+    private async setBlockContent(cache: Context, height: number, microblocks: any[]) {
         await cache.db.putObject(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(height), {
             microblocks,
         });
@@ -1510,7 +1510,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         return LevelDb.getTableIdFromVirtualBlockchainType(type);
     }
 
-    private getCacheInstance(txs: Uint8Array[]): Cache {
+    private getCacheInstance(txs: Uint8Array[]): Context {
         const db = new CachedLevelDb(this.db);
         const storage = new Storage(db, this.storagePath, txs, this.logger);
         const cachedInternalProvider = new NodeProvider(db, storage);
