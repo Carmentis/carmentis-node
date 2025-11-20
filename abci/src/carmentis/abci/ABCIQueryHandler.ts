@@ -1,35 +1,6 @@
 import { NODE_SCHEMAS } from './constants/constants';
-import {
-    CHAIN,
-    ECO,
-    SCHEMAS,
-    SECTIONS,
-    Crypto,
-    Hash,
-    Utils,
-    Base64,
-    Blockchain,
-    MicroblockImporter,
-    Economics,
-    NullNetworkProvider,
-    Provider,
-    MessageSerializer,
-    MessageUnserializer,
-    CryptoSchemeFactory,
-    CryptographicHash,
-    PublicSignatureKey,
-    CMTSToken,
-    Account,
-    AccountVb,
-    Secp256k1PrivateSignatureKey,
-    KeyedProvider,
-    Microblock,
-    PrivateSignatureKey,
-    IllegalParameterError,
-    EncoderFactory,
-} from '@cmts-dev/carmentis-sdk/server';
+import { MessageSerializer, MessageUnserializer, Provider, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
-import { SectionCallback } from './types/SectionCallback';
 import { QueryCallback } from './types/QueryCallback';
 import { LevelDb } from './database/LevelDb';
 import { AccountManager } from './AccountManager';
@@ -44,7 +15,7 @@ export class ABCIQueryHandler {
     messageUnserializer: MessageUnserializer;
 
     constructor(
-        private readonly blockchain: Blockchain,
+        private readonly provider: Provider,
         private readonly db: LevelDb,
         private readonly accountManager: AccountManager,
         private readonly genesisSnapshotHandler: GenesisSnapshotStorageService,
@@ -139,7 +110,7 @@ export class ABCIQueryHandler {
     }
 
     async getVirtualBlockchainState(object: any) {
-        const stateData = await this.blockchain.provider.getVirtualBlockchainStateInternal(
+        const stateData = await this.provider.getVirtualBlockchainStateInternal(
             object.virtualBlockchainId,
         );
 
@@ -155,12 +126,12 @@ export class ABCIQueryHandler {
     }
 
     async getVirtualBlockchainUpdate(object: any) {
-        let stateData = await this.blockchain.provider.getVirtualBlockchainStateInternal(
+        let stateData = await this.provider.getVirtualBlockchainStateInternal(
             object.virtualBlockchainId,
         );
         const exists = !!stateData;
         const headers = exists
-            ? await this.blockchain.provider.getVirtualBlockchainHeaders(
+            ? await this.provider.getVirtualBlockchainHeaders(
                   object.virtualBlockchainId,
                   object.knownHeight,
               )
@@ -180,7 +151,7 @@ export class ABCIQueryHandler {
     }
 
     async getMicroblockInformation(object: any) {
-        const microblockInfo = await this.blockchain.provider.getMicroblockInformation(object.hash);
+        const microblockInfo = await this.provider.getMicroblockInformation(object.hash);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_MICROBLOCK_INFORMATION, microblockInfo);
     }
@@ -190,7 +161,7 @@ export class ABCIQueryHandler {
 
         return new Promise((resolve, reject) => {
             const test = async () => {
-                const microblockInfo = await this.blockchain.provider.getMicroblockInformation(
+                const microblockInfo = await this.provider.getMicroblockInformation(
                     object.hash,
                 );
 
@@ -214,7 +185,7 @@ export class ABCIQueryHandler {
     }
 
     async getAccountState(object: any) {
-        const info = await this.accountManager.loadInformation(object.accountHash);
+        const info = await this.accountManager.loadAccountInformation(object.accountHash);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_ACCOUNT_STATE, info.state);
     }
@@ -253,22 +224,22 @@ export class ABCIQueryHandler {
     }
 
     async getObjectList(object: any) {
-console.log('getObjectList', object);
+        console.log('getObjectList', object);
         const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(object.type);
-console.log('indexTableId', indexTableId);
+        console.log('indexTableId', indexTableId);
 
         if (indexTableId == -1) {
             throw new Error(`invalid object type ${object.type}`);
         }
 
         const list = await this.db.getKeys(indexTableId);
-console.log('list', list);
+        console.log('list', list);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_OBJECT_LIST, { list });
     }
 
     async getMicroblockBodys(object: any) {
-        const list = await this.blockchain.provider.getMicroblockBodys(object.hashes);
+        const list = await this.provider.getMicroblockBodys(object.hashes);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_MICROBLOCK_BODYS, {
             list,

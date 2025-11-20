@@ -38,10 +38,14 @@ export class AccountManager {
         const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
         const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
 
-        if (transfer.payerAccount === null) {
+        this.logger.debug("Token transfer:", transfer)
+        const feesPayerAccount = transfer.payerAccount;
+        const isFeesPayerAccount = feesPayerAccount instanceof Uint8Array;
+        if (!isFeesPayerAccount) {
+            console.log("Undefined fees payer account")
             payerBalance = null;
         } else {
-            const payerInfo = await this.loadInformation(transfer.payerAccount);
+            const payerInfo = await this.loadAccountInformation(transfer.payerAccount);
 
             if (!Economics.isAllowedTransfer(payerInfo.type, transfer.type)) {
                 throw `account of type '${ECO.ACCOUNT_NAMES[payerInfo.type]}' not allowed for transfer of type '${ECO.BK_NAMES[transfer.type]}'`;
@@ -61,7 +65,7 @@ export class AccountManager {
         if (transfer.payeeAccount === null) {
             payeeBalance = null;
         } else {
-            const payeeInfo = await this.loadInformation(transfer.payeeAccount);
+            const payeeInfo = await this.loadAccountInformation(transfer.payeeAccount);
 
             if (!Economics.isAllowedTransfer(payeeInfo.type, transfer.type ^ ECO.BK_PLUS)) {
                 throw `account of type ${ECO.ACCOUNT_NAMES[payeeInfo.type]} not allowed for transfer of type '${ECO.BK_NAMES[transfer.type ^ ECO.BK_PLUS]}'`;
@@ -111,7 +115,13 @@ export class AccountManager {
         perfMeasure.end();
     }
 
-    async loadInformation(accountHash: Uint8Array): Promise<AccountInformation> {
+    /**
+     * Loads the information about the account associated with the provided account hash.
+     * @param accountHash
+     */
+    async loadAccountInformation(accountHash: Uint8Array): Promise<AccountInformation> {
+        if (accountHash === undefined)
+            throw new TypeError('Cannot load information account: received undefined hash');
         const type = Economics.getAccountTypeFromIdentifier(accountHash);
         let state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash);
         const exists = !!state;
@@ -139,7 +149,7 @@ export class AccountManager {
         chainReference: any,
         timestamp: any,
     ) {
-        const state = (await this.loadInformation(accountHash)).state;
+        const state = (await this.loadAccountInformation(accountHash)).state;
 
         state.height++;
         state.balance += type & ECO.BK_PLUS ? amount : -amount;

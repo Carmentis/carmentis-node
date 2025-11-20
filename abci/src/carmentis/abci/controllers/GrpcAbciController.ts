@@ -29,6 +29,7 @@ import {
     PrepareProposalResponse,
     ProcessProposalRequest,
     ProcessProposalResponse,
+    ProcessProposalStatus,
     QueryRequest,
     QueryResponse,
     VerifyVoteExtensionRequest,

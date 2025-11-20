@@ -13,7 +13,7 @@ export class ChallengeFile {
     constructor(filePath: string, pendingTxs: Uint8Array[]) {
         this.filePath = filePath;
 
-        let pendingDataSize = pendingTxs.reduce((sz, arr) => sz + arr.length, 0);
+        const pendingDataSize = pendingTxs.reduce((sz, arr) => sz + arr.length, 0);
         this.pendingData = new Uint8Array(pendingDataSize);
         let ptr = 0;
 

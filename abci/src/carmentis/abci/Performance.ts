@@ -99,6 +99,7 @@ export class Performance {
             object.total -= object.values.shift();
         }
 
+        // TODO(scalability): Remove the list of values, the total is sufficient to compute the avg
         object.values.push(time);
         object.total += time;
 
