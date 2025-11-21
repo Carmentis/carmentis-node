@@ -1,40 +1,58 @@
 import fs, { mkdirSync } from 'node:fs';
 import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
-import { NodeCrypto } from './crypto/NodeCrypto';
-import { ChallengeFile } from './ChallengeFile';
-import { SnapshotDataCopyManager } from './SnapshotDataCopyManager';
-import { DbInterface } from './database/DbInterface';
-import { NODE_SCHEMAS } from './constants/constants';
+import { NodeCrypto } from '../crypto/NodeCrypto';
+import { ChallengeFile } from '../challenge/ChallengeFile';
+import { SnapshotDataCopyManager } from '../SnapshotDataCopyManager';
+import { DbInterface } from '../database/DbInterface';
+import { NODE_SCHEMAS } from '../constants/constants';
 
 import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
-import { FileIdentifier } from './types/FileIdentifier';
-import { Logger } from '@nestjs/common';
+import { FileIdentifier } from '../types/FileIdentifier';
 import { getLogger } from '@logtape/logtape';
+import { IStorage } from './IStorage';
 
 const ENDLESS_DIRECTORY_NAME = 'endless';
 
+export enum MicroblockReadingMode {
+    READ_FULL = 0,
+    READ_HEADER = 1,
+    READ_BODY = 2,
+}
 const READ_FULL = 0;
 const READ_HEADER = 1;
 const READ_BODY = 2;
 
-const CHALLENGE_FILES_PER_CHALLENGE = 8;
-const CHALLENGE_PARTS_PER_FILE = 256;
-const CHALLENGE_BYTES_PER_PART = 1024;
 
-export class Storage {
-    db: DbInterface;
-    path: string;
-    txs: Uint8Array[];
-    cache: Map<number, any>;
+export class Storage implements IStorage {
 
-    private logger = getLogger(["node", "storage", Storage.name])
+    /**
+     * Converts the 32-bit encoded expiration day and microblock hash to a 32-bit file identifier:
+     * - the range 0x00000000 - 0x000EFFFF is reserved for special uses (only 0x00000000 is currently
+     *   used to identify the database file in a snapshot)
+     * - the range 0x000F0000 - 0xFEFFFFFF is used for files with an expiration day
+     * - the range 0xFF000000 - 0xFF0000FF is used for files with endless storage
+     * - the range 0xFF000100 - 0xFFFFFFFF is currently not used
+     */
+    static getFileIdentifier(expirationDay: number, hash: Uint8Array): FileIdentifier {
+        return expirationDay || (0xff000000 | hash[0]) >>> 0;
+    }
 
-    constructor(db: DbInterface, path: string, txs: Uint8Array[], logger: Logger) {
+
+    private db: DbInterface;
+    private path: string;
+
+    //private txs: Uint8Array[];
+    //private cache: Map<number, any>;
+
+    private static logger = getLogger(['node', 'storage', Storage.name]);
+    private logger = Storage.logger;
+
+    constructor(db: DbInterface, path: string) {
         this.db = db;
         this.path = path;
-        this.txs = txs;
-        this.cache = new Map();
+        //this.txs = txs;
+        //this.cache = new Map();
     }
 
     /**
@@ -42,23 +60,29 @@ export class Storage {
      * This should be called when and ONLY WHEN InitChain is triggered.
      */
     async clear() {
+        this.logger.debug(`Clearing storage at '${this.path}'`);
         await rm(this.path, { recursive: true, force: true });
     }
 
-    /**
+    /*
      * Writes a microblock taken from the block transaction pool with a given expiration day.
      * This updates a dedicated cache and the database (which should be cached as well).
      * The data is NOT saved on disk until flush() is called.
-     */
+     *
     async writeMicroblock(expirationDay: number, txId: number): Promise<boolean> {
         const content = this.txs[txId];
         const size = content.length;
-        const hash = NodeCrypto.Hashes.sha256AsBinary(content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE));
+        const hash = NodeCrypto.Hashes.sha256AsBinary(
+            content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE),
+        );
         const fileIdentifier = this.getFileIdentifier(expirationDay, hash);
         const filePath = this.getFilePath(fileIdentifier);
         const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
 
-        const dataFileObject: any = (await this.db.getObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey)) || {
+        const dataFileObject: any = (await this.db.getObject(
+            NODE_SCHEMAS.DB_DATA_FILE,
+            dbFileKey,
+        )) || {
             fileSize: 0,
             microblockCount: 0,
         };
@@ -88,9 +112,11 @@ export class Storage {
         return true;
     }
 
-    /**
-     * Flushes all pending writes to disk.
      */
+
+    /*
+     * Flushes all pending writes to disk.
+     *
     async flush() {
         for (const [fileIdentifier, cacheObject] of this.cache) {
             const filePath = this.getFilePath(fileIdentifier);
@@ -123,6 +149,8 @@ export class Storage {
             }
         }
     }
+
+     */
 
     /**
      * Copies from a microblock file to a buffer.
@@ -182,8 +210,8 @@ export class Storage {
     /**
      * Reads a full microblock, microblock header or microblock body from its hash.
      */
-    private async readMicroblock(hash: Uint8Array, partType: number) {
-        const storageInfo: any = await this.db.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, hash);
+    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode) {
+        const storageInfo = await this.db.getMicroblockStorage(hash);
 
         if (!storageInfo) {
             return new Uint8Array();
@@ -202,7 +230,7 @@ export class Storage {
             );
             await handle.close();
         } catch (error) {
-            console.error(error);
+            this.logger.error("{error}", {error});
             dataBuffer = new Uint8Array();
         }
 
@@ -216,7 +244,7 @@ export class Storage {
         handle: FileHandle,
         offset: number,
         size: number,
-        partType: number,
+        partType: MicroblockReadingMode,
     ) {
         const [extraOffset, targetSize] = [
             [0, size],
@@ -234,109 +262,55 @@ export class Storage {
         return dataBuffer;
     }
 
-    /**
-     * Processes a storage challenge for a given seed.
-     */
-    async processChallenge(seed: Uint8Array) {
-        const buffer = new Uint8Array(CHALLENGE_PARTS_PER_FILE * CHALLENGE_BYTES_PER_PART);
-        let prngValue = seed;
-        let prngCounter = 0;
-        let hash: Uint8Array = Utils.getNullHash();
 
-        const dataFileTable = await this.db.getFullTable(NODE_SCHEMAS.DB_DATA_FILE);
 
-        if (dataFileTable === null) {
-            return hash;
+
+
+    async writeTransactions(
+        fileIdentifier: number,
+        expectedFileSizeBeforeToWrite: number,
+        transactions: Uint8Array[],
+        //cacheObject: { txIds: number[]; expectedFileSize: number },
+    ) {
+        const filePath = this.getFilePath(fileIdentifier);
+        const directoryPath = path.dirname(filePath);
+
+        try {
+            await access(directoryPath, fs.constants.F_OK);
+        } catch (error) {
+            this.logger.debug(`Creating directory '${directoryPath}'`);
+            await mkdir(directoryPath, { recursive: true });
         }
 
-        // fileEntries[] is the list of all pairs [ fileIdentifier, fileSize ],
-        // sorted by file identifiers in ascending order
-        const fileEntries = dataFileTable.map(([key, value]) => {
-            return [
-                key.reduce((t, n) => t * 0x100 + n, 0),
-                value.slice(0, 6).reduce((t, n) => t * 0x100 + n, 0),
-            ];
-        })
-        .sort(([key0], [key1]) => key0 - key1);
+        try {
+            const handle = await open(filePath, 'a+');
+            const stats = await handle.stat();
+            const fileSize = stats.size;
 
-        const filesCount = fileEntries.length;
-
-        if (!filesCount) {
-            return hash;
-        }
-
-        for (let fileNdx = 0; fileNdx < CHALLENGE_FILES_PER_CHALLENGE; fileNdx++) {
-            const fileRank = getRandom48() % filesCount;
-            const [fileIdentifier, fileSize] = fileEntries[fileRank];
-            const filePath = this.getFilePath(fileIdentifier);
-
-            const pendingTxs =
-                this.cache.has(fileIdentifier) ?
-                    this.cache.get(fileIdentifier).txIds.map((txId) => this.txs[txId])
-                :
-                    [];
-
-            const challengeFile = new ChallengeFile(filePath, pendingTxs);
-            await challengeFile.open();
-            let bufferOffset = 0;
-
-            for (let partNdx = 0; partNdx < CHALLENGE_PARTS_PER_FILE; partNdx++) {
-                let remainingBytes = CHALLENGE_BYTES_PER_PART;
-                let fileOffset = getRandom48() % fileSize;
-
-                while (remainingBytes) {
-                    const sizeToRead = Math.min(fileSize - fileOffset, remainingBytes);
-                    const rd = await challengeFile.read(buffer, bufferOffset, sizeToRead, fileOffset);
-
-                    if (rd.bytesRead < sizeToRead) {
-                        throw new Error(
-                            `PANIC - Failed to read enough bytes from '${filePath}' during storage challenge`,
-                        );
-                    }
-
-                    bufferOffset += sizeToRead;
-                    fileOffset += sizeToRead;
-                    fileOffset %= fileSize;
-                    remainingBytes -= sizeToRead;
-                }
+            if (fileSize != expectedFileSizeBeforeToWrite) {
+                throw new Error(
+                    `PANIC - '${filePath}' has an invalid size (expected ${expectedFileSizeBeforeToWrite}, got ${fileSize})`,
+                );
             }
-            await challengeFile.close();
 
-            const newHash = NodeCrypto.Hashes.sha256AsBinary(buffer);
-            hash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
-        }
-
-        return hash;
-
-        // we extract 5 pseudo-random 48-bit values per hash and renew the hash every 5 calls
-        function getRandom48() {
-            const index = (prngCounter++ % 5) * 6;
-
-            if (index == 0) {
-                prngValue = NodeCrypto.Hashes.sha256AsBinary(prngValue);
+            for (const tx of transactions) {
+                await handle.write(tx);
             }
-            return prngValue.slice(index, index + 6).reduce((t, n) => t * 0x100 + n, 0);
+            await handle.sync();
+            await handle.close();
+        } catch (error) {
+            this.logger.error("{e}", {e: error})
         }
     }
 
-    /**
-     * Converts the 32-bit encoded expiration day and microblock hash to a 32-bit file identifier:
-     * - the range 0x00000000 - 0x000EFFFF is reserved for special uses (only 0x00000000 is currently
-     *   used to identify the database file in a snapshot)
-     * - the range 0x000F0000 - 0xFEFFFFFF is used for files with an expiration day
-     * - the range 0xFF000000 - 0xFF0000FF is used for files with endless storage
-     * - the range 0xFF000100 - 0xFFFFFFFF is currently not used
-     */
-    private getFileIdentifier(expirationDay: number, hash: Uint8Array): FileIdentifier {
-        return expirationDay || (0xff000000 | hash[0]) >>> 0;
-    }
+
 
     /**
      * Converts a 32-bit file identifier to a file path:
      * - either [this.path]/[ENDLESS_DIRECTORY_NAME]/NN.bin for files with endless storage
      * - or [this.path]/YYYY/YYYYMMDD.bin for files with an expiration day
      */
-    private getFilePath(fileIdentifier: FileIdentifier) {
+    getFilePath(fileIdentifier: FileIdentifier) {
         let directory;
         let filename;
 

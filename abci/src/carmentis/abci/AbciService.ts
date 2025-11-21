@@ -42,7 +42,7 @@ import { KeyManagementService } from './services/KeyManagementService';
 import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { CachedLevelDb } from './database/CachedLevelDb';
-import { Storage } from './Storage';
+import { Storage } from './storage/Storage';
 import { Performance } from './Performance';
 import { NodeCrypto } from './crypto/NodeCrypto';
 
@@ -90,6 +90,8 @@ import { NodeConfigService } from '../config/services/NodeConfigService';
 import { Context } from './types/Context';
 import { MicroblockCheckResult } from './types/MicroblockCheckResult';
 import { GlobalStateUpdater } from './globalState/GlobalStateUpdater';
+import { CachedStorage } from './storage/CachedStorage';
+import { ChallengeManager } from './challenge/ChallengeManager';
 
 const APP_VERSION = 1;
 
@@ -103,7 +105,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     accountManager: AccountManager;
     provider: Provider;
     db: LevelDb;
-    storage: Storage;
+    storage: Storage; // TODO(storage): It might be interesting to use cachedStorage instead of Storage
     snapshot: SnapshotsManager;
     sectionCallbacks: Map<number, SectionCallback>;
     finalizedBlockContext: Context | null;
@@ -147,11 +149,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.snapshotPath = snapshotStoragePath;
 
         // Create and initialize the database.
-        this.db = new LevelDb(this.dbPath, NODE_SCHEMAS.DB);
+        this.db = new LevelDb(this.dbPath);
         this.db.initialize();
 
         // Create and initialize file storage management and snapshot management.
-        this.storage = new Storage(this.db, this.storagePath, [], this.logger);
+        this.storage = new Storage(this.db, this.storagePath);
         this.snapshot = new SnapshotsManager(this.db, this.snapshotPath, this.logger);
 
         // Create unauthenticated blockchain client
@@ -462,7 +464,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const { appHash } = await this.computeApplicationHash(
             this.tokenRadix,
             this.vbRadix,
-            this.storage,
+            new CachedStorage(this.storage, new CachedLevelDb(this.db))
         );
 
         const hex = EncoderFactory.bytesToHexEncoder();
@@ -512,12 +514,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Hence, I assume that the types of both keys are identical.
         const currentNodePublicKey = this.cometConfig.getPublicKey();
         const initialValidatorSet = request.validators;
+        this.logger.debug(`Current node public key: ${currentNodePublicKey.value}`);
         for (const validator of initialValidatorSet) {
             const base64 = EncoderFactory.bytesToBase64Encoder();
             const validatorPublicKeyValue = base64.encode(validator.pub_key_bytes);
             const validatorPublicKeyType = validator.pub_key_type;
+            this.logger.debug(`Validator node public key: ${validatorPublicKeyValue}`);
             const isPublicKeyValueMatching = validatorPublicKeyValue === currentNodePublicKey.value;
             const isPublicKeyTypeMatching = validatorPublicKeyType === currentNodePublicKey.type;
+
             const isGenesisNode = isPublicKeyValueMatching;
             if (isGenesisNode) {
                 return true;
@@ -535,7 +540,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const { appHash } = await this.computeApplicationHash(
             this.tokenRadix,
             this.vbRadix,
-            this.storage,
+            new CachedStorage(this.storage, new CachedLevelDb(this.db))
         );
         return appHash;
     }
@@ -1112,7 +1117,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             );*/
             const fees = mb.computeFees();
             const feesPayerAccount = mb.getFeesPayerAccount();
-            console.log(`[Transaction ${txId}]`, mb.getHash().encode());
+            this.logger.log(`[Transaction ${txId}]`, mb.getHash().encode());
             this.logger.debug('Fees payer account in process block:', feesPayerAccount);
             perfMeasure.event('getFeesPayerAccount');
             totalFees += fees;
@@ -1182,6 +1187,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             perfMeasure.end();
         }
 
+        /*
         const chainInfoObject = (await cache.db.getObject(
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
@@ -1189,7 +1195,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             microblockCount: 0,
             objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0),
         };
+        */
 
+
+        const chainInfoObject = await cache.db.getChainInformationObject();
         chainInfoObject.height = blockHeight;
         chainInfoObject.lastBlockTimestamp = timestamp;
         chainInfoObject.microblockCount += txs.length;
@@ -1237,7 +1246,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
     }
 
-    async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: Storage) {
+    async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: CachedStorage) {
         const perfMeasure = this.perf.start('computeApplicationHash');
 
         const tokenRadixHash = await tokenRadix.getRootHash();
@@ -1245,7 +1254,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const radixHash = NodeCrypto.Hashes.sha256AsBinary(
             Utils.binaryFrom(vbRadixHash, tokenRadixHash),
         );
-        const storageHash = await storage.processChallenge(radixHash);
+        const challengeGenerator = new ChallengeManager(storage, storage.getCachedLevelDb());
+        const storageHash = await challengeGenerator.processChallenge(radixHash);
         const appHash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
 
         this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
@@ -1403,7 +1413,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            this.logger.error(`Microblock rejected: ${errorMessage}`, error);
+            this.logger.error(`Microblock rejected: ${errorMessage}`);
             this.logger.debug(`Error details:`, error);
             return {
                 checked: false,
@@ -1543,7 +1553,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     private getCacheInstance(txs: Uint8Array[]): Context {
         const db = new CachedLevelDb(this.db);
-        const storage = new Storage(db, this.storagePath, txs, this.logger);
+        const storage = new Storage(db, this.storagePath);
+        const cachedStorage = new CachedStorage(storage, db, txs);
         const cachedInternalProvider = new NodeProvider(db, storage);
         const cachedProvider = new Provider(cachedInternalProvider, new NullNetworkProvider());
         const vbRadix = new RadixTree(db, NODE_SCHEMAS.DB_VB_RADIX);
@@ -1554,7 +1565,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         return {
             provider: cachedProvider,
             db,
-            storage,
+            storage: cachedStorage,
             accountManager,
             vbRadix,
             tokenRadix,

@@ -1,15 +1,17 @@
 import { NODE_SCHEMAS } from './constants/constants';
 import { DbInterface } from './database/DbInterface';
-import { Storage } from './Storage';
+import { Storage } from './storage/Storage';
 import {getLogger} from "@logtape/logtape";
-import { Utils } from '@cmts-dev/carmentis-sdk/server';
+import { IInternalProvider, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { CachedStorage } from './storage/CachedStorage';
+import { IStorage } from './storage/IStorage';
 
-export class NodeProvider {
-    db: DbInterface;
-    storage: Storage;
+export class NodeProvider implements IInternalProvider {
+    private db: DbInterface;
+    private storage: IStorage;
     private logger = getLogger(["node", 'provider', NodeProvider.name]);
 
-    constructor(db: DbInterface, storage: Storage) {
+    constructor(db: DbInterface, storage: IStorage) {
         this.db = db;
         this.storage = storage;
     }
@@ -68,11 +70,11 @@ export class NodeProvider {
             identifier: Utils.binaryToHexa(identifier),
             dataLength: data.length,
         }));
-        return await this.set(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, identifier, data);
+        await this.set(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, identifier, data);
     }
 
     async setMicroblockHeader(identifier: Uint8Array, data: Uint8Array) {
-        this.logger.debug(`Setting microblock header for {identifier}: {dataLength} bytes`, () => ({
+        this.logger.debug(`(Ignored) Setting microblock header for {identifier}: {dataLength} bytes`, () => ({
             identifier: Utils.binaryToHexa(identifier),
             dataLength: data.length,
         }));
@@ -80,12 +82,13 @@ export class NodeProvider {
     }
 
     async setMicroblockBody(identifier: Uint8Array, data: Uint8Array) {
-        this.logger.debug(`Setting microblock body for {identifier}: {dataLength} bytes`, () => ({
+        this.logger.debug(`(Ignored) Setting microblock body for {identifier}: {dataLength} bytes`, () => ({
             identifier: Utils.binaryToHexa(identifier),
             dataLength: data.length,
         }));
         // ignored
     }
+
 
     /*
     async setMicroblock(
@@ -96,19 +99,26 @@ export class NodeProvider {
     ) {
         const data = Utils.binaryFrom(headerData, bodyData);
         const fileOffset = await this.storage.writeMicroblock(expirationDay, data);
+        return await this.db.putMicroblockStorage(identifier, {
+            expirationDay,
+            fileIdentifier
+        })
+        /*
         return await this.db.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, identifier, {
             expirationDay,
             fileOffset,
         });
+
+         *
     }
-     */
+    */
 
     async setVirtualBlockchainState(identifier: Uint8Array, data: Uint8Array) {
         this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
             identifier: Utils.binaryToHexa(identifier),
             dataLength: data.length,
         }));
-        return await this.set(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, identifier, data);
+        await this.set(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, identifier, data);
     }
 
     async get(tableId: number, identifier: Uint8Array) {

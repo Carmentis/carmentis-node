@@ -16,7 +16,7 @@ const logger = new Logger('Carmentis Node/ABCI');
 async function bootstrap() {
 
     const nestSink: Sink = (record) => {
-        const nestLogger = new Logger(record.category.join('-'));
+        const nestLogger = new Logger(record.category.join('/'));
         const message = record.message.map((m) => `${m}`).join(
             ''
         );
@@ -47,7 +47,8 @@ async function bootstrap() {
         },
         loggers: [
             { category: '@cmts-dev/carmentis-sdk', lowestLevel: 'debug', sinks: ['nest'] },
-            { category: 'node', lowestLevel: 'debug', sinks: ['nest'] },
+            { category: ['node'], lowestLevel: 'debug', sinks: ['nest'] },
+            { category: ['node', 'perf'], lowestLevel: 'fatal' },
         ],
     });
 

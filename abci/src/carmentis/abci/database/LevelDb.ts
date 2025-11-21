@@ -1,17 +1,36 @@
 import { Level } from 'level';
 import { NODE_SCHEMAS } from '../constants/constants';
-import { CHAIN, SchemaSerializer, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
-import { DbInterface } from './DbInterface';
+import {
+    CHAIN,
+    Schema,
+    SchemaSerializer,
+    SchemaUnserializer,
+    Utils,
+} from '@cmts-dev/carmentis-sdk/server';
+import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { getLogger } from '@logtape/logtape';
+import { DataFileObject } from '../types/DataFileObject';
+import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
+import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
+import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
+
+
+
 
 export class LevelDb implements DbInterface {
-    db: any;
-    path: string;
-    sub: any;
-    tableSchemas: any;
+    private db: Level<Uint8Array, Uint8Array>;
+    private path: string;
+    //private sub: AbstractSublevel<Level<Uint8Array, Uint8Array>,Uint8Array,Uint8Array,Uint8Array>[] = [];
+    private sub: AbstractSublevel<
+        Level<Uint8Array, Uint8Array>,
+        string | Uint8Array<ArrayBufferLike> | Buffer,
+        Uint8Array, Uint8Array
+    >[] = [];
+
+    private tableSchemas: Schema[];
     private logger = getLogger(["node", "db", LevelDb.name])
 
-    constructor(path: string, tableSchemas: any) {
+    constructor(path: string, tableSchemas: Schema[] = NODE_SCHEMAS.DB) {
         this.path = path;
         this.tableSchemas = tableSchemas;
     }
@@ -47,10 +66,8 @@ export class LevelDb implements DbInterface {
         };
 
         this.db = new Level(this.path, encoding);
-        this.sub = [];
-
         const nTables = this.getTableCount();
-
+        this.sub = [];
         for (let n = 0; n < nTables; n++) {
             this.sub[n] = this.db.sublevel(Utils.numberToHexa(n, 2), encoding);
         }
@@ -77,6 +94,10 @@ export class LevelDb implements DbInterface {
     }
 
     async getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined> {
+        this.logger.debug(`Accessing binary with key {key} on table {tableId}`, () => ({
+            key: Utils.binaryToHexa(key),
+            tableId,
+        }));
         try {
             const b = await this.sub[tableId].get(key);
             if (b !== undefined) {
@@ -89,8 +110,11 @@ export class LevelDb implements DbInterface {
     }
 
     async getObject(tableId: number, key: Uint8Array) {
+        this.logger.debug(`Accessing object with key {key} on table {tableId}`, () => ({
+            key: Utils.binaryToHexa(key),
+            tableId,
+        }));
         const data = await this.getRaw(tableId, key);
-
         if (data === undefined) {
             return data;
         }
@@ -98,16 +122,26 @@ export class LevelDb implements DbInterface {
     }
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
+        this.logger.debug(`Setting binary with key {key} on table {tableId}: {dataLength} bytes`, () => ({
+            key: Utils.binaryToHexa(key),
+            tableId,
+            dataLength: data.length,
+        }));
         try {
             await this.sub[tableId].put(key, data);
             return true;
         } catch (e) {
-            console.error(e);
+            this.logger.error(`{e}`, {e});
             return false;
         }
     }
 
     async putObject(tableId: number, key: Uint8Array, object: any) {
+        this.logger.debug(`Setting object with key {key} on table {tableId}: {object}`, () => ({
+            key: Utils.binaryToHexa(key),
+            tableId,
+            object,
+        }));
         const data = this.serialize(tableId, object);
         return await this.putRaw(tableId, key, data);
     }
@@ -122,7 +156,17 @@ export class LevelDb implements DbInterface {
         return keys;
     }
 
-    async query(tableId: number, query?: any) {
+    /**
+     * Executes a query on the specified table using provided iterator options.
+     *
+     * @param {number} tableId - The identifier of the table to execute the query on.
+     * @param {AbstractIteratorOptions<Uint8Array<ArrayBufferLike>, Uint8Array<ArrayBufferLike>>} query - The query options for the iterator.
+     * @return {Promise<Iterator | null>} A promise that resolves to the result of the query iterator on success, or null if an error occurs.
+     */
+    async query(
+        tableId: number,
+        query?: LevelQueryIteratorOptions,
+    ): Promise<LevelQueryResponseType> {
         try {
             return this.sub[tableId].iterator(query);
         } catch (e) {
@@ -191,4 +235,22 @@ export class LevelDb implements DbInterface {
         const unserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[tableId]);
         return unserializer.unserialize(data);
     }
+
+    async getDataFileFromDataFileKey(dbFileKey: Uint8Array<ArrayBuffer>): Promise<DataFileObject> {
+        return (await this.getObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey)) as DataFileObject;
+    }
+
+    async putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFileObject) {
+        return await this.putObject(NODE_SCHEMAS.DB_DATA_FILE, dataFileKey, dataFileObject);
+    }
+
+    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorageObject) {
+        return await this.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, microblockHeaderHash, microblockStorage);
+    }
+
+    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject> {
+        return (await this.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, microblockHeaderHash)) as MicroblockStorageObject;
+    }
+
+
 }

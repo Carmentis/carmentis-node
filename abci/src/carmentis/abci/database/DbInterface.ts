@@ -1,13 +1,39 @@
+import { DataFileObject } from '../types/DataFileObject';
+import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
+import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
+import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
+import { Level } from 'level';
+
+export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>
+
+export type LevelQueryResponseType =
+    AbstractIterator<
+        AbstractSublevel<
+            Level<Uint8Array, Uint8Array>,
+            string | Uint8Array | Buffer, Uint8Array,
+            Uint8Array
+        >,
+        Uint8Array,
+        Uint8Array
+    >;
+
 export interface DbInterface {
     getTableCount(): number;
     getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array>;
     getObject(tableId: number, key: Uint8Array): Promise<object>;
     putRaw(tableId: number, key: Uint8Array, data: Uint8Array): Promise<boolean>;
-    putObject(tableId: number, key: Uint8Array, object: any): Promise<boolean>;
+    putObject(tableId: number, key: Uint8Array, object: object): Promise<boolean>;
     getKeys(tableId: number): Promise<Uint8Array[]>;
-    query(tableId: number, query?: any): Promise<any>;
+    query(tableId: number, query?: any): Promise<LevelQueryResponseType>;
     getFullTable(tableId: number): Promise<any>;
     del(tableId: number, key: Uint8Array): Promise<boolean>;
     serialize(tableId: number, object: object): Uint8Array;
-    unserialize(tableId: number, data: Uint8Array): any;
+    unserialize(tableId: number, data: Uint8Array): object;
+    getDataFileFromDataFileKey(dbFileKey: Uint8Array): Promise<DataFileObject>;
+    putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFileObject): Promise<boolean>;
+    putMicroblockStorage(
+        microblockHeaderHash: Uint8Array,
+        microblockStorage: MicroblockStorageObject,
+    ): Promise<boolean>;
+    getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject>;
 }

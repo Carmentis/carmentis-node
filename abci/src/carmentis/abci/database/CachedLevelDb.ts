@@ -1,5 +1,10 @@
 import { LevelDb } from './LevelDb';
-import { DbInterface } from './DbInterface';
+import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
+import { DataFileObject } from '../types/DataFileObject';
+import { NODE_SCHEMAS } from '../constants/constants';
+import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
+import { CHAIN } from '@cmts-dev/carmentis-sdk/server';
+import { ChainInformationObject } from '../types/ChainInformationObject';
 
 export class CachedLevelDb implements DbInterface {
     private db: LevelDb;
@@ -87,26 +92,29 @@ export class CachedLevelDb implements DbInterface {
 
     async getKeys(tableId: number): Promise<Uint8Array[]> {
         // TODO: if this method is needed, it should use the cache
-        throw `getKeys() is not implemented on CachedLevelDb`;
+        throw new Error(`getKeys() is not implemented on CachedLevelDb`);
     }
 
-    async query(tableId: number, query?: any) {
+    query(
+        _tableId: number,
+        query?: LevelQueryIteratorOptions,
+    ): Promise<LevelQueryResponseType> {
         // TODO: if this method is needed, it should use the cache
-        throw `query() is not implemented on CachedLevelDb`;
+        throw new Error(`query() is not implemented on CachedLevelDb`);
     }
 
     async getFullTable(tableId: number) {
         const committedData = await this.db.getFullTable(tableId);
 
-        if(committedData === null) {
+        if (committedData === null) {
             return null;
         }
 
-        const cachedData = [...this.updateCache[tableId].entries()].map(([ key, value ]) => {
-            return [ CachedLevelDb.decodeKey(key), value ];
+        const cachedData = [...this.updateCache[tableId].entries()].map(([key, value]) => {
+            return [CachedLevelDb.decodeKey(key), value];
         });
 
-        return [ ...cachedData, ...committedData ];
+        return [...cachedData, ...committedData];
     }
 
     async del(tableId: number, key: Uint8Array) {
@@ -131,5 +139,44 @@ export class CachedLevelDb implements DbInterface {
 
     static decodeKey(str: string) {
         return new Uint8Array(Buffer.from(str, 'hex'));
+    }
+
+    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorageObject) {
+        return await this.putObject(
+            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
+            microblockHeaderHash,
+            microblockStorage,
+        );
+    }
+
+    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject> {
+        return (await this.getObject(
+            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
+            microblockHeaderHash,
+        )) as MicroblockStorageObject;
+    }
+
+    async getDataFileFromDataFileKey(dbFileKey: Uint8Array<ArrayBuffer>): Promise<DataFileObject> {
+        return (await this.getObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey)) as DataFileObject;
+    }
+
+    async putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFileObject) {
+        return await this.putObject(NODE_SCHEMAS.DB_DATA_FILE, dataFileKey, dataFileObject);
+    }
+
+    async getFullDataFileTable() {
+        return await this.getFullTable(NODE_SCHEMAS.DB_DATA_FILE);
+    }
+
+    async getChainInformationObject() {
+        const result = (await this.getObject(
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
+        )) || {
+            microblockCount: 0,
+            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0),
+        };
+
+        return result as ChainInformationObject;
     }
 }

@@ -102,6 +102,7 @@ export class RadixTree {
     Debugging method.
   */
     async getEntries() {
+        /*
         function hexa(a: any) {
             return a.map((v: any) => v.toString(16).toUpperCase().padStart(2, 0)).join('');
         }
@@ -130,7 +131,9 @@ export class RadixTree {
                         : hexa([...e[1]])),
             );
         }
-        return list;
+        return list;*
+
+         */
     }
 
     async write(key: any, value: any, nodeHash: any, depth: any) {

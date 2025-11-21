@@ -5,7 +5,7 @@ import stream from 'node:stream/promises';
 import { NodeCrypto } from './crypto/NodeCrypto';
 import { FileHandle, access, mkdir, open, rename, readdir, rm } from 'node:fs/promises';
 import { LevelDb } from './database/LevelDb';
-import { Storage } from './Storage';
+import { Storage } from './storage/Storage';
 import { SnapshotDataCopyManager } from './SnapshotDataCopyManager';
 import { SnapshotChunksFile } from './SnapshotChunksFile';
 import { NODE_SCHEMAS } from './constants/constants';

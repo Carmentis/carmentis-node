@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { getLogger } from '@logtape/logtape';
 
 const MAX_HISTORY = 50;
 
@@ -74,12 +75,11 @@ class PerformanceMeasure {
 }
 
 export class Performance {
-    logger: Logger;
+    logger = getLogger(['node', 'perf']);
     enabled: boolean;
     samples: Map<string, Sample>;
 
     constructor(logger: Logger, enabled = true) {
-        this.logger = logger;
         this.enabled = enabled;
         this.samples = new Map;
     }
