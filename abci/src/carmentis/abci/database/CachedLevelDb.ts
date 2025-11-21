@@ -121,7 +121,7 @@ export class CachedLevelDb implements DbInterface {
         return this.db.serialize(tableId, object);
     }
 
-    unserialize(tableId: number, data: Uint8Array) {
+    unserialize(tableId: number, data: Uint8Array): object {
         return this.db.unserialize(tableId, data);
     }
 
