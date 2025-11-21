@@ -2,9 +2,9 @@ import { LevelDb } from './LevelDb';
 import { DbInterface } from './DbInterface';
 
 export class CachedLevelDb implements DbInterface {
-    db: LevelDb;
-    updateCache: any;
-    deletionCache: any;
+    private db: LevelDb;
+    private readonly updateCache: Map<string, Uint8Array>[];
+    private readonly deletionCache: Set<string>[];
 
     constructor(db: LevelDb) {
         this.db = db;
