@@ -10,6 +10,7 @@ import { NODE_SCHEMAS } from './constants/constants';
 import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { FileIdentifier } from './types/FileIdentifier';
 import { Logger } from '@nestjs/common';
+import { getLogger } from '@logtape/logtape';
 
 const ENDLESS_DIRECTORY_NAME = 'endless';
 
@@ -24,14 +25,14 @@ const CHALLENGE_BYTES_PER_PART = 1024;
 export class Storage {
     db: DbInterface;
     path: string;
-    logger: Logger;
     txs: Uint8Array[];
     cache: Map<number, any>;
+
+    private logger = getLogger(["node", "storage", Storage.name])
 
     constructor(db: DbInterface, path: string, txs: Uint8Array[], logger: Logger) {
         this.db = db;
         this.path = path;
-        this.logger = logger;
         this.txs = txs;
         this.cache = new Map();
     }
@@ -134,7 +135,7 @@ export class Storage {
         fileOffset: number,
         size: number,
     ) {
-        const copyManager = new SnapshotDataCopyManager(this.logger);
+        const copyManager = new SnapshotDataCopyManager();
         const filePath = this.getFilePath(fileIdentifier);
 
         await copyManager.copyFileToBuffer(filePath, buffer, bufferOffset, fileOffset, size);
@@ -151,7 +152,7 @@ export class Storage {
         fileOffset: number,
         size: number,
     ) {
-        const copyManager = new SnapshotDataCopyManager(this.logger);
+        const copyManager = new SnapshotDataCopyManager();
         const filePath = this.getFilePath(fileIdentifier);
 
         await copyManager.copyBufferToFile(filePath, buffer, bufferOffset, fileOffset, size);

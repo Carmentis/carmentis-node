@@ -5,8 +5,8 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
-  "engines" : { 
-    "node" : ">=22.18.0"
+  "engines": {
+    "node": ">=22.18.0"
   },
   "scripts": {
     "build": "nest build",
@@ -31,6 +31,7 @@
     "@grpc/proto-loader": "^0.7.15",
     "@grpc/reflection": "^1.0.4",
     "@iarna/toml": "^2.2.5",
+    "@logtape/logtape": "^1.2.0",
     "@nestjs/axios": "^4.0.0",
     "@nestjs/common": "^11",
     "@nestjs/config": "^4.0.2",

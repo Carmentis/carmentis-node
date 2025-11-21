@@ -71,6 +71,7 @@ import {
     SECTIONS,
     Utils,
     VirtualBlockchain,
+    Logger as SDKLogger
 } from '@cmts-dev/carmentis-sdk/server';
 
 import { AccountManager } from './AccountManager';
@@ -88,6 +89,7 @@ import { AbciHandlerInterface } from './AbciHandlerInterface';
 import { NodeConfigService } from '../config/services/NodeConfigService';
 import { Context } from './types/Context';
 import { MicroblockCheckResult } from './types/MicroblockCheckResult';
+import { GlobalStateUpdater } from './globalState/GlobalStateUpdater';
 
 const APP_VERSION = 1;
 
@@ -175,8 +177,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.importedSnapshot = null;
 
         // we register the callbacks for the sections
-        this.sectionCallbacks = new Map();
-        this.registerSectionCallbacks();
+        //this.sectionCallbacks = new Map();
+        //this.registerSectionCallbacks();
 
         this.perf = new Performance(this.logger, true);
         ////////////////////////////
@@ -198,6 +200,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         ////////////////////////////
     }
 
+    /*
     private registerSectionCallbacks() {
         this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
             [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
@@ -211,11 +214,70 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         ]);
     }
 
-    onModuleInit() {}
-
-    /**
-     Account callbacks
      */
+
+    onModuleInit() {
+
+    }
+
+
+
+    registerSectionPreUpdateCallbacks(
+        objectType: number,
+        callbackList: Array<[number, SectionCallback]>,
+    ) {
+        this.putSectionCallbackInRegister(objectType, callbackList, 0);
+    }
+
+    registerSectionPostUpdateCallbacks(
+        objectType: number,
+        callbackList: Array<[number, SectionCallback]>,
+    ) {
+        this.putSectionCallbackInRegister(objectType, callbackList, 1);
+    }
+
+    putSectionCallbackInRegister(
+        objectType: number,
+        callbackList: Array<[number, SectionCallback]>,
+        isPostUpdate: number,
+    ) {
+        for (const [sectionType, callback] of callbackList) {
+            const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
+            this.sectionCallbacks.set(key, callback.bind(this));
+        }
+    }
+
+    /*
+    async invokeSectionPreUpdateCallback(objectType: number, sectionType: number, context: any) {
+        await this.invokeSectionCallback(objectType, sectionType, context, 0);
+    }
+
+     */
+
+    async invokeSectionPostUpdateCallback(objectType: number, sectionType: number, context: any) {
+        await this.invokeSectionCallback(objectType, sectionType, context, 1);
+    }
+
+    async invokeSectionCallback(
+        objectType: number,
+        sectionType: number,
+        context: any,
+        isPostUpdate: number,
+    ) {
+        const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
+
+        if (this.sectionCallbacks.has(key)) {
+            const sectionCallback = this.sectionCallbacks.get(key);
+
+            if (!sectionCallback) {
+                throw new Error(`internal error: undefined section callback`);
+            }
+            await sectionCallback(context);
+        }
+    }
+
+
+    /*
     async accountTokenIssuanceCallback(context: any) {
         const rawPublicKey = await context.vb.getPublicKey();
         await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
@@ -280,9 +342,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
     }
 
-    /**
-      Validator node callbacks
-    */
     async validatorNodeDescriptionCallback(context: any) {
         const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
         const cometAddress =
@@ -340,58 +399,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         validatorSetUpdate.push(validatorSetUpdateEntry);
         return true;
-    }
-
-    registerSectionPreUpdateCallbacks(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-    ) {
-        this.putSectionCallbackInRegister(objectType, callbackList, 0);
-    }
-
-    registerSectionPostUpdateCallbacks(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-    ) {
-        this.putSectionCallbackInRegister(objectType, callbackList, 1);
-    }
-
-    putSectionCallbackInRegister(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-        isPostUpdate: number,
-    ) {
-        for (const [sectionType, callback] of callbackList) {
-            const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
-            this.sectionCallbacks.set(key, callback.bind(this));
-        }
-    }
-
-    async invokeSectionPreUpdateCallback(objectType: number, sectionType: number, context: any) {
-        await this.invokeSectionCallback(objectType, sectionType, context, 0);
-    }
-
-    async invokeSectionPostUpdateCallback(objectType: number, sectionType: number, context: any) {
-        await this.invokeSectionCallback(objectType, sectionType, context, 1);
-    }
-
-    async invokeSectionCallback(
-        objectType: number,
-        sectionType: number,
-        context: any,
-        isPostUpdate: number,
-    ) {
-        const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
-
-        if (this.sectionCallbacks.has(key)) {
-            const sectionCallback = this.sectionCallbacks.get(key);
-
-            if (!sectionCallback) {
-                throw new Error(`internal error: undefined section callback`);
-            }
-            await sectionCallback(context);
-        }
-    }
+    }*/
 
     /**
      * Handle queries sent to the CometBFT's abci_query method.
@@ -1381,7 +1389,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      Checks a microblock and invokes the section callbacks of the node.
      */
     private async checkMicroblock(
-        cache: Context,
+        context: Context,
         checker: MicroblockChecker,
         timestamp: number = Utils.getTimestampInSeconds(),
         executedDuringGenesis = false,
@@ -1406,18 +1414,37 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
 
 
-        const sectionProcessingTimer = this.perf.start('processing sections');
+        //const sectionProcessingTimer = this.perf.start('processing sections');
         const vb = checker.getVirtualBlockchain();
         const mb = checker.getMicroblock();
-        for (const section of mb.getAllSections()) {
-            const context = {
-                cache,
-                object: section.object,
-                vb,
-                mb,
-                section,
-                timestamp,
+        /*
+        const context: Context = {
+            cache,
+            object: {},
+            vb,
+            mb,
+            section: 1,
+            timestamp,
+        };
+
+         */
+
+        try {
+            const stateUpdater = GlobalStateUpdater.createUpdater();
+            await stateUpdater.updateGlobalState(context, vb, mb);
+            //await this.invokeSectionPostUpdateCallback(vb.getType(), section.type, context);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            this.logger.error(`Microblock rejected: ${errorMessage}`, error);
+            this.logger.debug(`Error details:`, error);
+            return {
+                checked: false,
+                error: errorMessage
             };
+        }
+        /*
+        for (const section of mb.getAllSections()) {
+
             try {
                 await this.invokeSectionPostUpdateCallback(vb.getType(), section.type, context);
             } catch (error) {
@@ -1431,12 +1458,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         }
 
+
+
         sectionProcessingTimer.end();
+
+         */
 
         const indexTableId = this.getIndexTableId(vb.getType());
 
         if (indexTableId != -1) {
-            await cache.db.putObject(indexTableId, vb.getId(), {});
+            await context.db.putObject(indexTableId, vb.getId(), {});
         }
 
         this.logger.log(`Microblock ${mb.getHash().encode()} accepted`);

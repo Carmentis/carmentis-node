@@ -10,10 +10,47 @@ import { Logger } from '@nestjs/common';
 import { RestABCIQueryModule } from './carmentis/rest-abci-query/RestABCIQueryModule';
 import { NodeConfigModule } from './carmentis/config/NodeConfigModule';
 import { NodeConfigService } from './carmentis/config/services/NodeConfigService';
-
+import { configure, getConsoleSink, Sink } from '@logtape/logtape';
 
 const logger = new Logger('Carmentis Node/ABCI');
 async function bootstrap() {
+
+    const nestSink: Sink = (record) => {
+        const nestLogger = new Logger(record.category.join('-'));
+        const message = record.message.map((m) => `${m}`).join(
+            ''
+        );
+        switch (record.level) {
+            case 'debug':
+                nestLogger.debug(message);
+                break;
+            case 'info':
+                nestLogger.log(message);
+                break;
+            case 'warning':
+                nestLogger.warn(message);
+                break;
+            case 'error':
+                nestLogger.error(message);
+                break;
+            default:
+                nestLogger.log(message);
+                break;
+        }
+    }
+
+
+    await configure({
+        sinks: {
+            nest: nestSink,
+            //console: getConsoleSink(),
+        },
+        loggers: [
+            { category: '@cmts-dev/carmentis-sdk', lowestLevel: 'debug', sinks: ['nest'] },
+            { category: 'node', lowestLevel: 'debug', sinks: ['nest'] },
+        ],
+    });
+
     // we start by instantiating the NodeConfigModule containing the configuration for the node.
     const nodeConfigModule = await NestFactory.create(NodeConfigModule);
     const nodeConfigService = nodeConfigModule.get(NodeConfigService);

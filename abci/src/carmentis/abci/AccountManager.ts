@@ -6,7 +6,7 @@ import { Account } from './Account';
 import { Logger } from '@nestjs/common';
 import { Performance } from './Performance';
 
-interface Transfer {
+export interface Transfer {
     type: number;
     payerAccount: Uint8Array | null;
     payeeAccount: Uint8Array | null;

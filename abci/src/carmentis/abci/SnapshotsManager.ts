@@ -12,6 +12,7 @@ import { NODE_SCHEMAS } from './constants/constants';
 
 import { SCHEMAS, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
+import { getLogger } from '@logtape/logtape';
 
 const FORMAT = 1;
 const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
@@ -26,12 +27,11 @@ const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
 export class SnapshotsManager {
     db: LevelDb;
     path: string;
-    logger: Logger;
+    private logger = getLogger(['node', 'snapshots', SnapshotsManager.name])
 
     constructor(db: LevelDb, path: string, logger: Logger) {
         this.db = db;
         this.path = path;
-        this.logger = logger;
     }
 
     /**
@@ -47,7 +47,7 @@ export class SnapshotsManager {
             await rm(path.join(this.path, entry.metadata.jsonFile));
             await rm(path.join(this.path, entry.metadata.dbFile));
             await rm(path.join(this.path, entry.metadata.chunksFile));
-            this.logger.log(`Removed snapshot for height ${entry.height}`);
+            this.logger.info(`Removed snapshot for height ${entry.height}`);
         }
     }
 
@@ -77,7 +77,7 @@ export class SnapshotsManager {
 
                 list.push(object);
             } catch (error) {
-                this.logger.error(error);
+                this.logger.error(`{error}`, () => ({error}));
             }
         }
         return list;
@@ -96,7 +96,7 @@ export class SnapshotsManager {
             const content = fs.readFileSync(jsonFilePath);
             jsonData = JSON.parse(content.toString());
         } catch (error) {
-            this.logger.error(error);
+            this.logger.error(`{error}`, () => ({error}));
             return emptyBuffer;
         }
 
@@ -214,7 +214,7 @@ export class SnapshotsManager {
         fileOffset: number,
         size: number,
     ) {
-        const copyManager = new SnapshotDataCopyManager(this.logger);
+        const copyManager = new SnapshotDataCopyManager();
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
 
         await copyManager.copyFileToBuffer(dbFilePath, buffer, bufferOffset, fileOffset, size);
@@ -231,7 +231,7 @@ export class SnapshotsManager {
         size: number,
     ) {
         // open database in writing mode
-        const copyManager = new SnapshotDataCopyManager(this.logger);
+        const copyManager = new SnapshotDataCopyManager();
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
 
         await copyManager.copyBufferToFile(dbFilePath, buffer, bufferOffset, fileOffset, size);
@@ -345,7 +345,7 @@ export class SnapshotsManager {
      */
     private async importDbFile(height: number) {
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
-        this.logger.verbose(`Importing db file ${dbFilePath}`);
+        this.logger.info(`Importing db file ${dbFilePath}`);
         const handle = await open(dbFilePath, 'r');
         const stats = await handle.stat();
         const fileSize = stats.size;
@@ -367,7 +367,7 @@ export class SnapshotsManager {
                 batchIndex++;
 
                 const pct = fileOffset / fileSize * 100;
-                this.logger.verbose(`DB import in progress: batch #${batchIndex} (${pct.toFixed(2)}%)`);
+                this.logger.info(`DB import in progress: batch #${batchIndex} (${pct.toFixed(2)}%)`);
 
                 await batch.write();
                 batchSize = 0;

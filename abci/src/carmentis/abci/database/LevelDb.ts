@@ -2,12 +2,14 @@ import { Level } from 'level';
 import { NODE_SCHEMAS } from '../constants/constants';
 import { CHAIN, SchemaSerializer, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { DbInterface } from './DbInterface';
+import { getLogger } from '@logtape/logtape';
 
 export class LevelDb implements DbInterface {
     db: any;
     path: string;
     sub: any;
     tableSchemas: any;
+    private logger = getLogger(["node", "db", LevelDb.name])
 
     constructor(path: string, tableSchemas: any) {
         this.path = path;
@@ -38,6 +40,7 @@ export class LevelDb implements DbInterface {
     }
 
     async initialize() {
+        this.logger.info(`Initializing LevelDB at ${this.path}`);
         const encoding = {
             keyEncoding: 'view',
             valueEncoding: 'view',
