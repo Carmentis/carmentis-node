@@ -67,7 +67,7 @@ export class CachedLevelDb implements DbInterface {
         const data = await this.getRaw(tableId, key);
 
         if (data === undefined) {
-            return data;
+            return undefined;
         }
         return this.db.unserialize(tableId, data);
     }
