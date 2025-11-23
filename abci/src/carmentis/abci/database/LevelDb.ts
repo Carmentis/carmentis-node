@@ -13,6 +13,7 @@ import { DataFileObject } from '../types/DataFileObject';
 import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
+import { ChainInformationObject } from '../types/ChainInformationObject';
 
 
 
@@ -253,4 +254,10 @@ export class LevelDb implements DbInterface {
     }
 
 
+    async getChainInformationObject() {
+        return await this.getObject(
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
+        ) as ChainInformationObject
+    }
 }

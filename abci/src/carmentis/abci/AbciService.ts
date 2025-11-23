@@ -440,17 +440,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     async Info(request: InfoRequest) {
         this.logger.log(`info`);
-        this.importedSnapshot = null;
-
-        const { height: last_block_height } = <any>(
-            await this.db.getObject(
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            )
-        ) || {
-            height: 0,
-        };
-
+        this.importedSnapshot = null; // TODO(explain): why this.importedSnapshot is set to null here?
+        const chainInformation = await this.db.getChainInformationObject();
+        const last_block_height = chainInformation?.height || 0;
         if (last_block_height === 0) {
             this.logger.log(`(Info) Aborting info request because the chain is empty.`);
             return InfoResponse.create({
@@ -459,25 +451,25 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 app_version: APP_VERSION,
                 last_block_height,
             });
+        } else {
+            const { appHash } = await this.computeApplicationHash(
+                this.tokenRadix,
+                this.vbRadix,
+                new CachedStorage(this.storage, new CachedLevelDb(this.db))
+            );
+
+            const hex = EncoderFactory.bytesToHexEncoder();
+            this.logger.log(`(Info) last_block_height: ${last_block_height}`);
+            this.logger.log(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
+
+            return InfoResponse.create({
+                version: '1',
+                data: 'Carmentis ABCI application',
+                app_version: APP_VERSION,
+                last_block_height,
+                last_block_app_hash: appHash,
+            });
         }
-
-        const { appHash } = await this.computeApplicationHash(
-            this.tokenRadix,
-            this.vbRadix,
-            new CachedStorage(this.storage, new CachedLevelDb(this.db))
-        );
-
-        const hex = EncoderFactory.bytesToHexEncoder();
-        this.logger.log(`(Info) last_block_height: ${last_block_height}`);
-        this.logger.log(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
-
-        return InfoResponse.create({
-            version: '1',
-            data: 'Carmentis ABCI application',
-            app_version: APP_VERSION,
-            last_block_height,
-            last_block_app_hash: appHash,
-        });
     }
 
     async InitChain(request: InitChainRequest) {
@@ -1279,23 +1271,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         await this.finalizedBlockContext.db.commit();
         await this.finalizedBlockContext.storage.flush();
-
-        this.finalizedBlockContext = null;
-
         this.logger.log(`Commit done`);
 
-        const chainInfoObject = <any>(
-            await this.db.getObject(
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            )
-        );
+        this.finalizedBlockContext = null;
 
         // Create snapshots under conditions that we are not already importing snapshots and it is
         // the right period to generate snapshots.
         let retainedHeight = 0;
         const isNotImportingSnapshot = this.importedSnapshot === null;
         const snapshotBlockPeriod = this.nodeConfig.getSnapshotBlockPeriod();
+        const chainInfoObject = await this.db.getChainInformationObject();
         const isTimeToGenerateSnapshot = chainInfoObject.height % snapshotBlockPeriod == 0;
         if (isNotImportingSnapshot && isTimeToGenerateSnapshot) {
             this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
