@@ -1,24 +1,21 @@
 import { MicroblockReadingMode, Storage } from './Storage';
 import { NodeCrypto } from '../crypto/NodeCrypto';
-import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { Microblock, SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { CachedLevelDb } from '../database/CachedLevelDb';
 import { FileIdentifier } from '../types/FileIdentifier';
 import { FileHandle, open } from 'node:fs/promises';
 import { IStorage } from './IStorage';
 
+interface BufferedTransactions {
+    transactionsToWrite: Uint8Array[];
+    expectedFileSizeBeforeToWrite: number;
+}
+
 export class CachedStorage implements IStorage {
-    /**
-     * This variable holds the pending transactions that have not yet been flushed to disk.
-     *
-     * @private
-     */
-    private pendingTransactions: Uint8Array[];
-    private cache: Map<
+
+    private contentToBeWritten: Map<
         number,
-        {
-            txIds: number[];
-            expectedFileSizeBeforeToWrite: number;
-        }
+        BufferedTransactions
     >;
 
     constructor(
@@ -26,16 +23,7 @@ export class CachedStorage implements IStorage {
         private readonly db: CachedLevelDb,
         initialPendingTransactions: Uint8Array[] = [],
     ) {
-        this.cache = new Map();
-        this.pendingTransactions = initialPendingTransactions;
-    }
-
-    addPendingTransactions(transactions: Uint8Array[]) {
-        this.pendingTransactions = [...this.pendingTransactions, ...transactions];
-    }
-
-    addPendingTransaction(transactions: Uint8Array) {
-        this.pendingTransactions = [...this.pendingTransactions, transactions];
+        this.contentToBeWritten = new Map();
     }
 
     async readFullMicroblock(hash: Uint8Array) {
@@ -45,14 +33,14 @@ export class CachedStorage implements IStorage {
     /**
      * Reads a microblock header from its hash.
      */
-    async readMicroblockHeader(hash: Uint8Array) {
+    async readSerializedMicroblockHeader(hash: Uint8Array) {
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_HEADER);
     }
 
     /**
      * Reads a microblock body from its hash.
      */
-    async readMicroblockBody(hash: Uint8Array) {
+    async readSerializedMicroblockBody(hash: Uint8Array) {
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_BODY);
     }
 
@@ -112,54 +100,72 @@ export class CachedStorage implements IStorage {
         return dataBuffer;
     }
 
-    async writeMicroblock(expirationDay: number, txId: number): Promise<boolean> {
-        const content = this.pendingTransactions[txId];
+
+    /**
+     * Adds a microblock and its associated transaction to a buffer for later processing.
+     *
+     * @param {number} expirationDay - The expiration day associated with the microblock.
+     * @param {Microblock} microblock - The microblock to be added.
+     * @param {Uint8Array} serializedMicroblock - The transaction data to associate with the microblock.
+     * @return {Promise<boolean>} Resolves to true if the operation completes successfully.
+     */
+    async addMicroblockToBuffer(
+        expirationDay: number,
+        microblock: Microblock,
+        serializedMicroblock: Uint8Array,
+    ): Promise<boolean> {
+        const content = serializedMicroblock; //this.pendingTransactions[txId];
         const size = content.length;
+        /*
         const microblockHeaderHash = NodeCrypto.Hashes.sha256AsBinary(
             content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE),
         );
-        const fileIdentifier = Storage.getFileIdentifier(expirationDay, microblockHeaderHash);
-        const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
+         */
 
+        const microblockHash = microblock.getHashAsBytes();
+        const fileIdentifier = Storage.getFileIdentifier(expirationDay, microblockHash);
+        const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
         const dataFileObject = (await this.db.getDataFileFromDataFileKey(dbFileKey)) || {
             fileSize: 0,
             microblockCount: 0,
         };
 
-        let cacheObject;
-        if (this.cache.has(fileIdentifier)) {
-            cacheObject = this.cache.get(fileIdentifier);
+        // we add the transaction in the buffer
+        let cacheObject: BufferedTransactions;
+        if (this.contentToBeWritten.has(fileIdentifier)) {
+            cacheObject = this.contentToBeWritten.get(fileIdentifier);
+            cacheObject.transactionsToWrite.push(serializedMicroblock);
         } else {
-            cacheObject = { txIds: [], expectedFileSize: dataFileObject.fileSize };
-            this.cache.set(fileIdentifier, cacheObject);
+            this.contentToBeWritten.set(fileIdentifier, {
+                transactionsToWrite: [serializedMicroblock],
+                expectedFileSizeBeforeToWrite: dataFileObject.fileSize,
+            });
         }
-        cacheObject.txIds.push(txId);
 
-        await this.db.putMicroblockStorage(microblockHeaderHash, {
+        // update the microblock storage information
+        await this.db.putMicroblockStorage(microblockHash, {
             fileIdentifier,
             offset: dataFileObject.fileSize,
             size,
         });
 
+
         dataFileObject.fileSize += size;
-        dataFileObject.microblockCount++;
+        dataFileObject.microblockCount += 1;
         await this.db.putDataFile(dbFileKey, dataFileObject);
 
         return true;
     }
 
     clear() {
-        this.pendingTransactions = [];
-        this.cache.clear();
+        this.contentToBeWritten.clear();
     }
 
     async flush() {
         // write transactions
-        for (const [fileIdentifier, cacheObject] of this.cache) {
+        for (const [fileIdentifier, cacheObject] of this.contentToBeWritten) {
             const expectedFileSizeBeforeToWrite = cacheObject.expectedFileSizeBeforeToWrite;
-            const transactionsToBeWritten = cacheObject.txIds.map(
-                (txId) => this.pendingTransactions[txId],
-            );
+            const transactionsToBeWritten = cacheObject.transactionsToWrite;
             await this.storage.writeTransactions(
                 fileIdentifier,
                 expectedFileSizeBeforeToWrite,
@@ -176,11 +182,12 @@ export class CachedStorage implements IStorage {
     }
 
     containsFile(fileIdentifier: FileIdentifier) {
-        return this.cache.has(fileIdentifier);
+        return this.contentToBeWritten.has(fileIdentifier);
     }
 
     getPendingTransactionsByFileIdentifier(fileIdentifier: FileIdentifier) {
-        return this.cache.get(fileIdentifier).txIds.map((txId) => this.pendingTransactions[txId]);
+        const bufferedTransactions = this.contentToBeWritten.get(fileIdentifier);
+        return bufferedTransactions.transactionsToWrite;
     }
 
     /*

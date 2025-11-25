@@ -13,6 +13,7 @@ import { NODE_SCHEMAS } from './constants/constants';
 import { SCHEMAS, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 import { getLogger } from '@logtape/logtape';
+import { ChainInformationObject } from './types/ChainInformationObject';
 
 const FORMAT = 1;
 const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
@@ -280,6 +281,7 @@ export class SnapshotsManager {
      * Creates the database dump file.
      */
     private async createDbFile() {
+        this.logger.info("Creating DB file")
         const chainInfoTableId = Utils.numberToHexa(NODE_SCHEMAS.DB_CHAIN_INFORMATION, 2);
         const chainInfoTableChar0 = chainInfoTableId.charCodeAt(0);
         const chainInfoTableChar1 = chainInfoTableId.charCodeAt(1);
@@ -292,6 +294,7 @@ export class SnapshotsManager {
         );
 
         const temporaryPath = path.join(this.path, DB_DUMP_IN_PROGRESS_FILENAME);
+        this.logger.debug(`Writting in temporary file ${temporaryPath}`);
         const handle = await open(temporaryPath, 'w');
 
         const iterator = this.db.getDbIterator();
@@ -310,10 +313,10 @@ export class SnapshotsManager {
 
             // if this is the DB_CHAIN_INFORMATION record, collect the height
             if (key[1] == chainInfoTableChar0 && key[2] == chainInfoTableChar1) {
-                const chainInfoUnserializer = new SchemaUnserializer(
+                const chainInfoUnserializer = new SchemaUnserializer<ChainInformationObject>(
                     NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_CHAIN_INFORMATION],
                 );
-                const chainInfoObject: any = chainInfoUnserializer.unserialize(value);
+                const chainInfoObject = chainInfoUnserializer.unserialize(value);
                 height = chainInfoObject.height;
             }
             // if this is a DB_DATA_FILE record, collect the file identifier and size
@@ -327,6 +330,7 @@ export class SnapshotsManager {
         await handle.close();
 
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
+        this.logger.info(`Moving temporary file ${temporaryPath} -> ${dbFilePath}`)
         await rename(temporaryPath, dbFilePath);
 
         files.push([0, size]);

@@ -3,7 +3,7 @@ import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from '
 import { DataFileObject } from '../types/DataFileObject';
 import { NODE_SCHEMAS } from '../constants/constants';
 import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
-import { CHAIN } from '@cmts-dev/carmentis-sdk/server';
+import { CHAIN, MicroblockInformationSchema } from '@cmts-dev/carmentis-sdk/server';
 import { ChainInformationObject } from '../types/ChainInformationObject';
 
 export class CachedLevelDb implements DbInterface {
@@ -178,5 +178,23 @@ export class CachedLevelDb implements DbInterface {
         };
 
         return result as ChainInformationObject;
+    }
+
+    async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array) {
+        return this.getRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
+    }
+
+
+    getSerializedMicroblockInformation(microblockHash: Uint8Array) {
+        return this.getRaw(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, microblockHash);
+    }
+
+
+    async getMicroblockInformation(microblockHash: Uint8Array) {
+        const microblockInformation = await this.getObject(
+            NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION,
+            microblockHash,
+        );
+        return microblockInformation as MicroblockInformationSchema;
     }
 }

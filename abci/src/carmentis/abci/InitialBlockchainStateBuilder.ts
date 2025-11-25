@@ -11,13 +11,14 @@ import {
     PublicSignatureKey,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
+import { GlobalState } from './state/GlobalState';
 
 export class InitialBlockchainStateBuilder {
     private logger = new Logger(InitialBlockchainStateBuilder.name);
 
     private readonly issuerPublicKey: PublicSignatureKey;
     constructor(
-        private readonly provider: Provider,
+        private readonly state: GlobalState,
         private readonly request: InitChainRequest,
         private readonly issuerPrivateKey: PrivateSignatureKey,
     ) {
@@ -68,28 +69,10 @@ export class InitialBlockchainStateBuilder {
 
         const { microblockData } = microblock.serialize();
         return microblockData;
-        /*
-        const account = await this.blockchain.createGenesisAccount(this.issuerPublicKey);
-        const accountVb = account.vb;
-        await accountVb.setSignature(this.issuerPrivateKey);
-        const { headerData, bodyData } = account.vb.currentMicroblock.serialize();
-        return Utils.binaryFrom(headerData, bodyData);
-         */
     }
 
     public createCarmentisOrganisationCreationTransaction() {
         this.logger.verbose('Creating organisation creation transaction');
-
-        /*
-        await organisation.setDescription({
-            name: 'Carmentis',
-            countryCode: 'FR',
-            city: 'Paris',
-            website: 'https://carmentis.io',
-        });
-        const organisationVb = organisation.vb;
-        await organisationVb.setSignature(this.issuerPrivateKey);
-         */
 
         const mb = Microblock.createGenesisOrganizationMicroblock();
         mb.addOrganizationSignatureSchemeSection({
@@ -136,7 +119,7 @@ export class InitialBlockchainStateBuilder {
         mb.addValidatorNodeDeclarationSection({
             organizationId,
         });
-        mb.addValidatorNodeDescriptionSection({
+        mb.addValidatorNodeCometbftPublicKeyDeclarationSection({
             cometPublicKey: genesisNodePublicKey,
             cometPublicKeyType: genesisNodePublicKeyType,
         });
@@ -175,7 +158,7 @@ export class InitialBlockchainStateBuilder {
 
     public async createGenesisNodeValidatorGrantTransaction(genesisNodeId: Uint8Array) {
         // We now load the genesis validator node and set the voting power to 10.
-        const node = await this.provider.loadAccountVirtualBlockchain(Hash.from(genesisNodeId));
+        const node = await this.state.loadAccountVirtualBlockchain(Hash.from(genesisNodeId));
         const microblock = await node.createMicroblock();
         microblock.addValidatorNodeVotingPowerUpdateSection({
             votingPower: 10,

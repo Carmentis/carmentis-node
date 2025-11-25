@@ -64,94 +64,6 @@ export class Storage implements IStorage {
         await rm(this.path, { recursive: true, force: true });
     }
 
-    /*
-     * Writes a microblock taken from the block transaction pool with a given expiration day.
-     * This updates a dedicated cache and the database (which should be cached as well).
-     * The data is NOT saved on disk until flush() is called.
-     *
-    async writeMicroblock(expirationDay: number, txId: number): Promise<boolean> {
-        const content = this.txs[txId];
-        const size = content.length;
-        const hash = NodeCrypto.Hashes.sha256AsBinary(
-            content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE),
-        );
-        const fileIdentifier = this.getFileIdentifier(expirationDay, hash);
-        const filePath = this.getFilePath(fileIdentifier);
-        const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
-
-        const dataFileObject: any = (await this.db.getObject(
-            NODE_SCHEMAS.DB_DATA_FILE,
-            dbFileKey,
-        )) || {
-            fileSize: 0,
-            microblockCount: 0,
-        };
-
-        let cacheObject;
-
-        if (this.cache.has(fileIdentifier)) {
-            cacheObject = this.cache.get(fileIdentifier);
-        } else {
-            cacheObject = { txIds: [], expectedFileSize: dataFileObject.fileSize };
-            this.cache.set(fileIdentifier, cacheObject);
-        }
-
-        cacheObject.txIds.push(txId);
-
-        await this.db.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, hash, {
-            fileIdentifier,
-            offset: dataFileObject.fileSize,
-            size,
-        });
-
-        dataFileObject.fileSize += size;
-        dataFileObject.microblockCount++;
-
-        await this.db.putObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey, dataFileObject);
-
-        return true;
-    }
-
-     */
-
-    /*
-     * Flushes all pending writes to disk.
-     *
-    async flush() {
-        for (const [fileIdentifier, cacheObject] of this.cache) {
-            const filePath = this.getFilePath(fileIdentifier);
-            const directoryPath = path.dirname(filePath);
-
-            try {
-                await access(directoryPath, fs.constants.F_OK);
-            } catch (error) {
-                await mkdir(directoryPath, { recursive: true });
-            }
-
-            try {
-                const handle = await open(filePath, 'a+');
-                const stats = await handle.stat();
-                const fileSize = stats.size;
-
-                if (fileSize != cacheObject.expectedFileSize) {
-                    throw new Error(
-                        `PANIC - '${filePath}' has an invalid size (expected ${cacheObject.expectedFileSize}, got ${fileSize})`,
-                    );
-                }
-
-                for (const txId of cacheObject.txIds) {
-                    await handle.write(this.txs[txId]);
-                }
-                await handle.sync();
-                await handle.close();
-            } catch (error) {
-                console.error(error);
-            }
-        }
-    }
-
-     */
-
     /**
      * Copies from a microblock file to a buffer.
      * This is used by snapshots.
@@ -196,14 +108,14 @@ export class Storage implements IStorage {
     /**
      * Reads a microblock header from its hash.
      */
-    async readMicroblockHeader(hash: Uint8Array) {
+    async readSerializedMicroblockHeader(hash: Uint8Array) {
         return await this.readMicroblock(hash, READ_HEADER);
     }
 
     /**
      * Reads a microblock body from its hash.
      */
-    async readMicroblockBody(hash: Uint8Array) {
+    async readSerializedMicroblockBody(hash: Uint8Array) {
         return await this.readMicroblock(hash, READ_BODY);
     }
 

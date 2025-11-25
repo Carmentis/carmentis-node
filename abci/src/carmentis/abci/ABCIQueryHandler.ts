@@ -1,10 +1,18 @@
 import { NODE_SCHEMAS } from './constants/constants';
-import { MessageSerializer, MessageUnserializer, Provider, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
+import {
+    BlockchainUtils,
+    Hash,
+    MessageSerializer,
+    MessageUnserializer,
+    Provider,
+    SCHEMAS,
+} from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 import { QueryCallback } from './types/QueryCallback';
 import { LevelDb } from './database/LevelDb';
 import { AccountManager } from './AccountManager';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
+import { GlobalState } from './state/GlobalState';
 
 export class ABCIQueryHandler {
     private logger: Logger;
@@ -13,15 +21,15 @@ export class ABCIQueryHandler {
 
     messageSerializer: MessageSerializer;
     messageUnserializer: MessageUnserializer;
+    private readonly accountManager: AccountManager;
 
     constructor(
-        private readonly provider: Provider,
+        private readonly provider: GlobalState,
         private readonly db: LevelDb,
-        private readonly accountManager: AccountManager,
         private readonly genesisSnapshotHandler: GenesisSnapshotStorageService,
     ) {
         this.logger = new Logger(ABCIQueryHandler.name);
-
+        this.accountManager = provider.getAccountManager();
         this.messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
         this.messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
         this.queryCallbacks = new Map();
@@ -110,10 +118,9 @@ export class ABCIQueryHandler {
     }
 
     async getVirtualBlockchainState(object: any) {
-        const stateData = await this.provider.getVirtualBlockchainStateInternal(
-            object.virtualBlockchainId,
-        );
-
+        const virtualBlockchainId: Uint8Array = object.virtualBlockchainId;
+        const cachedDb = this.provider.getCachedDatabase();
+        const stateData = cachedDb.getSerializedVirtualBlockchainState(virtualBlockchainId);
         if (!stateData) {
             return this.messageSerializer.serialize(SCHEMAS.MSG_ERROR, {
                 error: `unknown virtual blockchain`,
@@ -126,42 +133,60 @@ export class ABCIQueryHandler {
     }
 
     async getVirtualBlockchainUpdate(object: any) {
-        let stateData = await this.provider.getVirtualBlockchainStateInternal(
-            object.virtualBlockchainId,
+        const knownHeight: number = object.knownHeight;
+        const virtualBlockchainId: Uint8Array = object.virtualBlockchainId;
+        const db = this.provider.getCachedDatabase();
+        const vbStatus = await this.provider.getVirtualBlockchainStatus(
+            virtualBlockchainId
         );
-        const exists = !!stateData;
-        const headers = exists
-            ? await this.provider.getVirtualBlockchainHeaders(
-                  object.virtualBlockchainId,
-                  object.knownHeight,
-              )
-            : [];
-        const changed = headers.length > 0;
 
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-expect-error
-        stateData = stateData || new Uint8Array();
 
-        return this.messageSerializer.serialize(SCHEMAS.MSG_VIRTUAL_BLOCKCHAIN_UPDATE, {
-            exists,
-            changed,
-            stateData,
-            headers,
-        });
+        // if the virtual blockchain does not exists
+        const exists = vbStatus instanceof Uint8Array;
+        if (!exists) {
+            return this.messageSerializer.serialize(SCHEMAS.MSG_VIRTUAL_BLOCKCHAIN_UPDATE, {
+                exists: false,
+                changed: false,
+                stateData: null,
+                headers: [],
+            });
+        } else {
+            // search missing headers
+            const vbState = vbStatus.state;
+            const vbHashes = vbStatus.microblockHashes;
+            const changed = vbStatus.state.height !== knownHeight;
+            const headers = []
+            for (let currentHeight = knownHeight + 1; currentHeight <= vbState.height; currentHeight++ ) {
+                const microblockHash = vbHashes[currentHeight];
+                const header = await this.provider.getMicroblockHeader(
+                    Hash.from(microblockHash)
+                );
+                headers.push(header);
+            }
+            return this.messageSerializer.serialize(SCHEMAS.MSG_VIRTUAL_BLOCKCHAIN_UPDATE, {
+                exists,
+                changed,
+                stateData: BlockchainUtils.encodeVirtualBlockchainState(vbState),
+                headers,
+            });
+        }
+
     }
 
     async getMicroblockInformation(object: any) {
-        const microblockInfo = await this.provider.getMicroblockInformation(object.hash);
-
+        const microblockHash: Uint8Array = object.hash;
+        const cachedDb = this.provider.getCachedDatabase();
+        const microblockInfo = await cachedDb.getMicroblockInformation(microblockHash);
         return this.messageSerializer.serialize(SCHEMAS.MSG_MICROBLOCK_INFORMATION, microblockInfo);
     }
 
     async awaitMicroblockAnchoring(object: any): Promise<Uint8Array> {
         let remaingingAttempts = 120;
+        const db = this.provider.getCachedDatabase();
 
         return new Promise((resolve, reject) => {
             const test = async () => {
-                const microblockInfo = await this.provider.getMicroblockInformation(
+                const microblockInfo = await db.getMicroblockInformation(
                     object.hash,
                 );
 
@@ -239,7 +264,7 @@ export class ABCIQueryHandler {
     }
 
     async getMicroblockBodys(object: any) {
-        const list = await this.provider.getMicroblockBodys(object.hashes);
+        const list = await this.provider.getListOfMicroblockBody(object.hashes);
 
         return this.messageSerializer.serialize(SCHEMAS.MSG_MICROBLOCK_BODYS, {
             list,

@@ -1,3 +1,5 @@
+export {}
+/*
 import { NODE_SCHEMAS } from './constants/constants';
 import { DbInterface } from './database/DbInterface';
 import { Storage } from './storage/Storage';
@@ -26,7 +28,7 @@ export class NodeProvider implements IInternalProvider {
     }
 
     async getMicroblockHeader(identifier: Uint8Array) {
-        const data = await this.storage.readMicroblockHeader(identifier);
+        const data = await this.storage.readSerializedMicroblockHeader(identifier);
         this.logger.debug(`Reading microblock header for {identifier}: {readDataLength} bytes`, () => ({
             identifier: Utils.binaryToHexa(identifier),
             readDataLength: data.length
@@ -35,7 +37,7 @@ export class NodeProvider implements IInternalProvider {
     }
 
     async getMicroblockBody(identifier: Uint8Array) {
-        const data = await this.storage.readMicroblockBody(identifier);
+        const data = await this.storage.readSerializedMicroblockBody(identifier);
         this.logger.debug(`Reading microblock body for {identifier}: {readDataLength} bytes`, () => ({
             identifier: Utils.binaryToHexa(identifier),
             readDataLength: data.length
@@ -111,7 +113,7 @@ export class NodeProvider implements IInternalProvider {
 
          *
     }
-    */
+    *
 
     async setVirtualBlockchainState(identifier: Uint8Array, data: Uint8Array) {
         this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
@@ -132,3 +134,5 @@ export class NodeProvider implements IInternalProvider {
         return await this.db.putRaw(tableId, identifier, data);
     }
 }
+
+ */
