@@ -127,8 +127,8 @@ export class GlobalStateUpdater {
     }
 
     async finalizeBlockApproval(state: GlobalState, request: FinalizeBlockRequest) {
-        const blockHeight = request.height;
-        const blockTimestamp = request.time.seconds;
+        const blockHeight = +request.height;
+        const blockTimestamp =  +(request.time?.seconds ?? 0);
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
