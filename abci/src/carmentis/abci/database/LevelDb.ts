@@ -260,4 +260,18 @@ export class LevelDb implements DbInterface {
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
         ) as ChainInformationObject
     }
+
+    async initializeTable() {
+        const chainInfo: ChainInformationObject = {
+            height: 0,
+            lastBlockTimestamp: 0,
+            microblockCount: 0,
+            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0) // TODO: use version-based constants
+        };
+        await this.putObject(
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
+            chainInfo
+        )
+    }
 }
