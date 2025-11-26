@@ -3,13 +3,15 @@ import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from '
 import { DataFileObject } from '../types/DataFileObject';
 import { NODE_SCHEMAS } from '../constants/constants';
 import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
-import { CHAIN, MicroblockInformationSchema } from '@cmts-dev/carmentis-sdk/server';
+import { CHAIN, MicroblockInformationSchema, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { ChainInformationObject } from '../types/ChainInformationObject';
+import { getLogger } from '@logtape/logtape';
 
 export class CachedLevelDb implements DbInterface {
     private db: LevelDb;
     private readonly updateCache: Map<string, Uint8Array>[];
     private readonly deletionCache: Set<string>[];
+    private logger = getLogger(["node", "db", CachedLevelDb.name]);
 
     constructor(db: LevelDb) {
         this.db = db;
@@ -38,6 +40,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async commit() {
+        this.logger.debug("Committing")
         const batch = this.db.getBatch();
         const nTable = this.db.getTableCount();
 
@@ -78,6 +81,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
+        this.logger.debug(`Storing raw data with key ${Utils.binaryToHexa(key)} on table ${tableId} in buffer: ${data.length} bytes`)
         const keyStr = CachedLevelDb.encodeKey(key);
 
         this.deletionCache[tableId].delete(keyStr);
@@ -86,6 +90,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async putObject(tableId: number, key: Uint8Array, object: any) {
+        this.logger.debug(`Storing object -${Utils.binaryToHexa(key)} on table ${tableId} in buffer`)
         const data = this.db.serialize(tableId, object);
         return await this.putRaw(tableId, key, data);
     }
