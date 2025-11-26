@@ -85,35 +85,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private logger = new Logger(AbciService.name);
     private perf: Performance;
 
-    /*
-    accountManager: AccountManager;
-    provider: Provider;
-    db: LevelDb;
-    storage: Storage; // TODO(storage): It might be interesting to use cachedStorage instead of Storage
-
-    sectionCallbacks: Map<number, SectionCallback>;
-    finalizedBlockContext: Context | null;
-    importedSnapshot: SnapshotProto | null;
-
-
-    // storage paths
-    private dbPath: string;
-    private storagePath: string;
-    private snapshotPath: string;
-
-    // Serializers are used to serialize/deserialize the messages sent to the application.
-    private messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
-    private messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
-
-    // Two radix trees are used to maintain the state of tokens and virtual blockchains.
-    private vbRadix: RadixTree;
-    private tokenRadix: RadixTree;
-
-
-
-
-     */
-
     // The ABCI query handler is used to handle queries sent to the application via the abci_query method.
     private abciQueryHandler: ABCIQueryHandler;
 
@@ -151,7 +122,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // creates the snapshot system
         const snapshotPath = snapshotStoragePath;
         this.snapshot = new SnapshotsManager(this.db, snapshotPath, this.logger);
-
         this.state = new GlobalState(this.db, this.storage);
 
         this.abciQueryHandler = new ABCIQueryHandler(
@@ -159,101 +129,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             this.db,
             this.genesisSnapshotStorage,
         );
-
-        /*
-        this.dbPath = dbStoragePath;
-        this.storagePath = microblocksStoragePath;
-
-
-        // Create and initialize the database.
-        this.db = new LevelDb(this.dbPath);
-        this.db.initialize();
-
-        // Create and initialize file storage management and snapshot management.
-        this.storage = new Storage(this.db, this.storagePath);
-        this.snapshot = new SnapshotsManager(this.db, this.snapshotPath, this.logger);
-
-        // Create unauthenticated blockchain client
-        const internalProvider = new NodeProvider(this.db, this.storage);
-        this.provider = new Provider(internalProvider, new NullNetworkProvider());
-        this.accountManager = new AccountManager(this.db, this.tokenRadix, this.logger);
-
-        // Set up the ABCI query handler
-        this.abciQueryHandler = new ABCIQueryHandler(
-            this.provider,
-            this.db,
-            this.accountManager,
-            this.genesisSnapshotStorage,
-        );
-
-        // instantiate radix trees
-        this.vbRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_VB_RADIX);
-        this.tokenRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_TOKEN_RADIX);
-
-        this.finalizedBlockContext = null;
-
-        // we do not import snapshot by default
-        this.importedSnapshot = null;
-
-         */
     }
 
     async onModuleInit() {
         await this.db.initialize();
-    }
-
-    registerSectionPreUpdateCallbacks(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-    ) {
-        this.putSectionCallbackInRegister(objectType, callbackList, 0);
-    }
-
-    registerSectionPostUpdateCallbacks(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-    ) {
-        this.putSectionCallbackInRegister(objectType, callbackList, 1);
-    }
-
-    putSectionCallbackInRegister(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-        isPostUpdate: number,
-    ) {
-        for (const [sectionType, callback] of callbackList) {
-            const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
-            //this.sectionCallbacks.set(key, callback.bind(this));
-        }
-    }
-
-    async invokeSectionPostUpdateCallback(
-        objectType: number,
-        sectionType: number,
-        context: Context,
-    ) {
-        await this.invokeSectionCallback(objectType, sectionType, context, 1);
-    }
-
-    async invokeSectionCallback(
-        objectType: number,
-        sectionType: number,
-        context: Context,
-        isPostUpdate: number,
-    ) {
-        /*
-        const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
-
-        if (this.sectionCallbacks.has(key)) {
-            const sectionCallback = this.sectionCallbacks.get(key);
-
-            if (!sectionCallback) {
-                throw new Error(`internal error: undefined section callback`);
-            }
-            await sectionCallback(context);
-        }
-
-         */
     }
 
     /**
@@ -380,13 +259,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
             genesisSnapshot,
         );
-        /*
-        const { appHash } = await this.computeApplicationHash(
-            this.tokenRadix,
-            this.vbRadix,
-            new CachedStorage(this.storage, new CachedLevelDb(this.db)),
-        );
-         */
         const { appHash } = await this.state.getApplicationHash();
         return appHash;
     }
@@ -404,7 +276,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         request: InitChainRequest,
         issuerPrivateKey: PrivateSignatureKey,
     ) {
-        //
+        // initialize the database
+        await this.db.initializeTable();
+
         await this.storeInitialValidatorSet(request);
         this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
         const appHash = await this.publishInitialBlockchainState(issuerPrivateKey, request);
@@ -548,46 +422,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         const {appHash} = await this.state.getApplicationHash();
         return appHash;
-
-        // we first publish the issuer account creation transaction and Carmentis organization creation transaction
-        /*
-        const issuerAccountCreationTransaction =
-            await stateBuilder.createIssuerAccountCreationTransaction();
-        return await this.publishGenesisTransactions(
-            [issuerAccountCreationTransaction],
-            1
-        )
-
-            ;
-         */
-        /*
-        const { organizationId, organizationCreationTransaction } =
-            stateBuilder.createCarmentisOrganisationCreationTransaction();
-        const transactionsPublishedInFirstBlock = [
-            issuerAccountCreationTransaction,
-            organizationCreationTransaction,
-        ];
-        await this.publishGenesisTransactions(transactionsPublishedInFirstBlock, 0);
-
-        // in the second block, we publish the genesis node declaration transaction
-        const { genesisNodePublicKey, genesisNodePublicKeyType } =
-            stateBuilder.getValidatorPublicKeyFromRequest(KEY_TYPE_MAPPING);
-        const genesisNodeCometbftRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
-        const { genesisNodeId, genesisNodeDeclarationTransaction } =
-            stateBuilder.createGenesisNodeDeclarationTransaction(
-                organizationId,
-                genesisNodePublicKey,
-                genesisNodePublicKeyType,
-                genesisNodeCometbftRpcEndpoint,
-            );
-        await this.publishGenesisTransactions([genesisNodeDeclarationTransaction], 1);
-
-        // finally, in the third block, we publish the grant to be a validator for the genesis node
-        const genesisNodeValidatorGrantTransaction =
-            await stateBuilder.createGenesisNodeValidatorGrantTransaction(genesisNodeId);
-        return await this.publishGenesisTransactions([genesisNodeValidatorGrantTransaction], 2);
-
-         */
     }
 
     private async publishGenesisTransactions(
@@ -626,34 +460,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
             }
         }
-
-        //await this.state.commit();
-        /*
-
-        const cache = this.getCacheInstance(transactions);
-        const processBlockResult = await this.processBlock(
-            cache,
-            publishedBlockHeight,
-            blockTimestamp,
-            transactions,
-            true,
-        );
-        const appHash = processBlockResult.appHash;
-        await this.setBlockInformation(
-            cache,
-            publishedBlockHeight,
-            Utils.getNullHash(),
-            blockTimestamp,
-            proposerAddress,
-            processBlockResult.blockSize,
-            transactions.length,
-        );
-        await this.setBlockContent(cache, publishedBlockHeight, processBlockResult.microblocks);
-
-        // commit database and flush storage.
-        await cache.db.commit();
-        await cache.storage.flush();
-         */
 
         const {appHash} =  await this.state.getApplicationHash();
         return appHash;
@@ -917,375 +723,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             consensus_param_updates: undefined,
         });
 
-        // -------------------------------------------------------------------------------
-        /* Done in the global state updater
-        const sectionCount: number = mb.getNumberOfSections();
-        microblocks.push({
-            hash: mb.getHash().toBytes(), //vb.currentMicroblock.hash,
-            vbIdentifier: vb.getIdentifier().toBytes(),
-            vbType: vb.getType(),
-            height: vb.getHeight(),
-            size: tx.length,
-            sectionCount,
-        });
-
-        blockSectionCount += sectionCount;
-
-
-         */
-        /* Done in the global state updater
-        await cache.storage.writeMicroblock(vb.getExpirationDay(), txId);
-
-        perfMeasure.event('write');
-
-        const stateData = await cache.provider.getVirtualBlockchainStateInternal(
-            vb.getIdentifier().toBytes(), //importer.vb.identifier,
-        );
-        const stateHash = NodeCrypto.Hashes.sha256AsBinary(stateData);
-        await cache.vbRadix.set(vb.getId(), stateHash);
-
-         */
-
-        /*
-        const isFeesPayerAccountDefined = feesPayerAccount !== null;
-        if (isFeesPayerAccountDefined) {
-            const chainReference = mb.getHash().toBytes() //vb.currentMicroblock.hash as Uint8Array;
-            await this.sendFeesFromFeesPayerAccountToFeesAccount(
-                cache,
-                feesPayerAccount,
-                fees,
-                chainReference,
-                timestamp,
-            );
-        }
-         */
-
-        //workingState.finalize(request);
-
-        /*
-        // raise a warning if finalizedBlock() is called before commit()
-        if (this.finalizedBlockContext !== null) {
-            this.logger.warn(`finalizeBlock() called before the previous commit()`);
-        }
-        this.finalizedBlockContext = this.getCacheInstance(request.txs);
-
-        // Extract the votes of validators involved in the publishing of this block.
-        // Then proceed to the payment of the validators.
-        const votes = request.decided_last_commit?.votes || [];
-        await this.payValidators(this.finalizedBlockContext, votes, blockHeight, blockTimestamp);
-
-        const processBlockResult = await this.processBlock(
-            this.finalizedBlockContext,
-            blockHeight,
-            blockTimestamp,
-            request.txs,
-        );
-        const fees = CMTSToken.createAtomic(processBlockResult.totalFees);
-        this.logger.log(`Total block fees: ${fees.toString()}`);
-
-
-        await this.setBlockInformation(
-            this.finalizedBlockContext,
-            blockHeight,
-            request.hash,
-            blockTimestamp,
-            request.proposer_address,
-            processBlockResult.blockSize,
-            request.txs.length,
-        );
-
-        await this.setBlockContent(
-            this.finalizedBlockContext,
-            blockHeight,
-            processBlockResult.microblocks,
-        );
-
-        this.finalizedBlockContext.validatorSetUpdate.forEach((entry) => {
-            this.logger.log(
-                `validatorSet update: pub_key=[${entry.pub_key_type}]${Base64.encodeBinary(entry.pub_key_bytes)}, power=${entry.power}`,
-            );
-        });
-
-         */
     }
-
-    /*
-    async payValidators(cache: Context, votes: any, blockHeight: number, blockTimestamp: number) {
-        this.logger.log(`payValidators`);
-
-
-        const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
-            ECO.ACCOUNT_BLOCK_FEES,
-        );
-        const feesAccountInfo: AccountInformation =
-            await cache.accountManager.loadAccountInformation(feesAccountIdentifier);
-        const pendingFees = feesAccountInfo.state.balance;
-
-        if (!pendingFees) {
-            return;
-        }
-
-
-        const validatorAccounts = [];
-
-        for (const vote of votes) {
-            if (vote.block_id_flag == 'BLOCK_ID_FLAG_COMMIT') {
-                const address = Utils.bufferToUint8Array(vote.validator.address);
-                const validatorNodeHash = await cache.db.getRaw(
-                    NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
-                    address,
-                );
-
-                if (!validatorNodeHash) {
-                    this.logger.error(`unknown validator address ${Utils.binaryToHexa(address)}`);
-                } else if (Utils.binaryIsEqual(validatorNodeHash, Utils.getNullHash())) {
-                    this.logger.warn(
-                        `validator address ${Utils.binaryToHexa(address)} is not yet linked to a validator node VB`,
-                    );
-                } else {
-                    const validatorNode = await cache.provider.loadValidatorNodeVirtualBlockchain(
-                        new Hash(validatorNodeHash),
-                    );
-                    const validatorPublicKey: PublicSignatureKey =
-                        await validatorNode.getOrganizationPublicKey();
-                    const hash: CryptographicHash =
-                        CryptoSchemeFactory.createDefaultCryptographicHash();
-                    const account = await cache.accountManager.loadAccountByPublicKeyHash(
-                        hash.hash(validatorPublicKey.getPublicKeyAsBytes()),
-                    );
-                    validatorAccounts.push(account);
-                }
-            }
-        }
-
-        // ensure that we have enough validators
-        const nValidators = validatorAccounts.length;
-        if (nValidators === 0) {
-            this.logger.warn('empty list of validator accounts: fees payment is delayed');
-            return;
-        }
-
-
-        const feesRest = pendingFees % nValidators;
-        const feesQuotient = (pendingFees - feesRest) / nValidators;
-
-        for (const n in validatorAccounts) {
-            const paidFees =
-                (+n + blockHeight) % nValidators < feesRest ? feesQuotient + 1 : feesQuotient;
-
-            await cache.accountManager.tokenTransfer(
-                {
-                    type: ECO.BK_PAID_BLOCK_FEES,
-                    payerAccount: feesAccountIdentifier,
-                    payeeAccount: validatorAccounts[n],
-                    amount: paidFees,
-                },
-                {
-                    height: blockHeight - 1,
-                },
-                blockTimestamp,
-            );
-        }
-    }
-
-     */
-
-    /*
-    async processBlock(
-        cache: Context,
-        blockHeight: number,
-        timestamp: number,
-        txs: Uint8Array[],
-        executedDuringGenesis = false,
-    ): Promise<ProcessBlockResult> {
-        this.logger.log(`processBlock (height=${blockHeight})`);
-
-        const txResults = [];
-        const newObjectCounts = Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0);
-        const microblocks = [];
-        let totalFees = 0;
-        let blockSize = 0;
-        let blockSectionCount = 0;
-
-        for (let txId = 0; txId < txs.length; txId++) {
-            const perfMeasure = this.perf.start('processBlock tx');
-
-            const tx = txs[txId];
-            const checker = new MicroblockChecker(cache.provider, Utils.bufferToUint8Array(tx));
-
-            const checkResult = await this.checkMicroblockLocalStateConsistency(
-                cache,
-                checker,
-                timestamp,
-                executedDuringGenesis,
-            );
-
-            perfMeasure.event('checkMicroblock');
-
-            if (!checkResult.checked) {
-                continue;
-            }
-
-            const vb: VirtualBlockchain = checker.getVirtualBlockchain();
-            const mb = checker.getMicroblock();
-
-            if (vb.getHeight() == 1) {
-                newObjectCounts[vb.getType()]++;
-            }
-
-            blockSize += tx.length;
-
-            //          this.logger.log(`gas = ${vb.currentMicroblock.header.gas}, gas price = ${vb.currentMicroblock.header.gasPrice / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
-
-            const fees = mb.computeFees();
-            const feesPayerAccount = mb.getFeesPayerAccount();
-            this.logger.log(`[Transaction ${txId}]`, mb.getHash().encode());
-            this.logger.debug('Fees payer account in process block:', feesPayerAccount);
-            perfMeasure.event('getFeesPayerAccount');
-            totalFees += fees;
-
-            this.logger.log(`Confirmed microblock ${mb.getHash().encode()}`);
-
-            await checker.finalize();
-
-            perfMeasure.event('store');
-
-            const sectionCount: number = mb.getNumberOfSections();
-            microblocks.push({
-                hash: mb.getHash().toBytes(), //vb.currentMicroblock.hash,
-                vbIdentifier: vb.getIdentifier().toBytes(),
-                vbType: vb.getType(),
-                height: vb.getHeight(),
-                size: tx.length,
-                sectionCount,
-            });
-
-            blockSectionCount += sectionCount;
-
-            await cache.storage.addMicroblockToBuffer(vb.getExpirationDay(), txId);
-
-            perfMeasure.event('write');
-
-            const stateData = await cache.provider.getVirtualBlockchainStateInternal(
-                vb.getIdentifier().toBytes(), //importer.vb.identifier,
-            );
-            // @ts-expect-error stateData has an invalid type
-            const stateHash = NodeCrypto.Hashes.sha256AsBinary(stateData);
-
-            await cache.vbRadix.set(vb.getId(), stateHash);
-
-            const isFeesPayerAccountDefined = feesPayerAccount !== null;
-            if (isFeesPayerAccountDefined) {
-                const chainReference = mb.getHash().toBytes(); //vb.currentMicroblock.hash as Uint8Array;
-                await this.sendFeesFromFeesPayerAccountToFeesAccount(
-                    cache,
-                    feesPayerAccount,
-                    fees,
-                    chainReference,
-                    timestamp,
-                );
-            }
-
-            perfMeasure.event('fees');
-
-            txResults.push(
-                ExecTxResult.create({
-                    code: 0,
-                    data: new Uint8Array(),
-                    log: '',
-                    info: '',
-                    gas_wanted: 0,
-                    gas_used: 0,
-                    events: [],
-                    codespace: 'app',
-                }),
-            );
-
-            perfMeasure.end();
-        }
-
-        const chainInfoObject = await cache.db.getChainInformationObject();
-        chainInfoObject.height = blockHeight;
-        chainInfoObject.lastBlockTimestamp = timestamp;
-        chainInfoObject.microblockCount += txs.length;
-        chainInfoObject.objectCounts = chainInfoObject.objectCounts.map(
-            (count, ndx) => count + newObjectCounts[ndx],
-        );
-        await cache.db.putObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            chainInfoObject,
-        );
-
-        const { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash } =
-            await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
-
-        return {
-            txResults,
-            totalFees,
-            appHash,
-            blockSize,
-            microblocks,
-        };
-    }
-
-     */
-
-    /*
-    private async sendFeesFromFeesPayerAccountToFeesAccount(
-        cache: Context,
-        feesPayerAccount: Uint8Array,
-        fees: number,
-        chainReference: Uint8Array,
-        sentAt: number,
-    ) {
-        const feesPayeeAccount = Economics.getSpecialAccountTypeIdentifier(ECO.ACCOUNT_BLOCK_FEES);
-        this.logger.verbose(`Send fees from ${feesPayerAccount} to ${feesPayeeAccount}`);
-        await cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_PAID_TX_FEES,
-                payerAccount: feesPayerAccount,
-                payeeAccount: feesPayeeAccount,
-                amount: fees,
-            },
-            {
-                mbHash: chainReference,
-            },
-            sentAt,
-        );
-    }
-
-     */
-
-    /*
-    async computeApplicationHash(
-        tokenRadix: RadixTree,
-        vbRadix: RadixTree,
-        storage: CachedStorage,
-    ) {
-        const perfMeasure = this.perf.start('computeApplicationHash');
-
-        const tokenRadixHash = await tokenRadix.getRootHash();
-        const vbRadixHash = await vbRadix.getRootHash();
-        const radixHash = NodeCrypto.Hashes.sha256AsBinary(
-            Utils.binaryFrom(vbRadixHash, tokenRadixHash),
-        );
-        const challengeGenerator = new ChallengeManager(storage, storage.getCachedLevelDb());
-        const storageHash = await challengeGenerator.processChallenge(radixHash);
-        const appHash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
-
-        this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
-        this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
-        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
-        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
-        this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
-
-        perfMeasure.end();
-
-        return { tokenRadixHash, vbRadixHash, appHash, storageHash, radixHash };
-    }
-
-     */
 
     async Commit(request: CommitRequest) {
         this.logger.log(`EVENT: commit`);
@@ -1388,62 +826,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         });
     }
 
-    /*
-    private async setBlockInformation(
-        cache: Context,
-        height: number,
-        hash: Uint8Array,
-        timestamp: number,
-        proposerAddress: Uint8Array,
-        size: number,
-        microblockCount: number,
-    ) {
-        await cache.db.putObject(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(height), {
-            hash,
-            timestamp,
-            proposerAddress,
-            size,
-            microblockCount,
-        });
-    }
-
-    private async setBlockContent(cache: Context, height: number, microblocks: any[]) {
-        await cache.db.putObject(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(height), {
-            microblocks,
-        });
-    }
-
-    private heightToTableKey(height: number) {
-        return LevelDb.convertHeightToTableKey(height);
-    }
-
-    private getIndexTableId(type) {
-        return LevelDb.getTableIdFromVirtualBlockchainType(type);
-    }
-
-    private getCacheInstance(txs: Uint8Array[]): Context {
-        const db = new CachedLevelDb(this.db);
-        const storage = new Storage(db, this.storagePath);
-        const cachedStorage = new CachedStorage(storage, db, txs);
-        const cachedInternalProvider = new NodeProvider(db, storage);
-        const cachedProvider = new Provider(cachedInternalProvider, new NullNetworkProvider());
-        const vbRadix = new RadixTree(db, NODE_SCHEMAS.DB_VB_RADIX);
-        const tokenRadix = new RadixTree(db, NODE_SCHEMAS.DB_TOKEN_RADIX);
-        const accountManager = new AccountManager(db, tokenRadix, this.logger);
-        const validatorSetUpdate: any[] = [];
-
-        return {
-            provider: cachedProvider,
-            db,
-            storage: cachedStorage,
-            accountManager,
-            vbRadix,
-            tokenRadix,
-            validatorSetUpdate,
-        };
-    }
-
-     */
 
     private async clearDatabase() {
         this.logger.log(`Clearing database`);
@@ -1497,63 +879,5 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         } finally {
             microblockCheckTimer.end();
         }
-
-        /*
-        const context: Context = {
-            cache,
-            object: {},
-            vb,
-            mb,
-            section: 1,
-            timestamp,
-        };
-
-         */
-
-        /*
-        for (const section of mb.getAllSections()) {
-
-            try {
-                await this.invokeSectionPostUpdateCallback(vb.getType(), section.type, context);
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : "Unknown error";
-                this.logger.error(`Microblock rejected: ${errorMessage}`, error);
-                this.logger.debug(`Error details:`, error);
-                return {
-                    checked: false,
-                    error: errorMessage
-                };
-            }
-        }
-
-
-
-        sectionProcessingTimer.end();
-
-         */
-
-        /*
-        try {
-            const stateUpdater = GlobalStateUpdater.createUpdater();
-            await stateUpdater.updateGlobalState(context, vb, mb);
-            //await this.invokeSectionPostUpdateCallback(vb.getType(), section.type, context);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            this.logger.error(`Microblock rejected: ${errorMessage}`, error);
-            this.logger.debug(`Error details:`, error);
-            return {
-                checked: false,
-                error: errorMessage
-            };
-        }
-        const indexTableId = this.getIndexTableId(vb.getType());
-
-        if (indexTableId != -1) {
-            await context.db.putObject(indexTableId, vb.getId(), {});
-        }
-
-        this.logger.log(`Microblock ${mb.getHash().encode()} accepted`);
-
-         */
     }
 }
