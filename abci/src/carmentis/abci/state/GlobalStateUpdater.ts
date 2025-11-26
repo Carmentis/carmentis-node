@@ -1,4 +1,5 @@
 import {
+    AccountTransferSection,
     AccountVb,
     Base64,
     CHAIN,
@@ -288,6 +289,8 @@ export class GlobalStateUpdater {
         accountVb: AccountVb,
         microblock: Microblock,
     ): Promise<void> {
+        const accountManager = globalState.getAccountManager();
+
         // check the token issuance
         const hasTokenIssuanceSection = microblock.hasSection(SectionType.ACCOUNT_TOKEN_ISSUANCE);
         if (hasTokenIssuanceSection) {
@@ -295,7 +298,6 @@ export class GlobalStateUpdater {
             const issuerPublicKey = await accountVb.getPublicKey();
 
             // we ensure the public key is available, otherwise raise an exception (implicit)
-            const accountManager = globalState.getAccountManager();
             await accountManager.checkPublicKeyAvailabilityOrFail(
                 issuerPublicKey.getPublicKeyAsBytes(),
             );
@@ -323,73 +325,55 @@ export class GlobalStateUpdater {
                 issuerPublicKey.getPublicKeyAsBytes(),
             );
         }
-    }
 
-    /**
-     Account callbacks
-     */
-    async accountTokenIssuanceCallback(context: any) {
-        const rawPublicKey = await context.vb.getPublicKey();
-        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
+        // check account creation
+        const hasAccountCreationSection = microblock.hasSection(SectionType.ACCOUNT_CREATION);
+        if (hasAccountCreationSection) {
+            const accountPublicKey = await accountVb.getPublicKey();
+            await accountManager.checkPublicKeyAvailabilityOrFail(
+                accountPublicKey.getPublicKeyAsBytes(),
+            );
 
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SENT_ISSUANCE,
-                payerAccount: null,
-                payeeAccount: context.vb.identifier,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
+            const accountCreationSection = microblock.getAccountCreationSection();
+            const { sellerAccount, amount } = accountCreationSection.object;
+            await accountManager.tokenTransfer(
+                {
+                    type: ECO.BK_SALE,
+                    payerAccount: sellerAccount,
+                    payeeAccount: accountVb.getId(),
+                    amount,
+                },
+                {
+                    mbHash: microblock.getHash(),
+                },
+                microblock.getTimestamp(),
+            );
+
+            await accountManager.saveAccountByPublicKey(
+                accountVb.getId(),
+                accountPublicKey.getPublicKeyAsBytes(),
+            );
+        }
+
+        // check token transfer
+        const tokenTransferSections = microblock.getSectionsByType<AccountTransferSection>(
+            SectionType.ACCOUNT_TRANSFER,
         );
-
-        await context.cache.accountManager.saveAccountByPublicKey(
-            context.vb.identifier,
-            rawPublicKey,
-        );
-    }
-
-    async accountCreationCallback(context: any) {
-        const rawPublicKey = await context.vb.getPublicKey();
-        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
-
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SALE,
-                payerAccount: context.section.object.sellerAccount,
-                payeeAccount: context.vb.identifier,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-        );
-
-        await context.cache.accountManager.saveAccountByPublicKey(
-            context.vb.identifier,
-            rawPublicKey,
-        );
-    }
-
-    async accountTokenTransferCallback(context: any) {
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SENT_PAYMENT,
-                payerAccount: context.vb.identifier,
-                payeeAccount: context.section.object.account,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-        );
+        for (const section of tokenTransferSections) {
+            const { account, amount } = section.object;
+            await accountManager.tokenTransfer(
+                {
+                    type: ECO.BK_SENT_PAYMENT,
+                    payerAccount: accountVb.getId(),
+                    payeeAccount: account,
+                    amount,
+                },
+                {
+                    mbHash: microblock.getHash(),
+                },
+                microblock.getTimestamp(),
+            );
+        }
     }
 
     private async handleValidatorNodeUpdate(
