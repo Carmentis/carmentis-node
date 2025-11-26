@@ -1,22 +1,31 @@
 import { z } from 'zod';
 
-const VestingSchema = z.object({
+const GenesisRunoffVestingSchema = z.object({
     name: z.string(),
     cliffPeriod: z.number(),
     vestingPeriod: z.number(),
 });
 
-const AccountSchema = z.object({
+const GenesisRunoffAccountSchema = z.object({
     name: z.string(),
     publicKey: z.string(),
+});
+
+const GenesisRunoffTransferSchema = z.object({
+    source: z.string(),
+    destination: z.string(),
     amount: z.number(),
-    origin: z.string(),
     vesting: z.string().optional(),
 });
 
 export const GenesisRunoffSchema = z.object({
-    vesting: z.array(VestingSchema),
-    accounts: z.array(AccountSchema),
+    vesting: z.array(GenesisRunoffVestingSchema),
+    accounts: z.array(GenesisRunoffAccountSchema),
+    transfers: z.array(GenesisRunoffTransferSchema),
 });
 
+
+export type GenesisRunoffVestingType = z.infer<typeof GenesisRunoffVestingSchema>;
+export type GenesisRunoffAccountType = z.infer<typeof GenesisRunoffAccountSchema>;
+export type GenesisRunoffTransferType = z.infer<typeof GenesisRunoffTransferSchema>;
 export type GenesisRunoffType = z.infer<typeof GenesisRunoffSchema>;

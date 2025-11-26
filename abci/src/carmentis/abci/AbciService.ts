@@ -110,7 +110,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             microblocksStoragePath,
             snapshotStoragePath,
         } = this.nodeConfig.getStoragePaths();
-        this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreate(
+        this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreateNoRunoff(
             this.nodeConfig.getGenesisRunoffFilePath(),
         );
         this.logger.log(`ABCI storage at ${abciStoragePath}`);
