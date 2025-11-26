@@ -72,6 +72,7 @@ import { Context } from './types/Context';
 import { MicroblockCheckResult } from './types/MicroblockCheckResult';
 import { GlobalState } from './state/GlobalState';
 import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
+import { GenesisRunoff } from './GenesisRunoff';
 
 const APP_VERSION = 1;
 
@@ -123,6 +124,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private state: GlobalState;
     private snapshot: SnapshotsManager;
     private importedSnapshot: SnapshotProto;
+    private genesisRunoffs: GenesisRunoff;
 
     constructor(
         private readonly nodeConfig: NodeConfigService,
@@ -137,6 +139,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             microblocksStoragePath,
             snapshotStoragePath,
         } = this.nodeConfig.getStoragePaths();
+        this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreate(
+            this.nodeConfig.getGenesisRunoffFilePath(),
+        );
         this.logger.log(`ABCI storage at ${abciStoragePath}`);
         this.perf = new Performance(this.logger, true);
         this.db = new LevelDb(dbStoragePath);

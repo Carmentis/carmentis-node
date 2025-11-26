@@ -91,6 +91,15 @@ export class NodeConfigService {
     }
 
     /**
+     * Retrieves the file path for the genesis runoff configuration.
+     *
+     * @return {string} The file path to the genesis runoff file as defined in the node configuration.
+     */
+    getGenesisRunoffFilePath(): string {
+        return this.nodeConfig.genesis.runoffFilePath;
+    }
+
+    /**
      * Retrieves the exposed RPC endpoint used by CometBFT.
      *
      * The RPC endpoint shows a page listing all operations performed by CometBFT.
