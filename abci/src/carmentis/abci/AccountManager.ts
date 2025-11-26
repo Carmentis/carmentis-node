@@ -93,6 +93,11 @@ export class AccountManager {
      * @throws {Error} If accounts don't exist when required
      */
     async tokenTransfer(transfer: Transfer, chainReference: unknown, timestamp: number): Promise<void> {
+        this.logger.debug(`Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amount} at ${timestamp}`)
+        this.logger.debug(`Transfer from: ${transfer.payerAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payerAccount) : 'Unknown'}`)
+        this.logger.debug(`Transfer to: ${transfer.payeeAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payeeAccount) : 'Unknown'}`)
+        this.logger.debug(`Chain reference: {chainReference}`, {chainReference})
+
         const perfMeasure = this.perf.start('tokenTransfer');
 
         const accountCreation =
@@ -104,7 +109,7 @@ export class AccountManager {
         const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
         const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
 
-        this.logger.debug("Token transfer:", transfer)
+
         const feesPayerAccount = transfer.payerAccount;
         const isFeesPayerAccount = feesPayerAccount instanceof Uint8Array;
         if (!isFeesPayerAccount) {
@@ -375,16 +380,31 @@ export class AccountManager {
         );
     }
 
-    async createIssuerAccount(publicKey: PublicSignatureKey, initialTokenAmountAsAtomic = INITIAL_OFFER) {
-        const issuerAccoountHash =   AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
+    async createIssuerAccount(publicKey: PublicSignatureKey, issuerAccountHash: Uint8Array, initialTokenAmountAsAtomic = INITIAL_OFFER) {
+        //const issuerAccoountHash =   AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
+        this.logger.log(`Issuer account creation: association with account hash ${Utils.binaryToHexa(issuerAccountHash)}`)
         await this.saveAccountByPublicKey(
-            issuerAccoountHash,
+            issuerAccountHash,
             publicKey.getPublicKeyAsBytes(),
         );
         await this.setBalanceForAccount(
             ECO.BK_RECEIVED_ISSUANCE,
-            issuerAccoountHash,
+            issuerAccountHash,
             initialTokenAmountAsAtomic,
+            Utils.getTimestampInSeconds()
+        )
+    }
+
+    async createAccountWithNoTokens(publicKey: PublicSignatureKey) {
+        const accountHash =   AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
+        await this.saveAccountByPublicKey(
+            accountHash,
+            publicKey.getPublicKeyAsBytes(),
+        );
+        await this.setBalanceForAccount(
+            ECO.BK_RECEIVED_PAYMENT,
+            accountHash,
+            0,
             Utils.getTimestampInSeconds()
         )
     }

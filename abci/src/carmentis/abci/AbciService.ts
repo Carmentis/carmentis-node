@@ -46,7 +46,10 @@ import { Storage } from './storage/Storage';
 import { Performance } from './Performance';
 
 import {
+    AccountVb,
     CHAIN,
+    CryptoEncoderFactory,
+    ECO,
     EncoderFactory,
     GenesisSnapshotDTO,
     MessageSerializer,
@@ -73,6 +76,7 @@ import { MicroblockCheckResult } from './types/MicroblockCheckResult';
 import { GlobalState } from './state/GlobalState';
 import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
 import { GenesisRunoff } from './GenesisRunoff';
+import { getLogger } from '@logtape/logtape';
 
 const APP_VERSION = 1;
 
@@ -203,7 +207,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async InitChain(request: InitChainRequest) {
-        this.logger.log(`EVENT: initChain`);
+        this.logger.log(`[ InitChain ] --------------------------------------------------------`);
 
         // we start by cleaning database, snapshots and storage
         await this.clearDatabase();
@@ -417,8 +421,38 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             issuerPrivateKey,
         );
 
-        await this.state.createGenesisState(issuerPrivateKey.getPublicKey());
-        await this.state.commit();
+        // we start by creating the issuer account
+        this.logger.log('Creating microblock for issuer account creation');
+        const publicKey = issuerPrivateKey.getPublicKey();
+        const issuerAccountMicroblock = Microblock.createGenesisAccountMicroblock();
+        issuerAccountMicroblock.addAccountSignatureSchemeSection({ schemeId: publicKey.getSignatureSchemeId() });
+        issuerAccountMicroblock.addAccountPublicKeySection({ publicKey: publicKey.getPublicKeyAsBytes() });
+        issuerAccountMicroblock.addAccountTokenIssuanceSection({ amount: ECO.INITIAL_OFFER });
+        const signature = issuerAccountMicroblock.sign(issuerPrivateKey);
+        issuerAccountMicroblock.addAccountSignatureSection({ signature });
+        const {microblockData, microblockHash: issuerAccountHash} = issuerAccountMicroblock.serialize();
+
+        // we then create the accounts receiving tokens from the issuer
+        const transactions = [microblockData]
+        const directAccounts = this.genesisRunoffs.getAccountsReceivingTokensFromIssuer();
+        const sigEncoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
+        for (const account of directAccounts) {
+            const accountPublicKey = sigEncoder.decodePublicKey(account.publicKey)
+            const mb = Microblock.createGenesisAccountMicroblock();
+            mb.addAccountSignatureSchemeSection({ schemeId: accountPublicKey.getSignatureSchemeId() });
+            mb.addAccountPublicKeySection({ publicKey: accountPublicKey.getPublicKeyAsBytes() });
+            mb.addAccountCreationSection({
+                sellerAccount: issuerAccountHash,
+                amount: this.genesisRunoffs.getTransferredAmountInAtomicFromIssuerToAccount(account.name)
+            });
+            const signature = mb.sign(issuerPrivateKey);
+            mb.addAccountSignatureSection({ signature });
+            const {microblockData} = mb.serialize();
+            transactions.push(microblockData);
+        }
+
+
+        await this.publishGenesisTransactions(transactions, 1)
 
         const {appHash} = await this.state.getApplicationHash();
         return appHash;
@@ -430,13 +464,18 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     ) {
         // Since we are publishing transactions at the genesis, publication timestamp is at the lowest possible value.
         // The proposer address is undefined since we do not have published this node.
+        const logger = getLogger(['node', "genesis"])
         const blockTimestamp = Utils.getTimestampInSeconds();
         const proposerAddress = new Uint8Array(32);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+        let txIndex = 0;
         for (const tx of transactions) {
+            txIndex += 1;
+            logger.debug(`Handling transaction ${txIndex} on ${transactions.length}`)
             try {
                 const serializedMicroblock = tx;
                 const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+                logger.debug(`Transaction parsed successfully: microblock ${parsedMicroblock.getHash().encode()}`)
 
                 // we create working state to check the transaction
                 const workingState = this.state;
@@ -448,16 +487,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     const vb = checkResult.vb;
                     // we now check the consistency of the working state with the global state
                     const updatedVirtualBlockchain = checkResult.vb;
-                    await globalStateUpdater.updateGlobalState(
+                    await globalStateUpdater.updateGlobalStateDuringGenesis(
                         workingState,
                         updatedVirtualBlockchain,
                         parsedMicroblock,
                         { blockHeight: publishedBlockHeight, blockTimestamp, transaction: tx },
                     );
+                } else {
+                    logger.warn(`Microblock ${parsedMicroblock.getHash().encode()} rejected`)
                 }
-
             } catch (e) {
-
+                logger.error(`An error occurred during handling of genesis microblock: ${e}`)
+                if (e instanceof Error) {
+                    logger.debug(e.stack)
+                }
             }
         }
 
@@ -469,7 +512,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      */
     async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
         const perfMeasure = this.perf.start('CheckTx');
-        this.logger.log(`EVENT: checkTx (${request.tx.length} bytes)`);
+        this.logger.log(`[ CheckTx ]  --------------------------------------------------------`);
+        this.logger.log(`Size of transaction: ${request.tx.length} bytes`);
 
         // we first attempt to parse the microblock
         try {
@@ -541,7 +585,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const blockTimestamp = +(request.time?.seconds ?? 0); // TODO(explain): why zero, it might break the consensus
 
         this.logger.log(
-            `EVENT: prepareProposal (${request.txs.length} txs, height=${blockHeight}, ts=${blockTimestamp})`,
+            `[ PrepareProposal - Height: ${blockHeight} ]  --------------------------------------------------------`,
+        );
+        this.logger.log(
+            `Handling ${request.txs.length} transations at ts=${blockTimestamp}`,
         );
 
         const proposedTxs = [];
@@ -597,7 +644,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const blockHeight = +request.height;
         const blockTimestamp = +(request.time?.seconds ?? 0);
         this.logger.log(
-            `EVENT: processProposal (${request.txs.length} txs, height=${blockHeight}, ts=${blockTimestamp})`,
+            `[ ProcessProposal - Height: ${blockHeight} ]  --------------------------------------------------------`,
+        );
+        this.logger.log(
+            `Handling ${request.txs.length} transations at ts=${blockTimestamp}`,
         );
 
         const workingState = new GlobalState(this.db, this.storage);
@@ -654,10 +704,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         const blockHeight = +request.height;
         const blockTimestamp = +(request.time?.seconds ?? 0);
-        const numberOfTransactionsInBlock = request.txs.length;
 
         this.logger.log(
-            `EVENT: finalizeBlock (${numberOfTransactionsInBlock} txs, height=${blockHeight}, ts=${blockTimestamp})`,
+            `[ FinalizeBlock - Height: ${blockHeight} ]  --------------------------------------------------------`,
+        );
+        this.logger.log(
+            `Handling ${request.txs.length} transations at ts=${blockTimestamp}`,
         );
 
         const workingState = this.state;
@@ -726,7 +778,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async Commit(request: CommitRequest) {
-        this.logger.log(`EVENT: commit`);
+        this.logger.log(`[ Commit ] --------------------------------------------------------`);
         if (!this.state.hasSomethingToCommit()) {
             this.logger.warn(`nothing to commit`);
             return;
@@ -863,9 +915,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const microblockCheckTimer = this.perf.start('checking microblock');
         try {
             const checker = new MicroblockConsistencyChecker(workingState, checkedMicroblock);
+            await checker.checkVirtualBlockchainConsistencyOrFail();
             checker.checkTimestampOrFail();
             checker.checkGasOrFail();
-            await checker.checkVirtualBlockchainConsistencyOrFail();
             const vb = checker.getVirtualBlockchain();
             return { checked: true, vb: vb };
         } catch (error) {

@@ -5,6 +5,7 @@ import {
     GenesisRunoffType,
 } from './types/GenesisRunoffType';
 import { getLogger } from '@logtape/logtape';
+import { CMTSToken } from '@cmts-dev/carmentis-sdk/server';
 
 export class GenesisRunoff {
     private static readonly logger = getLogger(['node', GenesisRunoff.name]);
@@ -13,12 +14,13 @@ export class GenesisRunoff {
     static loadFromFilePathOrCreateNoRunoff(path: string): GenesisRunoff {
         // Si le fichier n'existe pas, retourner une instance vide
         if (!existsSync(path)) {
+            this.logger.info(`No genesis runoffs file found at ${path}: Assuming no runoffs`)
             return GenesisRunoff.noRunoff();
         }
 
         try {
             // Lire le fichier JSON
-            GenesisRunoff.logger.debug(`Reading genesis runoff file from: ${path}`);
+            GenesisRunoff.logger.info(`Reading genesis runoff file from: ${path}`);
             const fileContent = readFileSync(path, 'utf-8');
 
             // Parser le JSON
@@ -135,4 +137,39 @@ export class GenesisRunoff {
     getData(): GenesisRunoffType {
         return this.data;
     }
+
+    /**
+     * Retrieves a list of accounts that receive tokens from the issuer.
+     *
+     * The method identifies all accounts that are listed as destinations in token transfers
+     * originating from the issuer and returns detailed information about those accounts.
+     *
+     * @return {GenesisRunoffAccountType[]} An array of accounts receiving tokens from the issuer.
+     */
+    getAccountsReceivingTokensFromIssuer(): GenesisRunoffAccountType[] {
+        const receivingAccountNames = new Set(
+            this.data.transfers
+                .filter((transfer) => transfer.source === 'issuer')
+                .map((transfer) => transfer.destination),
+        );
+
+        return this.data.accounts.filter((account) => receivingAccountNames.has(account.name));
+    }
+
+    getTransferredAmountInAtomicFromIssuerToAccount(accountName: string): number {
+        const transfers = this.data.transfers.filter(
+            (transfer) => transfer.source === 'issuer' && transfer.destination === accountName,
+        );
+
+        if (transfers.length === 0) {
+            throw new Error(`No transfer from issuer to account ${accountName}`);
+        }
+
+        if (transfers.length > 1) {
+            throw new Error(`Multiple transfers from issuer to account ${accountName}`);
+        }
+
+        return CMTSToken.createCMTS(transfers[0].amount).getAmountAsAtomic();
+    }
+
 }

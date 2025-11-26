@@ -2,7 +2,7 @@ import * as z from "zod";
 
 export const ConfigSchema = z.object({
     genesis: z.object({
-        runoffFilePath: z.string().default("genesisRunoffs.yml"),
+        runoffFilePath: z.string().default("genesisRunoffs.json"),
         private_key: z.union([
             z.object({
                 sk: z.string(),

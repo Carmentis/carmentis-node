@@ -174,6 +174,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async getChainInformationObject() {
+        this.logger.debug("Getting chain information")
         const result = (await this.getObject(
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
@@ -185,9 +186,27 @@ export class CachedLevelDb implements DbInterface {
         return result as ChainInformationObject;
     }
 
+    async putChainInformationObject(chainInfoObject: ChainInformationObject) {
+        this.logger.debug(`Setting chain information: ${chainInfoObject.microblockCount} microblocks, ${chainInfoObject.objectCounts} object created`)
+        await this.putObject(
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
+            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
+            chainInfoObject,
+        );
+    }
+
     async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array) {
         return this.getRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
     }
+
+    async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array) {
+        this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
+            identifier: Utils.binaryToHexa(identifier),
+            dataLength: serializedState.length,
+        }));
+        await this.putRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
+    }
+
 
 
     getSerializedMicroblockInformation(microblockHash: Uint8Array) {

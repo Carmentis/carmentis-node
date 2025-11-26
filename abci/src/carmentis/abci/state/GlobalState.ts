@@ -7,11 +7,16 @@ import { RadixTree } from '../RadixTree';
 import { AccountManager } from '../AccountManager';
 import {
     AbstractProvider,
+    AccountVb,
     BlockchainUtils,
+    CHAIN,
+    CryptoEncoderFactory,
+    ECO,
     Hash,
     Microblock,
     MicroblockBody,
     MicroblockHeaderObject,
+    PrivateSignatureKey,
     PublicSignatureKey,
     Utils,
     VirtualBlockchain,
@@ -22,9 +27,9 @@ import { NODE_SCHEMAS } from '../constants/constants';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
 import {Performance} from '../Performance';
+import { GenesisRunoff } from '../GenesisRunoff';
 
 export class GlobalState extends AbstractProvider {
-
     private readonly logger: Logger;
     private cachedStorage: CachedStorage;
     private cachedDb: CachedLevelDb;
@@ -67,7 +72,8 @@ export class GlobalState extends AbstractProvider {
     async getVirtualBlockchainState(
         virtualBlockchainId: Uint8Array,
     ): Promise<VirtualBlockchainState | null> {
-        const serializedVbState = await this.cachedDb.getSerializedVirtualBlockchainState(virtualBlockchainId);
+        const serializedVbState =
+            await this.cachedDb.getSerializedVirtualBlockchainState(virtualBlockchainId);
         if (serializedVbState !== null) {
             return BlockchainUtils.decodeVirtualBlockchainState(serializedVbState);
         } else {
@@ -76,10 +82,8 @@ export class GlobalState extends AbstractProvider {
     }
 
     async getAccountIdFromPublicKey(publicKey: PublicSignatureKey): Promise<Hash> {
-        const accountIdAsBytes = await this.cachedAccountManager.loadAccountByPublicKey(
-            publicKey
-        );
-        return Hash.from(accountIdAsBytes)
+        const accountIdAsBytes = await this.cachedAccountManager.loadAccountByPublicKey(publicKey);
+        return Hash.from(accountIdAsBytes);
     }
 
     async getMicroblockBody(microblockHash: Hash): Promise<MicroblockBody | null> {
@@ -212,12 +216,13 @@ export class GlobalState extends AbstractProvider {
      * @param {VirtualBlockchain} virtualBlockchain - The virtual blockchain instance to be stored.
      * @return {Promise<void>} - A promise that resolves when the virtual blockchain state has been stored successfully.
      */
-    async storeVirtualBlockchainState(virtualBlockchain: VirtualBlockchain) {
+    async storeVirtualBlockchainState(virtualBlockchain: VirtualBlockchain): Promise<void> {
         const vbId = virtualBlockchain.getId();
-        // TODO(fix): need to export the virtual blockchain state
-        const stateData = await this.getSerializedVirtualBlockchainState(vbId);
-        const stateHash = NodeCrypto.Hashes.sha256AsBinary(stateData);
+        const serializedState =
+            await virtualBlockchain.getSerializedVirtualBlockchainState();
+        const stateHash = NodeCrypto.Hashes.sha256AsBinary(serializedState);
         await this.vbRadix.set(vbId, stateHash);
+        await this.cachedDb.setSerializedVirtualBlockchainState(vbId, serializedState);
     }
 
     /**
@@ -237,11 +242,23 @@ export class GlobalState extends AbstractProvider {
     ): Promise<Uint8Array> {
         const serializedVbState =
             await this.cachedDb.getSerializedVirtualBlockchainState(vbIdentifier);
-        const vbState = BlockchainUtils.decodeVirtualBlockchainState(serializedVbState);
-        return BlockchainUtils.encodeVirtualBlockchainState(vbState);
+        return serializedVbState;
     }
 
-    async createGenesisState(publicKey: PublicSignatureKey) {
-        this.cachedAccountManager.createIssuerAccount(publicKey);
+    async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
+        if (virtualBlockchain.getHeight() === 1) {
+            this.logger.debug(`Add virtual blockchain ${Utils.binaryToHexa(virtualBlockchain.getId())} to index`)
+            const vbType = virtualBlockchain.getType();
+            const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
+            if (indexTableId != -1) {
+                await this.cachedDb.putObject(indexTableId, virtualBlockchain.getId(), {});
+            } else {
+                // no need to index this type of virtual blockchain
+                this.logger.debug(`Ignore virtual blockchain from index: virtual blockchain type ${virtualBlockchain.getType()} is ignored`)
+            }
+        } else {
+            // in this case, the virtual blockchain is (and should be) already indexed so no need to index it again
+        }
+
     }
 }

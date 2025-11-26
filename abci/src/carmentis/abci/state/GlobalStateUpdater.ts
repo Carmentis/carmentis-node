@@ -52,28 +52,113 @@ export class GlobalStateUpdater {
 
     private logger = new Logger(GlobalStateUpdater.name);
 
+    async updateGlobalStateDuringGenesis(
+        globalState: GlobalState,
+        virtualBlockchain: VirtualBlockchain,
+        microblock: Microblock,
+        cometParameters: GlobalStateUpdateCometParameters,
+    ) {
+        if (virtualBlockchain instanceof AccountVb) {
+            // we handle the token issuance case explicitly here
+            const accountManager = globalState.getAccountManager();
+            const accountVb = virtualBlockchain;
+            const hasTokenIssuanceSection = microblock.hasSection(SectionType.ACCOUNT_TOKEN_ISSUANCE);
+            if (hasTokenIssuanceSection) {
+                // recover the public key defined in the account
+                const issuerPublicKey = await accountVb.getPublicKey();
+
+                // we ensure the public key is available, otherwise raise an exception (implicit)
+                await accountManager.checkPublicKeyAvailabilityOrFail(
+                    issuerPublicKey.getPublicKeyAsBytes(),
+                );
+
+                // we now perform the token transfer ex nihilo
+                const tokenIssuanceSection = microblock.getAccountTokenIssuanceSection();
+                const { amount } = tokenIssuanceSection.object;
+                const tokenTransfer: Transfer = {
+                    type: ECO.BK_SENT_ISSUANCE,
+                    payerAccount: null,
+                    payeeAccount: accountVb.getId(),
+                    amount,
+                };
+                const chainReference =  {
+                    mbHash: microblock.getHash().toBytes(),
+                    sectionIndex: tokenIssuanceSection.index,
+                };
+                await accountManager.tokenTransfer(
+                    tokenTransfer,
+                    chainReference,
+                    microblock.getTimestamp(), //context.timestamp,
+                );
+
+                await accountManager.saveAccountByPublicKey(
+                    accountVb.getId(),
+                    issuerPublicKey.getPublicKeyAsBytes(),
+                );
+            }
+
+            // we handle other cases using the shared account update method
+            await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
+
+        } else if (virtualBlockchain instanceof ValidatorNodeVb) {
+            await this.handleValidatorNodeUpdate(globalState, virtualBlockchain, microblock);
+        }
+
+        // update the statistics
+        const numberOfSectionsInMicroblock: number = microblock.getNumberOfSections();
+        this.blockSectionCount += numberOfSectionsInMicroblock;
+        this.blockSizeInBytes += cometParameters.transaction.length;
+        this.totalFees += 0;
+        if (virtualBlockchain.getHeight() == 1) {
+            this.newObjectCounts[virtualBlockchain.getType()] += 1;
+        }
+        this.processedAndAcceptedMicroblocks.push({
+            hash: microblock.getHashAsBytes(), //vb.currentMicroblock.hash,
+            vbIdentifier: virtualBlockchain.getId(),
+            vbType: virtualBlockchain.getType(),
+            height: virtualBlockchain.getHeight(),
+            size: cometParameters.transaction.length,
+            sectionCount: numberOfSectionsInMicroblock,
+        });
+
+        // store the virtual blockchain local state and microblock in buffer
+        await globalState.storeVirtualBlockchainState(virtualBlockchain);
+        await globalState.storeMicroblock(
+            virtualBlockchain.getExpirationDay(),
+            microblock,
+            cometParameters.transaction,
+        );
+        await globalState.indexVirtualBlockchain(virtualBlockchain);
+    }
+
     async updateGlobalState(
         globalState: GlobalState,
         virtualBlockchain: VirtualBlockchain,
         microblock: Microblock,
         cometParameters: GlobalStateUpdateCometParameters,
     ) {
+        const accountManager = globalState.getAccountManager();
+
         // we reject the microblock if the microblock does not define the fees payer account
         // or if the fees payer account does not have enough tokens to publish the microblock
-        if (!microblock.isFeesPayerAccountDefined())
+        if (!microblock.isFeesPayerAccountDefined()) {
             throw new Error(
                 `Microblock ${microblock.getHash().encode()} does not specify fees payer account`,
             );
+        }
+        // extract the fees payer account from the microblock and ensures it has enough tokens to pay
         const feesPayerAccountId = microblock.getFeesPayerAccount();
-        const accountManager = globalState.getAccountManager();
         const feesPayerAccountBalance =
             await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
         const feesToPay: CMTSToken = microblock.computeFees();
         const hasEnoughTokensToPublish = feesPayerAccountBalance.isGreaterThan(feesToPay);
-        if (!hasEnoughTokensToPublish)
+        if (!hasEnoughTokensToPublish) {
             throw new Error(
                 `Insufficient funds to publish microblock: expected at leats ${feesToPay.toString()}, got ${feesPayerAccountBalance.toString()} on account`,
             );
+        }
+
+
 
         if (virtualBlockchain instanceof AccountVb) {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
@@ -125,6 +210,7 @@ export class GlobalStateUpdater {
             microblock,
             cometParameters.transaction,
         );
+        await globalState.indexVirtualBlockchain(virtualBlockchain);
     }
 
     async finalizeBlockApproval(state: GlobalState, request: FinalizeBlockRequest) {
@@ -165,11 +251,14 @@ export class GlobalStateUpdater {
         chainInfoObject.objectCounts = chainInfoObject.objectCounts.map(
             (count, ndx) => count + this.newObjectCounts[ndx],
         );
+        await database.putChainInformationObject(chainInfoObject);
+        /*
         await database.putObject(
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
             chainInfoObject,
         );
+         */
     }
 
     getValidatorSetUpdates(): ValidatorSetUpdate[] {
@@ -291,44 +380,10 @@ export class GlobalStateUpdater {
     ): Promise<void> {
         const accountManager = globalState.getAccountManager();
 
-        // check the token issuance
-        const hasTokenIssuanceSection = microblock.hasSection(SectionType.ACCOUNT_TOKEN_ISSUANCE);
-        if (hasTokenIssuanceSection) {
-            // recover the public key defined in the account
-            const issuerPublicKey = await accountVb.getPublicKey();
-
-            // we ensure the public key is available, otherwise raise an exception (implicit)
-            await accountManager.checkPublicKeyAvailabilityOrFail(
-                issuerPublicKey.getPublicKeyAsBytes(),
-            );
-
-            // we now perform the token transfer ex nihilo
-            const tokenIssuanceSection = microblock.getAccountTokenIssuanceSection();
-            const { amount } = tokenIssuanceSection.object;
-            const tokenTranser: Transfer = {
-                type: ECO.BK_SENT_ISSUANCE,
-                payerAccount: null,
-                payeeAccount: accountVb.getId(),
-                amount,
-            };
-            await accountManager.tokenTransfer(
-                tokenTranser,
-                {
-                    mbHash: microblock.getHash(),
-                    //sectionIndex: context.section.index,
-                },
-                microblock.getTimestamp(), //context.timestamp,
-            );
-
-            await accountManager.saveAccountByPublicKey(
-                accountVb.getId(),
-                issuerPublicKey.getPublicKeyAsBytes(),
-            );
-        }
-
         // check account creation
         const hasAccountCreationSection = microblock.hasSection(SectionType.ACCOUNT_CREATION);
         if (hasAccountCreationSection) {
+            // checking the availability of the public key
             const accountPublicKey = await accountVb.getPublicKey();
             await accountManager.checkPublicKeyAvailabilityOrFail(
                 accountPublicKey.getPublicKeyAsBytes(),
@@ -344,7 +399,8 @@ export class GlobalStateUpdater {
                     amount,
                 },
                 {
-                    mbHash: microblock.getHash(),
+                    mbHash: microblock.getHash().toBytes(),
+                    sectionIndex: accountCreationSection.index
                 },
                 microblock.getTimestamp(),
             );
@@ -369,7 +425,7 @@ export class GlobalStateUpdater {
                     amount,
                 },
                 {
-                    mbHash: microblock.getHash(),
+                    mbHash: microblock.getHash().toBytes(),
                 },
                 microblock.getTimestamp(),
             );
@@ -421,7 +477,7 @@ export class GlobalStateUpdater {
             CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
 
         // we search for the last voting power known to the
-        const localState = vb.getLocalState();
+        const localState = vb.getInternalState();
         const lastKnownVotingPower = localState.getLastKnownVotingPower();
 
         // create the new link: Comet address -> identifier
@@ -446,7 +502,7 @@ export class GlobalStateUpdater {
     ) {
         const publicKeyDeclaration = await vb.getCometbftPublicKeyDeclaration();
         const cometPublicKeyBytes = Base64.decodeBinary(publicKeyDeclaration.cometbftPublicKey);
-        const lastKnownVotingPower = vb.getLocalState().getLastKnownVotingPower();
+        const lastKnownVotingPower = vb.getInternalState().getLastKnownVotingPower();
         this.addValidatorSetUpdate(
             lastKnownVotingPower,
             publicKeyDeclaration.cometbftPublicKeyType,

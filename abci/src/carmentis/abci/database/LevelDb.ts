@@ -6,6 +6,7 @@ import {
     SchemaSerializer,
     SchemaUnserializer,
     Utils,
+    VirtualBlockchainType,
 } from '@cmts-dev/carmentis-sdk/server';
 import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { getLogger } from '@logtape/logtape';
@@ -102,11 +103,13 @@ export class LevelDb implements DbInterface {
         try {
             const b = await this.sub[tableId].get(key);
             if (b !== undefined) {
+                this.logger.debug(`Returning ${b.length} bytes`)
                 return new Uint8Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
             }
         } catch (e) {
-            console.error(e);
+            this.logger.error("{e}", {e});
         }
+        this.logger.warn(`Raw entry ${Utils.binaryToHexa(key)} not found on table ${tableId}: returning undefined`)
         return undefined;
     }
 
