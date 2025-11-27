@@ -1,0 +1,26 @@
+{
+    "vesting": [
+        {
+            "name": "seed",
+            "cliffPeriod": 12,
+            "vestingPeriod": 10
+        }
+    ],
+    "accounts": [
+        {
+            "name": "julien",
+            "publicKey": "SIG:SECP256K1:PK{027f7e43f30f9da0629511c1f8d2e4769a92f4d3896e6da4e566eba21894a24fa4}"
+        },
+        {
+            "name": "team-advisors",
+            "publicKey": "SIG:SECP256K1:PK{02e46c9088c374637a325e80f9e699bb60364dfa69e7e8c66e5723a7fdcf53cc73}"
+        }
+    ],
+    "transfers": [
+        {
+            "source": "issuer",
+            "destination": "team-advisors",
+            "amount": 12
+        }
+    ]
+}
