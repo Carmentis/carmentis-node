@@ -20,7 +20,7 @@ export class KeyManagementService implements OnModuleInit {
 
     constructor(private nodeConfig: NodeConfigService) {}
 
-    onModuleInit() {
+    async onModuleInit() {
         // get the specified private key retrieval method for the genesis private key.
         const { sk, path, env} = this.nodeConfig.getSpecifiedGenesisPrivateKeyRetrievalMethod();
         const specifiedEncodedPrivateKey = sk;
@@ -47,7 +47,7 @@ export class KeyManagementService implements OnModuleInit {
         if (retrievedPrivateKey) {
             this.logger.log('Private key retrieved successfully.');
             this.privateKey = retrievedPrivateKey;
-            const publicKey = retrievedPrivateKey.getPublicKey();
+            const publicKey = await retrievedPrivateKey.getPublicKey();
             const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
             this.logger.log(
                 `Loaded genesis public key: ${encoder.encodePublicKey(publicKey)}`,

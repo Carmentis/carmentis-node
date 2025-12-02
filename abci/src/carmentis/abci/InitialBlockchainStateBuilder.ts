@@ -16,13 +16,21 @@ import { GlobalState } from './state/GlobalState';
 export class InitialBlockchainStateBuilder {
     private logger = new Logger(InitialBlockchainStateBuilder.name);
 
-    private readonly issuerPublicKey: PublicSignatureKey;
     constructor(
         private readonly state: GlobalState,
         private readonly request: InitChainRequest,
         private readonly issuerPrivateKey: PrivateSignatureKey,
+        private readonly issuerPublicKey: PublicSignatureKey,
     ) {
-        this.issuerPublicKey = this.issuerPrivateKey.getPublicKey();
+    }
+
+    public static async create(
+        state: GlobalState,
+        request: InitChainRequest,
+        issuerPrivateKey: PrivateSignatureKey,
+    ) {
+        const issuerPublicKey = await issuerPrivateKey.getPublicKey();
+        const updater = new InitialBlockchainStateBuilder(state, request, issuerPrivateKey, issuerPublicKey);
     }
 
     public getValidatorPublicKeyFromRequest(keyTypeMapping: Record<string, string>) {
@@ -64,14 +72,14 @@ export class InitialBlockchainStateBuilder {
         const microblock = await AccountVb.createIssuerAccountCreationMicroblock(
             this.issuerPublicKey,
         );
-        const signature = microblock.sign(this.issuerPrivateKey);
+        const signature = await microblock.sign(this.issuerPrivateKey);
         microblock.addAccountSignatureSection({ signature });
 
         const { microblockData } = microblock.serialize();
         return microblockData;
     }
 
-    public createCarmentisOrganisationCreationTransaction() {
+    public async createCarmentisOrganisationCreationTransaction() {
         this.logger.verbose('Creating organisation creation transaction');
 
         const mb = Microblock.createGenesisOrganizationMicroblock();
@@ -79,7 +87,7 @@ export class InitialBlockchainStateBuilder {
             schemeId: this.issuerPublicKey.getSignatureSchemeId(),
         });
         mb.addOrganizationPublicKeySection({
-            publicKey: this.issuerPublicKey.getPublicKeyAsBytes(),
+            publicKey: await this.issuerPublicKey.getPublicKeyAsBytes(),
         });
         mb.addOrganizationDescriptionSection({
             name: 'Carmentis',
@@ -88,7 +96,7 @@ export class InitialBlockchainStateBuilder {
             website: 'https://carmentis.io',
         });
 
-        const mbSignature = mb.sign(this.issuerPrivateKey);
+        const mbSignature = await mb.sign(this.issuerPrivateKey);
         mb.addOrganizationSignatureSection({ signature: mbSignature });
 
         const { microblockHash: organizationId, microblockData: organizationCreationTransaction } =
@@ -108,7 +116,7 @@ export class InitialBlockchainStateBuilder {
          */
     }
 
-    public createGenesisNodeDeclarationTransaction(
+    public async createGenesisNodeDeclarationTransaction(
         organizationId: Uint8Array,
         genesisNodePublicKey: string,
         genesisNodePublicKeyType: string,
@@ -126,7 +134,7 @@ export class InitialBlockchainStateBuilder {
         mb.addValidatorNodeRpcEndpointSection({
             rpcEndpoint: genesisNodeCometbftRpcEndpoint,
         });
-        const signature = mb.sign(this.issuerPrivateKey);
+        const signature = await mb.sign(this.issuerPrivateKey);
         mb.addValidatorNodeSignatureSection({ signature });
 
         const {
@@ -163,7 +171,7 @@ export class InitialBlockchainStateBuilder {
         microblock.addValidatorNodeVotingPowerUpdateSection({
             votingPower: 10,
         });
-        const signature = microblock.sign(this.issuerPrivateKey);
+        const signature = await microblock.sign(this.issuerPrivateKey);
         microblock.addValidatorNodeSignatureSection({ signature });
 
         const { microblockData } = microblock.serialize();

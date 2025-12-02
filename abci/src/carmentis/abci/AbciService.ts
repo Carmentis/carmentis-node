@@ -415,7 +415,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         request: InitChainRequest,
     ) {
         // we first create a blockchain client equipped with the key of the
-        const stateBuilder = new InitialBlockchainStateBuilder(
+        const stateBuilder = InitialBlockchainStateBuilder.create(
             this.state,
             request,
             issuerPrivateKey,
@@ -423,12 +423,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         // we start by creating the issuer account
         this.logger.log('Creating microblock for issuer account creation');
-        const publicKey = issuerPrivateKey.getPublicKey();
+        const publicKey = await issuerPrivateKey.getPublicKey();
         const issuerAccountMicroblock = Microblock.createGenesisAccountMicroblock();
         issuerAccountMicroblock.addAccountSignatureSchemeSection({ schemeId: publicKey.getSignatureSchemeId() });
-        issuerAccountMicroblock.addAccountPublicKeySection({ publicKey: publicKey.getPublicKeyAsBytes() });
+        issuerAccountMicroblock.addAccountPublicKeySection({ publicKey: await publicKey.getPublicKeyAsBytes() });
         issuerAccountMicroblock.addAccountTokenIssuanceSection({ amount: ECO.INITIAL_OFFER });
-        const signature = issuerAccountMicroblock.sign(issuerPrivateKey);
+        const signature = await issuerAccountMicroblock.sign(issuerPrivateKey);
         issuerAccountMicroblock.addAccountSignatureSection({ signature });
         const {microblockData, microblockHash: issuerAccountHash} = issuerAccountMicroblock.serialize();
 
@@ -437,15 +437,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const directAccounts = this.genesisRunoffs.getAccountsReceivingTokensFromIssuer();
         const sigEncoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
         for (const account of directAccounts) {
-            const accountPublicKey = sigEncoder.decodePublicKey(account.publicKey)
+            const accountPublicKey = await sigEncoder.decodePublicKey(account.publicKey)
             const mb = Microblock.createGenesisAccountMicroblock();
             mb.addAccountSignatureSchemeSection({ schemeId: accountPublicKey.getSignatureSchemeId() });
-            mb.addAccountPublicKeySection({ publicKey: accountPublicKey.getPublicKeyAsBytes() });
+            mb.addAccountPublicKeySection({ publicKey: await accountPublicKey.getPublicKeyAsBytes() });
             mb.addAccountCreationSection({
                 sellerAccount: issuerAccountHash,
                 amount: this.genesisRunoffs.getTransferredAmountInAtomicFromIssuerToAccount(account.name)
             });
-            const signature = mb.sign(issuerPrivateKey);
+            const signature = await mb.sign(issuerPrivateKey);
             mb.addAccountSignatureSection({ signature });
             const {microblockData} = mb.serialize();
             transactions.push(microblockData);

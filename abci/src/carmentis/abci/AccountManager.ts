@@ -374,9 +374,9 @@ export class AccountManager {
             : Utils.truncateStringMiddle(Utils.binaryToHexa(account), 8, 4);
     }
 
-    loadAccountByPublicKey(publicSignatureKey: PublicSignatureKey) {
+    async loadAccountByPublicKey(publicSignatureKey: PublicSignatureKey) {
         return this.loadAccountByPublicKeyHash(
-            AccountManager.getAccountHashFromPublicSignatureKey(publicSignatureKey),
+            await AccountManager.getAccountHashFromPublicSignatureKey(publicSignatureKey),
         );
     }
 
@@ -385,7 +385,7 @@ export class AccountManager {
         this.logger.log(`Issuer account creation: association with account hash ${Utils.binaryToHexa(issuerAccountHash)}`)
         await this.saveAccountByPublicKey(
             issuerAccountHash,
-            publicKey.getPublicKeyAsBytes(),
+            await publicKey.getPublicKeyAsBytes(),
         );
         await this.setBalanceForAccount(
             ECO.BK_RECEIVED_ISSUANCE,
@@ -396,10 +396,10 @@ export class AccountManager {
     }
 
     async createAccountWithNoTokens(publicKey: PublicSignatureKey) {
-        const accountHash =   AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
+        const accountHash = await AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
         await this.saveAccountByPublicKey(
             accountHash,
-            publicKey.getPublicKeyAsBytes(),
+            await publicKey.getPublicKeyAsBytes(),
         );
         await this.setBalanceForAccount(
             ECO.BK_RECEIVED_PAYMENT,
@@ -437,8 +437,8 @@ export class AccountManager {
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash, record);
     }
 
-    private static getAccountHashFromPublicSignatureKey(publicKey: PublicSignatureKey) {
+    private static async getAccountHashFromPublicSignatureKey(publicKey: PublicSignatureKey) {
         const hash: CryptographicHash = new Sha256CryptographicHash();
-        return hash.hash(publicKey.getPublicKeyAsBytes())
+        return hash.hash(await publicKey.getPublicKeyAsBytes())
     }
 }

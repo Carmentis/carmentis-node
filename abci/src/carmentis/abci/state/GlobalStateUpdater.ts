@@ -69,7 +69,7 @@ export class GlobalStateUpdater {
 
                 // we ensure the public key is available, otherwise raise an exception (implicit)
                 await accountManager.checkPublicKeyAvailabilityOrFail(
-                    issuerPublicKey.getPublicKeyAsBytes(),
+                    await issuerPublicKey.getPublicKeyAsBytes(),
                 );
 
                 // we now perform the token transfer ex nihilo
@@ -93,7 +93,7 @@ export class GlobalStateUpdater {
 
                 await accountManager.saveAccountByPublicKey(
                     accountVb.getId(),
-                    issuerPublicKey.getPublicKeyAsBytes(),
+                    await issuerPublicKey.getPublicKeyAsBytes(),
                 );
             }
 
@@ -154,11 +154,9 @@ export class GlobalStateUpdater {
         const hasEnoughTokensToPublish = feesPayerAccountBalance.isGreaterThan(feesToPay);
         if (!hasEnoughTokensToPublish) {
             throw new Error(
-                `Insufficient funds to publish microblock: expected at leats ${feesToPay.toString()}, got ${feesPayerAccountBalance.toString()} on account`,
+                `Insufficient funds to publish microblock: expected at least ${feesToPay.toString()}, got ${feesPayerAccountBalance.toString()} on account`,
             );
         }
-
-
 
         if (virtualBlockchain instanceof AccountVb) {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
@@ -386,7 +384,7 @@ export class GlobalStateUpdater {
             // checking the availability of the public key
             const accountPublicKey = await accountVb.getPublicKey();
             await accountManager.checkPublicKeyAvailabilityOrFail(
-                accountPublicKey.getPublicKeyAsBytes(),
+                await accountPublicKey.getPublicKeyAsBytes(),
             );
 
             const accountCreationSection = microblock.getAccountCreationSection();
@@ -407,7 +405,7 @@ export class GlobalStateUpdater {
 
             await accountManager.saveAccountByPublicKey(
                 accountVb.getId(),
-                accountPublicKey.getPublicKeyAsBytes(),
+                await accountPublicKey.getPublicKeyAsBytes(),
             );
         }
 
