@@ -181,4 +181,13 @@ export class NodeConfigService {
     getBlockHistoryBeforeSnapshot() {
         return this.nodeConfig.snapshots.block_history_before_snapshot
     }
+
+    /**
+     * Retrieves the complete node configuration.
+     *
+     * @return {NodeConfig} The complete node configuration object.
+     */
+    getConfig(): NodeConfig {
+        return this.nodeConfig;
+    }
 }
