@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
     PrivateSignatureKey,
     Secp256k1PrivateSignatureKey,
-    StringSignatureEncoder,
+    CryptoEncoderFactory,
 } from '@cmts-dev/carmentis-sdk/server';
 import { NodeConfigService } from '../../config/services/NodeConfigService';
 import process from 'node:process';
@@ -32,15 +32,15 @@ export class KeyManagementService implements OnModuleInit {
         let retrievedPrivateKey: PrivateSignatureKey;
         if (typeof specifiedEncodedPrivateKey === 'string') {
             this.logger.log(`Retrieving private key provided in the config file...`);
-            retrievedPrivateKey = this.loadPrivateKeyFromEncodedPrivateKey(
+            retrievedPrivateKey = await this.loadPrivateKeyFromEncodedPrivateKey(
                 specifiedEncodedPrivateKey,
             );
         } else if (typeof specifiedPrivateKeyFilePath === 'string') {
             this.logger.log(`Retrieving private key from file ${specifiedPrivateKeyFilePath}...`);
-            retrievedPrivateKey = this.loadPrivateKeyFromFilePath(specifiedPrivateKeyFilePath);
+            retrievedPrivateKey = await this.loadPrivateKeyFromFilePath(specifiedPrivateKeyFilePath);
         } else if (typeof specifiedEnvVarName === 'string') {
             this.logger.log(`Retrieving private key from env variable ${specifiedEnvVarName}...`);
-            retrievedPrivateKey = this.loadPrivateKeyFromEnvVar(specifiedEnvVarName);
+            retrievedPrivateKey = await this.loadPrivateKeyFromEnvVar(specifiedEnvVarName);
         }
 
         // log the success (or not) of the private key retrieval
@@ -48,7 +48,7 @@ export class KeyManagementService implements OnModuleInit {
             this.logger.log('Private key retrieved successfully.');
             this.privateKey = retrievedPrivateKey;
             const publicKey = await retrievedPrivateKey.getPublicKey();
-            const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
+            const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
             this.logger.log(
                 `Loaded genesis public key: ${encoder.encodePublicKey(publicKey)}`,
             );
@@ -59,12 +59,12 @@ export class KeyManagementService implements OnModuleInit {
         }
     }
 
-    private loadPrivateKeyFromEnvVar(envVarName: string): PrivateSignatureKey {
+    private async loadPrivateKeyFromEnvVar(envVarName: string): Promise<PrivateSignatureKey> {
         const envVarValue = process.env[envVarName];
         if (envVarValue === undefined) throw new Error(`Cannot load private key from env variable ${envVarName}: undefined value.`);
-        const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
+        const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
         try {
-            return encoder.decodePrivateKey(envVarValue);
+            return await encoder.decodePrivateKey(envVarValue);
         } catch (e) {
             if (e instanceof Error) {
                 this.logger.error(
@@ -75,9 +75,9 @@ export class KeyManagementService implements OnModuleInit {
         }
     }
 
-    private loadPrivateKeyFromEncodedPrivateKey(encodedPrivateKey: string): PrivateSignatureKey {
-        const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
-        return encoder.decodePrivateKey(encodedPrivateKey);
+    private async loadPrivateKeyFromEncodedPrivateKey(encodedPrivateKey: string): Promise<PrivateSignatureKey> {
+        const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
+        return await encoder.decodePrivateKey(encodedPrivateKey);
     }
 
     getIssuerPrivateKey(): PrivateSignatureKey | undefined {
@@ -88,7 +88,7 @@ export class KeyManagementService implements OnModuleInit {
         return this.privateKey;
     }
 
-    private loadPrivateKeyFromFilePath(privateKeyFilePath: string): PrivateSignatureKey {
+    private async loadPrivateKeyFromFilePath(privateKeyFilePath: string): Promise<PrivateSignatureKey> {
         const keyFilePath = privateKeyFilePath;
         this.logger.log(`Loading keys from file: ${keyFilePath}`);
 
@@ -105,8 +105,8 @@ export class KeyManagementService implements OnModuleInit {
                     privateKey.length > 0 &&
                     publicKey.length > 0
                 ) {
-                    const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
-                    return encoder.decodePrivateKey(privateKey);
+                    const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
+                    return await encoder.decodePrivateKey(privateKey);
                 } else {
                     this.logger.error(
                         `Key file found but missing required fields 'privateKey'/'publicKey' or invalid format.`,

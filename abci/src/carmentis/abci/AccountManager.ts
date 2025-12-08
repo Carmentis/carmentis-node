@@ -11,6 +11,7 @@ import {
     SchemaSerializer,
     Sha256CryptographicHash,
     Utils,
+    Lock,
 } from '@cmts-dev/carmentis-sdk/server';
 import { AccountInformation } from './types/AccountInformation';
 import { Account } from './Account';
@@ -47,6 +48,7 @@ interface AccountState {
     height: number;
     balance: number;
     lastHistoryHash: Uint8Array;
+    locks: Lock[];
 }
 
 interface AccountHistoryEntry {
@@ -208,9 +210,9 @@ export class AccountManager {
                 height: 0,
                 balance: 0,
                 lastHistoryHash: Utils.getNullHash(),
+                locks: [],
             };
         }
-
 
         return {
             exists: exists || type != ECO.ACCOUNT_STANDARD,

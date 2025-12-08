@@ -1,5 +1,3 @@
-
-
 export interface ChainInformationObject {
     microblockCount: number,
     objectCounts: number[]

@@ -12,7 +12,7 @@ export const DB_VIRTUAL_BLOCKCHAIN_STATE = 0x08;
 export const DB_ACCOUNT_STATE = 0x09;
 export const DB_ACCOUNT_HISTORY = 0x0a;
 export const DB_ACCOUNT_BY_PUBLIC_KEY = 0x0b;
-export const DB_ACCOUNT_LOCKS = 0x0c;
+export const DB_ACCOUNTS_WITH_VESTING_LOCKS = 0x0c;
 export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0d;
 export const DB_ACCOUNTS = 0x0e;
 export const DB_VALIDATOR_NODES = 0x0f;
@@ -107,19 +107,11 @@ DB[DB_ACCOUNT_BY_PUBLIC_KEY] = {
     definition: [{ name: 'accountHash', type: DATA.TYPE_BIN256 }],
 };
 
-// account locks
+// index of accounts with vesting locks
 // key: account hash
-DB[DB_ACCOUNT_LOCKS] = {
-    label: 'AccountLocks',
-    definition: [{
-        name: 'locks',
-        type: DATA.TYPE_ARRAY_OF | DATA.TYPE_OBJECT,
-        definition: [
-            { name: 'type', type: DATA.TYPE_UINT8 },
-            { name: 'amount', type: DATA.TYPE_UINT48 },
-            { name: 'parameters', type: DATA.TYPE_BINARY }
-        ]
-    }]
+DB[DB_ACCOUNTS_WITH_VESTING_LOCKS] = {
+    label: 'AccountsWithVestingLocks',
+    definition: [],
 };
 
 // Comet address -> validator node VB identifier

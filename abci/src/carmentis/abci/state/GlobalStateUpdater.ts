@@ -1,6 +1,8 @@
 import {
     AccountTransferSection,
+    AccountVestingTransferSection,
     AccountVb,
+    AccountLockManager,
     Base64,
     CHAIN,
     CMTSToken,
@@ -23,7 +25,8 @@ import { Logger } from '@nestjs/common';
 import { Transfer } from '../AccountManager';
 import { GlobalState } from './GlobalState';
 import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
-import { AccountInformation } from '../types/AccountInformation';
+import { AccountState, AccountInformation } from '../types/AccountInformation';
+import { BlockInformation } from '../types/BlockInformation';
 import { GlobalStateUpdateCometParameters } from './GlobalStateUpdateCometParameters';
 import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { LevelDb } from '../database/LevelDb';
@@ -52,11 +55,41 @@ export class GlobalStateUpdater {
 
     private logger = new Logger(GlobalStateUpdater.name);
 
-    async updateGlobalStateDuringGenesis(
+    async updateGlobalStateOnBlock(
+        globalState: GlobalState,
+        cometParameters: GlobalStateUpdateCometParameters
+    ) {
+        const database = globalState.getCachedDatabase();
+        const previousBlockInformation = await database.getObject(
+            NODE_SCHEMAS.DB_BLOCK_INFORMATION,
+            this.heightToTableKey(cometParameters.blockHeight - 1)
+        ) as BlockInformation;
+        const previousBlockDayTs = Utils.addDaysToTimestamp(previousBlockInformation.timestamp, 0);
+        const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
+
+        if(currentBlockDayTs != previousBlockDayTs) {
+            const accountsWithVestingLocksIdentifiers = await database.getKeys(NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS);
+
+            for(const id of accountsWithVestingLocksIdentifiers) {
+                const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id) as AccountState;
+                const accountLockManager = new AccountLockManager();
+                accountLockManager.setBalance(accountState.balance);
+                accountLockManager.setLocks(accountState.locks);
+
+                if(accountLockManager.applyLinearVesting(currentBlockDayTs) > 0) {
+                    accountState.locks = accountLockManager.getLocks();
+                    await database.putObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id, accountState);
+                }
+            }
+        }
+    }
+
+    async updateGlobalStateOnMicroblockDuringGenesis(
         globalState: GlobalState,
         virtualBlockchain: VirtualBlockchain,
         microblock: Microblock,
         cometParameters: GlobalStateUpdateCometParameters,
+        transaction: Uint8Array
     ) {
         if (virtualBlockchain instanceof AccountVb) {
             // we handle the token issuance case explicitly here
@@ -107,7 +140,7 @@ export class GlobalStateUpdater {
         // update the statistics
         const numberOfSectionsInMicroblock: number = microblock.getNumberOfSections();
         this.blockSectionCount += numberOfSectionsInMicroblock;
-        this.blockSizeInBytes += cometParameters.transaction.length;
+        this.blockSizeInBytes += transaction.length;
         this.totalFees += 0;
         if (virtualBlockchain.getHeight() == 1) {
             this.newObjectCounts[virtualBlockchain.getType()] += 1;
@@ -117,7 +150,7 @@ export class GlobalStateUpdater {
             vbIdentifier: virtualBlockchain.getId(),
             vbType: virtualBlockchain.getType(),
             height: virtualBlockchain.getHeight(),
-            size: cometParameters.transaction.length,
+            size: transaction.length,
             sectionCount: numberOfSectionsInMicroblock,
         });
 
@@ -126,16 +159,17 @@ export class GlobalStateUpdater {
         await globalState.storeMicroblock(
             virtualBlockchain.getExpirationDay(),
             microblock,
-            cometParameters.transaction,
+            transaction,
         );
         await globalState.indexVirtualBlockchain(virtualBlockchain);
     }
 
-    async updateGlobalState(
+    async updateGlobalStateOnMicroblock(
         globalState: GlobalState,
         virtualBlockchain: VirtualBlockchain,
         microblock: Microblock,
         cometParameters: GlobalStateUpdateCometParameters,
+        transaction: Uint8Array,
     ) {
         const accountManager = globalState.getAccountManager();
 
@@ -187,7 +221,7 @@ export class GlobalStateUpdater {
         // update the statistics
         const numberOfSectionsInMicroblock: number = microblock.getNumberOfSections();
         this.blockSectionCount += numberOfSectionsInMicroblock;
-        this.blockSizeInBytes += cometParameters.transaction.length;
+        this.blockSizeInBytes += transaction.length;
         this.totalFees += feesToPay.getAmountAsAtomic();
         if (virtualBlockchain.getHeight() == 1) {
             this.newObjectCounts[virtualBlockchain.getType()] += 1;
@@ -197,7 +231,7 @@ export class GlobalStateUpdater {
             vbIdentifier: virtualBlockchain.getId(),
             vbType: virtualBlockchain.getType(),
             height: virtualBlockchain.getHeight(),
-            size: cometParameters.transaction.length,
+            size: transaction.length,
             sectionCount: numberOfSectionsInMicroblock,
         });
 
@@ -206,7 +240,7 @@ export class GlobalStateUpdater {
         await globalState.storeMicroblock(
             virtualBlockchain.getExpirationDay(),
             microblock,
-            cometParameters.transaction,
+            transaction,
         );
         await globalState.indexVirtualBlockchain(virtualBlockchain);
     }
@@ -409,7 +443,7 @@ export class GlobalStateUpdater {
             );
         }
 
-        // check token transfer
+        // check token standard transfers
         const tokenTransferSections = microblock.getSectionsByType<AccountTransferSection>(
             SectionType.ACCOUNT_TRANSFER,
         );
@@ -427,6 +461,17 @@ export class GlobalStateUpdater {
                 },
                 microblock.getTimestamp(),
             );
+        }
+
+        // check token vesting transfers
+        const tokenVestingTransferSections = microblock.getSectionsByType<AccountVestingTransferSection>(
+            SectionType.ACCOUNT_VESTING_TRANSFER,
+        );
+        for (const section of tokenVestingTransferSections) {
+/*
+            await accountManager.tokenVestingTransfer(
+            );
+*/
         }
     }
 

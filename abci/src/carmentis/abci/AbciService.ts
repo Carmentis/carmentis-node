@@ -77,6 +77,7 @@ import { GlobalState } from './state/GlobalState';
 import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
 import { GenesisRunoff } from './GenesisRunoff';
 import { getLogger } from '@logtape/logtape';
+import {GlobalStateUpdateCometParameters} from "./state/GlobalStateUpdateCometParameters";
 
 const APP_VERSION = 1;
 
@@ -487,11 +488,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     const vb = checkResult.vb;
                     // we now check the consistency of the working state with the global state
                     const updatedVirtualBlockchain = checkResult.vb;
-                    await globalStateUpdater.updateGlobalStateDuringGenesis(
+                    await globalStateUpdater.updateGlobalStateOnMicroblockDuringGenesis(
                         workingState,
                         updatedVirtualBlockchain,
                         parsedMicroblock,
-                        { blockHeight: publishedBlockHeight, blockTimestamp, transaction: tx },
+                        { blockHeight: publishedBlockHeight, blockTimestamp },
+                        tx
                     );
                 } else {
                     logger.warn(`Microblock ${parsedMicroblock.getHash().encode()} rejected`)
@@ -595,6 +597,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const workingState = new GlobalState(this.db, this.storage);
         //const cache = this.getCacheInstance(request.txs);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+        const cometParameters: GlobalStateUpdateCometParameters = { blockHeight, blockTimestamp };
+
+        await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
+
         for (const tx of request.txs) {
             try {
                 // we attempt to parse the received microblock and check its consistency
@@ -606,11 +612,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 if (localStateConsistentWithMicroblock.checked) {
                     // we now check the consistency of the working state with the global state
                     const updatedVirtualBlockchain = localStateConsistentWithMicroblock.vb;
-                    await globalStateUpdater.updateGlobalState(
+                    await globalStateUpdater.updateGlobalStateOnMicroblock(
                         workingState,
                         updatedVirtualBlockchain,
                         parsedMicroblock,
-                        { blockHeight, blockTimestamp, transaction: tx },
+                        cometParameters,
+                        tx
                     );
                     proposedTxs.push(tx);
                 } else {
@@ -651,6 +658,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         const workingState = new GlobalState(this.db, this.storage);
+        const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+        const cometParameters: GlobalStateUpdateCometParameters = { blockHeight, blockTimestamp };
+
+        await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
+
         for (const tx of request.txs) {
             try {
                 // we attempt to parse the received microblock and check its consistency with
@@ -662,12 +674,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 // we now check the consistency of the working state with the global state
                 if (localStateConsistentWithMicroblock.checked) {
                     const updatedVirtualBlockchain = localStateConsistentWithMicroblock.vb;
-                    const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
-                    await globalStateUpdater.updateGlobalState(
+                    await globalStateUpdater.updateGlobalStateOnMicroblock(
                         workingState,
                         updatedVirtualBlockchain,
                         parsedMicroblock,
-                        { blockHeight, blockTimestamp, transaction: tx },
+                        cometParameters,
+                        tx
                     );
                 } else {
                     // TODO: reject case
@@ -715,6 +727,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const workingState = this.state;
         const txResults = [];
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+        const cometParameters: GlobalStateUpdateCometParameters = { blockHeight, blockTimestamp };
+
+        await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
+
         for (const tx of request.txs) {
             try {
                 // we attempt to parse the received microblock and check its consistency with
@@ -726,11 +742,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 if (localStateConsistentWithMicroblock.checked) {
                     // we now check the consistency of the working state with the global state
                     const updatedVirtualBlockchain = localStateConsistentWithMicroblock.vb;
-                    await globalStateUpdater.updateGlobalState(
+                    await globalStateUpdater.updateGlobalStateOnMicroblock(
                         workingState,
                         updatedVirtualBlockchain,
                         parsedMicroblock,
-                        { blockHeight, blockTimestamp, transaction: tx },
+                        cometParameters,
+                        tx
                     );
 
                     perfMeasure.event('fees');

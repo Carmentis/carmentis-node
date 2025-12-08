@@ -96,8 +96,13 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async getKeys(tableId: number): Promise<Uint8Array[]> {
-        // TODO: if this method is needed, it should use the cache
-        throw new Error(`getKeys() is not implemented on CachedLevelDb`);
+        const committedKeys = await this.db.getKeys(tableId);
+
+        const cachedKeys = [...this.updateCache[tableId].entries()].map(([key]) => {
+            return CachedLevelDb.decodeKey(key);
+        });
+
+        return [...cachedKeys, ...committedKeys];
     }
 
     query(

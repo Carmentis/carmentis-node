@@ -171,5 +171,4 @@ export class GenesisRunoff {
 
         return CMTSToken.createCMTS(transfers[0].amount).getAmountAsAtomic();
     }
-
 }

@@ -29,6 +29,17 @@ type Lock =
     | { type: LockType.Vesting, amount: number, parameters: VestingParameters }
     | { type: LockType.Staking, amount: number, parameters: StakingParameters };
 
+type AccountBreakdown = {
+    balance: number,
+    escrowed: number,
+    vested: number,
+    releasable: number,
+    staked: number,
+    stakeable: number,
+    locked: number,
+    spendable: number
+};
+
 export class Account {
     private balance: number;
     private locks: Lock[];
@@ -142,7 +153,7 @@ export class Account {
         }
     }
 
-    getBreakdown() {
+    getBreakdown(): AccountBreakdown {
         const balance = this.balance;
         const lockedAmounts = Array(LOCK_TYPE_COUNT).fill(0);
 
