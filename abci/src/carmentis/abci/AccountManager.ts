@@ -1,6 +1,7 @@
 import { NODE_SCHEMAS } from './constants/constants';
 import { NodeCrypto } from './crypto/NodeCrypto';
 import {
+    AccountLockManager,
     CMTSToken,
     CryptographicHash,
     CryptoSchemeFactory,
@@ -37,13 +38,6 @@ const ErrorMessages = {
     UNDEFINED_ACCOUNT_HASH: 'Cannot load information account: received undefined hash',
 } as const;
 
-export interface Transfer {
-    type: number;
-    payerAccount: Uint8Array | null;
-    payeeAccount: Uint8Array | null;
-    amount: number;
-}
-
 interface AccountState {
     height: number;
     balance: number;
@@ -63,6 +57,26 @@ interface AccountHistoryEntry {
 
 interface AccountHistory {
     list: AccountHistoryEntry[];
+}
+
+interface VestingParameters {
+    startTime: number;
+    cliffDurationDays: number;
+    vestingDurationDays: number;
+}
+
+interface EscrowParameters {
+    escrowIdentifier: Uint8Array;
+    agentPublicKey: any;
+}
+
+export interface Transfer {
+    type: number;
+    payerAccount: Uint8Array | null;
+    payeeAccount: Uint8Array | null;
+    amount: number;
+    vestingParameters?: VestingParameters;
+    escrowParameters?: EscrowParameters;
 }
 
 export class AccountManager {
@@ -110,7 +124,6 @@ export class AccountManager {
 
         const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
         const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
-
 
         const feesPayerAccount = transfer.payerAccount;
         const isFeesPayerAccount = feesPayerAccount instanceof Uint8Array;
@@ -171,6 +184,8 @@ export class AccountManager {
                 transfer.amount,
                 chainReference,
                 timestamp,
+                transfer.vestingParameters || null,
+                transfer.escrowParameters || null,
             );
         }
 
@@ -182,6 +197,8 @@ export class AccountManager {
                 transfer.amount,
                 chainReference,
                 timestamp,
+                transfer.vestingParameters || null,
+                transfer.escrowParameters || null,
             );
         }
 
@@ -229,12 +246,51 @@ export class AccountManager {
         amount: number,
         chainReference: unknown,
         timestamp: number,
+        vestingParameters: VestingParameters|null = null,
+        escrowParameters: EscrowParameters|null = null,
     ): Promise<void> {
         const accountInformation = await this.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
+        const signedAmount = type & ECO.BK_PLUS ? amount : -amount;
+
+        const accountLockManager = new AccountLockManager;
+        accountLockManager.setBalance(accountState.balance);
+        accountLockManager.setLocks(accountState.locks);
+
+        switch(type) {
+            case ECO.BK_RECEIVED_VESTING: {
+                if(vestingParameters === null) {
+                    throw new Error('Vesting parameters are missing');
+                }
+                accountLockManager.addVestedTokens(
+                    signedAmount,
+                    vestingParameters.startTime,
+                    vestingParameters.cliffDurationDays,
+                    vestingParameters.vestingDurationDays
+                );
+                break;
+            }
+            case ECO.BK_RECEIVED_ESCROW: {
+                if(escrowParameters === null) {
+                    throw new Error('Escrow parameters are missing');
+                }
+                accountLockManager.addEscrowedTokens(
+                    signedAmount,
+                    escrowParameters.escrowIdentifier,
+                    escrowParameters.agentPublicKey
+                );
+                break;
+            }
+            default: {
+                accountLockManager.addSpendableTokens(signedAmount);
+                break;
+            }
+        }
 
         accountState.height++;
-        accountState.balance += type & ECO.BK_PLUS ? amount : -amount;
+        accountState.balance = accountLockManager.getBalance();
+        accountState.locks = accountLockManager.getLocks();
+
         accountState.lastHistoryHash = await this.addHistoryEntry(
             accountState,
             type,
