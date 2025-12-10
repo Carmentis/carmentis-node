@@ -15,10 +15,13 @@ export const DB_ACCOUNT_BY_PUBLIC_KEY = 0x0b;
 export const DB_ACCOUNTS_WITH_VESTING_LOCKS = 0x0c;
 export const DB_ESCROWS = 0x0d;
 export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0e;
-export const DB_ACCOUNTS = 0x0f;
-export const DB_VALIDATOR_NODES = 0x10;
-export const DB_ORGANIZATIONS = 0x11;
-export const DB_APPLICATIONS = 0x12;
+
+// tables used as indexes
+export const DB_PROTOCOL_INDEX = 0x0f;
+export const DB_ACCOUNTS_INDEX = 0x10;
+export const DB_VALIDATOR_NODES_INDEX = 0x11;
+export const DB_ORGANIZATIONS_INDEX = 0x12;
+export const DB_APPLICATIONS_INDEX = 0x12;
 
 export const DB: SCHEMAS.Schema[] = [];
 
@@ -138,7 +141,11 @@ DB[DB_VALIDATOR_NODE_BY_ADDRESS] = {
 };
 
 // tables used as indexes
-DB[DB_ACCOUNTS] = {
+DB[DB_PROTOCOL_INDEX] = {
+    label: 'Protocol',
+    definition: [],
+};
+DB[DB_ACCOUNTS_INDEX] = {
     label: 'Accounts',
     definition: [],
 };

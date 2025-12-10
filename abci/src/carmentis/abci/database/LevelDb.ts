@@ -45,11 +45,11 @@ export class LevelDb implements DbInterface {
     public static getTableIdFromVirtualBlockchainType(type: number) {
         switch (type) {
             case CHAIN.VB_ACCOUNT:
-                return NODE_SCHEMAS.DB_ACCOUNTS;
+                return NODE_SCHEMAS.DB_ACCOUNTS_INDEX;
             case CHAIN.VB_VALIDATOR_NODE:
-                return NODE_SCHEMAS.DB_VALIDATOR_NODES;
+                return NODE_SCHEMAS.DB_VALIDATOR_NODES_INDEX;
             case CHAIN.VB_ORGANIZATION:
-                return NODE_SCHEMAS.DB_ORGANIZATIONS;
+                return NODE_SCHEMAS.DB_ORGANIZATIONS_INDEX;
             case CHAIN.VB_APPLICATION:
                 return NODE_SCHEMAS.DB_APPLICATIONS_INDEX;
             case CHAIN.VB_PROTOCOL:
