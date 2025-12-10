@@ -14,7 +14,6 @@ module.exports = {
   ignorePatterns: ['dist/', 'node_modules/', 'src/proto', 'src/proto-ts'],
   rules: {
     '@typescript-eslint/explicit-function-return-type': 'off',
-    '@typescript-eslint/no-floating-promises': 'warn',
     'prettier/prettier': 'warn',
     '@typescript-eslint/no-unused-vars': 'off',
     '@typescript-eslint/no-unsafe-argument': 'off',
@@ -30,5 +29,6 @@ module.exports = {
     '@typescript-eslint/no-for-in-array': 'warn',
     '@typescript-eslint/prefer-promise-reject-errors': 'warn',
     '@typescript-eslint/no-misused-promises': 'warn',
+    '@typescript-eslint/no-floating-promises': 'error'
   },
 };

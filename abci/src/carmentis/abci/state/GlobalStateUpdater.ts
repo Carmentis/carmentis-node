@@ -10,8 +10,10 @@ import {
     CMTSToken,
     ECO,
     Economics,
+    FeesCalculationFormulaFactory,
     Hash,
     Microblock,
+    ProtocolVb,
     PublicSignatureKey,
     Section,
     SectionType,
@@ -24,13 +26,13 @@ import {
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { NODE_SCHEMAS } from '../constants/constants';
 import { Logger } from '@nestjs/common';
-import { Transfer } from '../AccountManager';
+import { AccountManager, Transfer } from '../AccountManager';
 import { GlobalState } from './GlobalState';
 import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
 import { AccountState, AccountInformation } from '../types/AccountInformation';
 import { BlockInformation } from '../types/BlockInformation';
 import { Escrow } from '../types/Escrow';
-import { GlobalStateUpdateCometParameters } from './GlobalStateUpdateCometParameters';
+import { GlobalStateUpdateCometParameters } from '../types/GlobalStateUpdateCometParameters';
 import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { LevelDb } from '../database/LevelDb';
 import { ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
@@ -108,46 +110,21 @@ export class GlobalStateUpdater {
             // we handle the token issuance case explicitly here
             const accountManager = globalState.getAccountManager();
             const accountVb = virtualBlockchain;
-            const hasTokenIssuanceSection = microblock.hasSection(SectionType.ACCOUNT_TOKEN_ISSUANCE);
+            const hasTokenIssuanceSection = microblock.hasSection(
+                SectionType.ACCOUNT_TOKEN_ISSUANCE,
+            );
             if (hasTokenIssuanceSection) {
-                // recover the public key defined in the account
-                const issuerPublicKey = await accountVb.getPublicKey();
-
-                // we ensure the public key is available, otherwise raise an exception (implicit)
-                await accountManager.checkPublicKeyAvailabilityOrFail(
-                    await issuerPublicKey.getPublicKeyAsBytes(),
-                );
-
-                // we now perform the token transfer ex nihilo
-                const tokenIssuanceSection = microblock.getAccountTokenIssuanceSection();
-                const { amount } = tokenIssuanceSection.object;
-                const tokenTransfer: Transfer = {
-                    type: ECO.BK_SENT_ISSUANCE,
-                    payerAccount: null,
-                    payeeAccount: accountVb.getId(),
-                    amount,
-                };
-                const chainReference =  {
-                    mbHash: microblock.getHash().toBytes(),
-                    sectionIndex: tokenIssuanceSection.index,
-                };
-                await accountManager.tokenTransfer(
-                    tokenTransfer,
-                    chainReference,
-                    microblock.getTimestamp(), //context.timestamp,
-                );
-
-                await accountManager.saveAccountByPublicKey(
-                    accountVb.getId(),
-                    await issuerPublicKey.getPublicKeyAsBytes(),
-                );
+                await this.handleTokenIssuance(accountManager, accountVb, microblock);
             }
 
             // we handle other cases using the shared account update method
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
-
         } else if (virtualBlockchain instanceof ValidatorNodeVb) {
             await this.handleValidatorNodeUpdate(globalState, virtualBlockchain, microblock);
+        }
+
+        if (virtualBlockchain instanceof ProtocolVb) {
+            await this.handleProtocolUpdate(virtualBlockchain, microblock);
         }
 
         // update the statistics
@@ -171,10 +148,57 @@ export class GlobalStateUpdater {
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
             virtualBlockchain.getExpirationDay(),
+            virtualBlockchain,
             microblock,
             transaction,
         );
         await globalState.indexVirtualBlockchain(virtualBlockchain);
+    }
+
+    /**
+     * Note: this method SHOULD not be called except for the genesis block processing.
+     * @private
+     */
+    private async handleTokenIssuance(
+        accountManager: AccountManager,
+        accountVb: AccountVb,
+        microblock: Microblock,
+    ) {
+        // recover the public key defined in the account
+        const issuerPublicKey = await accountVb.getPublicKey();
+
+        // we ensure the public key is available, otherwise raise an exception (implicit)
+        await accountManager.checkPublicKeyAvailabilityOrFail(
+            await issuerPublicKey.getPublicKeyAsBytes(),
+        );
+
+        // we now perform the token transfer ex nihilo
+        const tokenIssuanceSection = microblock.getAccountTokenIssuanceSection();
+        const { amount } = tokenIssuanceSection.object;
+        const tokenTransfer: Transfer = {
+            type: ECO.BK_SENT_ISSUANCE,
+            payerAccount: null,
+            payeeAccount: accountVb.getId(),
+            amount,
+        };
+        const chainReference = {
+            mbHash: microblock.getHash().toBytes(),
+            sectionIndex: tokenIssuanceSection.index,
+        };
+        await accountManager.tokenTransfer(
+            tokenTransfer,
+            chainReference,
+            microblock.getTimestamp(), //context.timestamp,
+        );
+
+        await accountManager.saveAccountByPublicKey(
+            accountVb.getId(),
+            await issuerPublicKey.getPublicKeyAsBytes(),
+        );
+    }
+
+    private async handleProtocolUpdate(virtualBlockchain: ProtocolVb, microblock: Microblock) {
+        // we currently have nothing to do with the protocol virtual blockchain state,
     }
 
     async updateGlobalStateOnMicroblock(
@@ -184,6 +208,20 @@ export class GlobalStateUpdater {
         cometParameters: GlobalStateUpdateCometParameters,
         transaction: Uint8Array,
     ) {
+        this.logger.log(`Updating global state with microblock: ${microblock.getHash().encode()}`);
+
+        // we ignore the microblock if it declares a new protocol VB state and there is already one defined
+        const isDeclaringNewProtocolVb = microblock.hasSection(SectionType.PROTOCOL_PUBLIC_KEY);
+        if (isDeclaringNewProtocolVb) {
+            const isProtocolVbAlreadyDefined = await globalState.isProtocolVbDefined();
+            if (isProtocolVbAlreadyDefined) {
+                this.logger.warn(
+                    `Skipping microblock ${microblock.getHash().encode()} because it declares a new protocol VB state but there is already one defined.`,
+                );
+                return
+            }
+        }
+
         const accountManager = globalState.getAccountManager();
 
         // we reject the microblock if the microblock does not define the fees payer account
@@ -197,7 +235,18 @@ export class GlobalStateUpdater {
         const feesPayerAccountId = microblock.getFeesPayerAccount();
         const feesPayerAccountBalance =
             await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
-        const feesToPay: CMTSToken = microblock.computeFees();
+        const protocolParameters = await globalState.getProtocolVariables();
+        const feesCalculationVersion = protocolParameters.getFeesCalculationVersion();
+        const signatureSection = microblock.getLastSignatureSection();
+        const usedSignatureSchemeId = signatureSection.object.schemeId;
+        const usedFeesCalculationFormula =
+            FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(
+                feesCalculationVersion,
+            );
+        const feesToPay: CMTSToken = await usedFeesCalculationFormula.computeFees(
+            usedSignatureSchemeId,
+            microblock,
+        );
         const hasEnoughTokensToPublish = feesPayerAccountBalance.isGreaterThan(feesToPay);
         if (!hasEnoughTokensToPublish) {
             throw new Error(
@@ -209,6 +258,8 @@ export class GlobalStateUpdater {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
         } else if (virtualBlockchain instanceof ValidatorNodeVb) {
             await this.handleValidatorNodeUpdate(globalState, virtualBlockchain, microblock);
+        } else if (virtualBlockchain instanceof ProtocolVb) {
+            await this.handleProtocolUpdate(virtualBlockchain, microblock);
         }
 
         // we are now sure that the fees payer account has enough tokens, so we proceed to the transfer of tokens
@@ -252,6 +303,7 @@ export class GlobalStateUpdater {
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
             virtualBlockchain.getExpirationDay(),
+            virtualBlockchain,
             microblock,
             transaction,
         );
@@ -260,7 +312,7 @@ export class GlobalStateUpdater {
 
     async finalizeBlockApproval(state: GlobalState, request: FinalizeBlockRequest) {
         const blockHeight = +request.height;
-        const blockTimestamp =  +(request.time?.seconds ?? 0);
+        const blockTimestamp = +(request.time?.seconds ?? 0);
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
@@ -293,6 +345,7 @@ export class GlobalStateUpdater {
         chainInfoObject.height = blockHeight;
         chainInfoObject.lastBlockTimestamp = blockTimestamp;
         chainInfoObject.microblockCount += this.processedAndAcceptedMicroblocks.length;
+        // TODO: update the chain information object with the protocol vbid
         chainInfoObject.objectCounts = chainInfoObject.objectCounts.map(
             (count, ndx) => count + this.newObjectCounts[ndx],
         );
@@ -445,7 +498,7 @@ export class GlobalStateUpdater {
                 },
                 {
                     mbHash: microblock.getHash().toBytes(),
-                    sectionIndex: accountCreationSection.index
+                    sectionIndex: accountCreationSection.index,
                 },
                 microblock.getTimestamp(),
             );
@@ -471,6 +524,7 @@ export class GlobalStateUpdater {
                 },
                 {
                     mbHash: microblock.getHash().toBytes(),
+                    sectionIndex: section.index,
                 },
                 microblock.getTimestamp(),
             );

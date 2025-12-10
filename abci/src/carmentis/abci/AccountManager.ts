@@ -107,7 +107,6 @@ export class AccountManager {
         this.logger.debug(`Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amount} at ${timestamp}`)
         this.logger.debug(`Transfer from: ${transfer.payerAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payerAccount) : 'Unknown'}`)
         this.logger.debug(`Transfer to: ${transfer.payeeAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payeeAccount) : 'Unknown'}`)
-        this.logger.debug(`Chain reference: {chainReference}`, {chainReference})
 
         const perfMeasure = this.perf.start('tokenTransfer');
 

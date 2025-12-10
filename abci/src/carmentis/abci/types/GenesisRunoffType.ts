@@ -9,6 +9,7 @@ const GenesisRunoffVestingSchema = z.object({
 const GenesisRunoffAccountSchema = z.object({
     name: z.string(),
     publicKey: z.string(),
+    privateKey: z.string().optional(),
 });
 
 const GenesisRunoffTransferSchema = z.object({

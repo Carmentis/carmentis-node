@@ -1,10 +1,11 @@
 import { MicroblockReadingMode, Storage } from './Storage';
 import { NodeCrypto } from '../crypto/NodeCrypto';
-import { Microblock, SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { BlockchainUtils, Microblock, SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { CachedLevelDb } from '../database/CachedLevelDb';
 import { FileIdentifier } from '../types/FileIdentifier';
 import { FileHandle, open } from 'node:fs/promises';
 import { IStorage } from './IStorage';
+import { getLogger } from '@logtape/logtape';
 
 interface BufferedTransactions {
     transactionsToWrite: Uint8Array[];
@@ -13,10 +14,13 @@ interface BufferedTransactions {
 
 export class CachedStorage implements IStorage {
 
+    private logger = getLogger(["node", "storage", CachedStorage.name]);
     private contentToBeWritten: Map<
         number,
         BufferedTransactions
     >;
+
+    private cachedSerializedMicroblockByHash: Map<string, Uint8Array> = new Map();
 
     constructor(
         private readonly storage: Storage,
@@ -27,6 +31,7 @@ export class CachedStorage implements IStorage {
     }
 
     async readFullMicroblock(hash: Uint8Array) {
+        this.logger.debug(`Reading serialized microblock ${Utils.binaryToHexa(hash)}`);
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_FULL);
     }
 
@@ -34,6 +39,7 @@ export class CachedStorage implements IStorage {
      * Reads a microblock header from its hash.
      */
     async readSerializedMicroblockHeader(hash: Uint8Array) {
+        this.logger.debug(`Reading serialized header of microblock ${Utils.binaryToHexa(hash)}`);
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_HEADER);
     }
 
@@ -41,6 +47,7 @@ export class CachedStorage implements IStorage {
      * Reads a microblock body from its hash.
      */
     async readSerializedMicroblockBody(hash: Uint8Array) {
+        this.logger.debug(`Reading serialized body of microblock ${Utils.binaryToHexa(hash)}`);
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_BODY);
     }
 
@@ -48,8 +55,31 @@ export class CachedStorage implements IStorage {
      * Reads a full microblock, microblock header or microblock body from its hash.
      */
     private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode) {
+        // we first search in the cache
+        const stringHash = Utils.binaryToHexa(hash);
+        const cachedSerializedMicroblock = this.cachedSerializedMicroblockByHash.get(stringHash);
+        if (cachedSerializedMicroblock) {
+            this.logger.debug(`Microblock ${stringHash} found in cache`);
+            if (partType === MicroblockReadingMode.READ_FULL) {
+                return cachedSerializedMicroblock
+            } else {
+                const cachedMicroblock = Microblock.loadFromSerializedMicroblock(cachedSerializedMicroblock);
+                const {headerData: cachedSerializedMicroblockHeader, bodyData: cachedSerializedMicroblockBody} =
+                    cachedMicroblock.serialize();
+                if (partType === MicroblockReadingMode.READ_HEADER) {
+                    return cachedSerializedMicroblockHeader;
+                } else {
+                    return cachedSerializedMicroblockBody;
+                }
+            }
+        } else {
+            this.logger.debug(`Microblock ${stringHash} not found in cache: searching on disk`)
+        }
+
+        // not found in cache, so we search on the disk storage
         const storageInfo = await this.db.getMicroblockStorage(hash);
         if (!storageInfo) {
+            this.logger.warn(`Microblock ${stringHash} not found`);
             return new Uint8Array();
         }
 
@@ -114,6 +144,8 @@ export class CachedStorage implements IStorage {
         microblock: Microblock,
         serializedMicroblock: Uint8Array,
     ): Promise<boolean> {
+        const stringMicroblockHash = Utils.binaryToHexa(microblock.getHashAsBytes());
+        this.logger.debug(`Storing microblock ${stringMicroblockHash} in cache`);
         const content = serializedMicroblock; //this.pendingTransactions[txId];
         const size = content.length;
         /*
@@ -131,6 +163,7 @@ export class CachedStorage implements IStorage {
         };
 
         // we add the transaction in the buffer
+        this.cachedSerializedMicroblockByHash.set(stringMicroblockHash, serializedMicroblock);
         let cacheObject: BufferedTransactions;
         if (this.contentToBeWritten.has(fileIdentifier)) {
             cacheObject = this.contentToBeWritten.get(fileIdentifier);

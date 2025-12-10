@@ -27,16 +27,18 @@ export const DB: SCHEMAS.Schema[] = [];
 // this always contains a single record
 export const DB_CHAIN_INFORMATION_KEY = new Uint8Array(Buffer.from('CHAIN_INFORMATION'));
 
+
+
 DB[DB_CHAIN_INFORMATION] = {
     label: 'ChainInformation',
     definition: [
         { name: 'height', type: DATA.TYPE_UINT48 },
         { name: 'lastBlockTimestamp', type: DATA.TYPE_UINT48 },
+//        { name: 'protocolVirtualBlockchainIdentifier', type: DATA.TYPE_BIN256 },
         { name: 'microblockCount', type: DATA.TYPE_UINT48 },
         {
             name: 'objectCounts',
             type: DATA.TYPE_ARRAY_OF | DATA.TYPE_UINT48,
-            size: CHAIN.N_VIRTUAL_BLOCKCHAINS,
         },
     ],
 };
@@ -140,15 +142,15 @@ DB[DB_ACCOUNTS] = {
     label: 'Accounts',
     definition: [],
 };
-DB[DB_VALIDATOR_NODES] = {
+DB[DB_VALIDATOR_NODES_INDEX] = {
     label: 'ValidatorNodes',
     definition: [],
 };
-DB[DB_ORGANIZATIONS] = {
+DB[DB_ORGANIZATIONS_INDEX] = {
     label: 'Organizations',
     definition: [],
 };
-DB[DB_APPLICATIONS] = {
+DB[DB_APPLICATIONS_INDEX] = {
     label: 'Applications',
     definition: [],
 };

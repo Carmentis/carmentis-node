@@ -17,6 +17,8 @@ import {
     MicroblockBody,
     MicroblockHeaderObject,
     PrivateSignatureKey,
+    ProtocolInternalState,
+    ProtocolVBInternalStateObject,
     PublicSignatureKey,
     Utils,
     VirtualBlockchain,
@@ -26,8 +28,9 @@ import {
 import { NODE_SCHEMAS } from '../constants/constants';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
-import {Performance} from '../Performance';
+import { Performance } from '../Performance';
 import { GenesisRunoff } from '../GenesisRunoff';
+import { maybeGetESLintCoreRule } from '@typescript-eslint/eslint-plugin/dist/util/getESLintCoreRule';
 
 export class GlobalState extends AbstractProvider {
     private readonly logger: Logger;
@@ -62,11 +65,51 @@ export class GlobalState extends AbstractProvider {
         return Hash.from(accountHashInBytes);
     }
 
-    getVirtualBlockchainStatus(
+    async getVirtualBlockchainStatus(
         virtualBlockchainId: Uint8Array,
     ): Promise<VirtualBlockchainStatus | null> {
-        // TODO implement
-        throw new Error('Method not implemented.');
+        // first search for the state
+        const vbState = await this.getVirtualBlockchainState(virtualBlockchainId);
+        if (vbState === null) {
+            this.logger.debug(`Virtual Blockchain with id ${Utils.binaryToHexa(virtualBlockchainId)} not found: returning null`);
+            return null;
+        }
+
+        // we now search for the microblock hashes contained in the virtual blockchain
+        const latestMicroblockHash = vbState.lastMicroblockHash;
+        const latestMicroblockHeader = await this.getMicroblockHeader(Hash.from(latestMicroblockHash));
+        let currentMicroblockHeader = latestMicroblockHeader;
+        const microblockHashes = [ latestMicroblockHash ]
+        for (let currentMicroblockHeight = currentMicroblockHeader.height; currentMicroblockHeight > 1; currentMicroblockHeight--) {
+            const previousMicrolockHash = currentMicroblockHeader.previousHash;
+            microblockHashes.push(previousMicrolockHash);
+            const previousMicroblockHeader= await this.getMicroblockHeader(Hash.from(previousMicrolockHash));
+            currentMicroblockHeader = previousMicroblockHeader;
+        }
+
+        const status: VirtualBlockchainStatus = {
+            microblockHashes: microblockHashes,
+            state: vbState
+        };
+        return status;
+    }
+
+    async getProtocolVariables(): Promise<ProtocolInternalState> {
+       try {
+           const protocolVirtualBlockchainIdentifier =
+               await this.cachedDb.getProtocolVirtualBlockchainIdentifier();
+           const protocolVbStatus = await this.getVirtualBlockchainState(
+               protocolVirtualBlockchainIdentifier,
+           );
+           const internalState = protocolVbStatus.internalState;
+           return ProtocolInternalState.createFromObject(internalState);
+       } catch (e) {
+           if (e instanceof Error) {
+               this.logger.warn("Unabled to return the protocol variables: " + e.message + `(${e.stack})`)
+               this.logger.warn("Returning default protocol variables")
+           }
+           return ProtocolInternalState.createInitialState();
+       }
     }
 
     async getVirtualBlockchainState(
@@ -77,6 +120,11 @@ export class GlobalState extends AbstractProvider {
         if (serializedVbState !== null) {
             return BlockchainUtils.decodeVirtualBlockchainState(serializedVbState);
         } else {
+            this.logger.warn(
+                'Virtual blockchain state not found in database: ' +
+                    Utils.binaryToHexa(virtualBlockchainId) +
+                    ': returning null',
+            );
             return null;
         }
     }
@@ -101,6 +149,7 @@ export class GlobalState extends AbstractProvider {
     }
 
     async getVirtualBlockchainIdContainingMicroblock(microblockHash: Hash): Promise<Hash> {
+        this.logger.debug(`Getting the virtual blockchain id containing the microblock ${microblockHash.encode()}`)
         const microblockInformation = await this.cachedDb.getMicroblockInformation(
             microblockHash.toBytes(),
         );
@@ -218,8 +267,10 @@ export class GlobalState extends AbstractProvider {
      */
     async storeVirtualBlockchainState(virtualBlockchain: VirtualBlockchain): Promise<void> {
         const vbId = virtualBlockchain.getId();
-        const serializedState =
-            await virtualBlockchain.getSerializedVirtualBlockchainState();
+        this.logger.debug(
+            `Store virtual blockchain state for ${Utils.binaryToHexa(vbId)}`,
+        );
+        const serializedState = await virtualBlockchain.getSerializedVirtualBlockchainState();
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(serializedState);
         await this.vbRadix.set(vbId, stateHash);
         await this.cachedDb.setSerializedVirtualBlockchainState(vbId, serializedState);
@@ -229,12 +280,19 @@ export class GlobalState extends AbstractProvider {
      * Stores the given microblock along with its associated transaction in the buffered storage.
      *
      * @param {number} expirationDay - The day when the microblock should expire and be removed from storage.
+     *
      * @param {Microblock} microblock - The microblock object that needs to be stored.
      * @param {Uint8Array} transaction - The transaction data associated with the microblock.
      * @return {Promise<void>} A promise that resolves when the microblock is successfully stored.
      */
-    async storeMicroblock(expirationDay: number, microblock: Microblock, transaction: Uint8Array) {
+    async storeMicroblock(expirationDay: number, virtualBlockchain: VirtualBlockchain, microblock: Microblock, transaction: Uint8Array) {
         await this.cachedStorage.addMicroblockToBuffer(expirationDay, microblock, transaction);
+        const { headerData: serializedHeader } = microblock.serialize();
+        await this.cachedDb.setMicroblockInformation(microblock, {
+            header: serializedHeader,
+            virtualBlockchainId: virtualBlockchain.getId(),
+            virtualBlockchainType: virtualBlockchain.getType(),
+        });
     }
 
     private async getSerializedVirtualBlockchainState(
@@ -247,18 +305,34 @@ export class GlobalState extends AbstractProvider {
 
     async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
         if (virtualBlockchain.getHeight() === 1) {
-            this.logger.debug(`Add virtual blockchain ${Utils.binaryToHexa(virtualBlockchain.getId())} to index`)
+            this.logger.debug(
+                `Add virtual blockchain ${Utils.binaryToHexa(virtualBlockchain.getId())} to index`,
+            );
             const vbType = virtualBlockchain.getType();
             const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
             if (indexTableId != -1) {
                 await this.cachedDb.putObject(indexTableId, virtualBlockchain.getId(), {});
             } else {
                 // no need to index this type of virtual blockchain
-                this.logger.debug(`Ignore virtual blockchain from index: virtual blockchain type ${virtualBlockchain.getType()} is ignored`)
+                this.logger.debug(
+                    `Ignore virtual blockchain from index: virtual blockchain type ${virtualBlockchain.getType()} is ignored`,
+                );
             }
         } else {
             // in this case, the virtual blockchain is (and should be) already indexed so no need to index it again
         }
+    }
 
+    async isProtocolVbDefined() {
+        this.logger.debug('Check if protocol VB state is defined in database');
+        try {
+            await this.getProtocolVariables();
+            return true;
+        } catch (e) {
+            this.logger.debug(
+                `Protocol VB state cannot be accessed in database (reason: ${e}): returning false`,
+            );
+            return false;
+        }
     }
 }

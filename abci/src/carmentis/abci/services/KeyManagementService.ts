@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
+    CryptoEncoderFactory,
     PrivateSignatureKey,
     Secp256k1PrivateSignatureKey,
     CryptoEncoderFactory,
@@ -50,7 +51,7 @@ export class KeyManagementService implements OnModuleInit {
             const publicKey = await retrievedPrivateKey.getPublicKey();
             const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
             this.logger.log(
-                `Loaded genesis public key: ${encoder.encodePublicKey(publicKey)}`,
+                `Loaded genesis public key: ${await encoder.encodePublicKey(publicKey)}`,
             );
         } else {
             this.logger.warn(
@@ -60,6 +61,7 @@ export class KeyManagementService implements OnModuleInit {
     }
 
     private async loadPrivateKeyFromEnvVar(envVarName: string): Promise<PrivateSignatureKey> {
+        this.logger.log(`Loading private key from env variable ${envVarName}...`);
         const envVarValue = process.env[envVarName];
         if (envVarValue === undefined) throw new Error(`Cannot load private key from env variable ${envVarName}: undefined value.`);
         const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
@@ -76,6 +78,7 @@ export class KeyManagementService implements OnModuleInit {
     }
 
     private async loadPrivateKeyFromEncodedPrivateKey(encodedPrivateKey: string): Promise<PrivateSignatureKey> {
+        this.logger.log(`Loading private key from encoded private key...`);
         const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
         return await encoder.decodePrivateKey(encodedPrivateKey);
     }

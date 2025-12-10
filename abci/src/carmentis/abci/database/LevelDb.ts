@@ -51,13 +51,15 @@ export class LevelDb implements DbInterface {
             case CHAIN.VB_ORGANIZATION:
                 return NODE_SCHEMAS.DB_ORGANIZATIONS;
             case CHAIN.VB_APPLICATION:
-                return NODE_SCHEMAS.DB_APPLICATIONS;
+                return NODE_SCHEMAS.DB_APPLICATIONS_INDEX;
+            case CHAIN.VB_PROTOCOL:
+                return NODE_SCHEMAS.DB_PROTOCOL_INDEX;
             default:
                 return -1;
         }
     }
 
-    async initialize() {
+    initialize() {
         this.logger.info(`Initializing LevelDB at ${this.path}`);
         const encoding = {
             keyEncoding: 'view',
@@ -147,7 +149,7 @@ export class LevelDb implements DbInterface {
         return await this.putRaw(tableId, key, data);
     }
 
-    async getKeys(tableId: number) {
+    async getKeys(tableId: number): Promise<Uint8Array[]> {
         const table = this.sub[tableId];
         const keys = [];
 
@@ -265,7 +267,7 @@ export class LevelDb implements DbInterface {
             height: 0,
             lastBlockTimestamp: 0,
             microblockCount: 0,
-            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0) // TODO: use version-based constants
+            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0), // TODO: use version-based constants
         };
         await this.putObject(
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,

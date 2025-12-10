@@ -48,9 +48,11 @@ import { Performance } from './Performance';
 import {
     AccountVb,
     CHAIN,
+    CMTSToken,
     CryptoEncoderFactory,
     ECO,
     EncoderFactory,
+    FeesCalculationFormulaFactory,
     GenesisSnapshotDTO,
     MessageSerializer,
     MessageUnserializer,
@@ -137,7 +139,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async onModuleInit() {
-        await this.db.initialize();
+        this.db.initialize();
     }
 
     /**
@@ -313,14 +315,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async saveGenesisSnapshotToDisk() {
-        // we assume that after the genesis state, the chain contains three blocks (starting at zero).
-        const chainHeightAfterGenesis = 2;
+        // we assume that after the genesis state, the chain contains one block (starting at one)
+        const chainHeightAfterGenesis = 1;
 
         // the genesis state's chunks are encoded in base64
         const base64Encoder = EncoderFactory.bytesToBase64Encoder();
 
         // we generate and export the genesis state as a snapshot
-        const numberOfChunksToExport = 4;
+        const numberOfChunksToExport = 4; // TODO(explain): why 4?
         const genesisChunks = [];
         for (
             let chunkIndexToExport = 0;
@@ -415,47 +417,120 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         issuerPrivateKey: PrivateSignatureKey,
         request: InitChainRequest,
     ) {
-        // we first create a blockchain client equipped with the key of the
-        const stateBuilder = InitialBlockchainStateBuilder.create(
-            this.state,
-            request,
-            issuerPrivateKey,
-        );
+        // define variables used below
+        const issuerPublicKey = await issuerPrivateKey.getPublicKey();
 
-        // we start by creating the issuer account
+        // we create the (single) protocol virtual blockchain
+        const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
+        protocolMicroblock.addProtocolPublicKeySection({
+            schemeId: issuerPublicKey.getSignatureSchemeId(),
+            publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
+        });
+        const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
+
+        // we create  the issuer account
         this.logger.log('Creating microblock for issuer account creation');
-        const publicKey = await issuerPrivateKey.getPublicKey();
         const issuerAccountMicroblock = Microblock.createGenesisAccountMicroblock();
-        issuerAccountMicroblock.addAccountSignatureSchemeSection({ schemeId: publicKey.getSignatureSchemeId() });
-        issuerAccountMicroblock.addAccountPublicKeySection({ publicKey: await publicKey.getPublicKeyAsBytes() });
+        issuerAccountMicroblock.addAccountPublicKeySection({
+            publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
+            schemeId: issuerPublicKey.getSignatureSchemeId(),
+        });
         issuerAccountMicroblock.addAccountTokenIssuanceSection({ amount: ECO.INITIAL_OFFER });
         const signature = await issuerAccountMicroblock.sign(issuerPrivateKey);
-        issuerAccountMicroblock.addAccountSignatureSection({ signature });
-        const {microblockData, microblockHash: issuerAccountHash} = issuerAccountMicroblock.serialize();
+        issuerAccountMicroblock.addAccountSignatureSection({
+            signature,
+            schemeId: issuerPrivateKey.getSignatureSchemeId(),
+        });
+        const { microblockData, microblockHash: issuerAccountHash } =
+            issuerAccountMicroblock.serialize();
 
-        // we then create the accounts receiving tokens from the issuer
-        const transactions = [microblockData]
-        const directAccounts = this.genesisRunoffs.getAccountsReceivingTokensFromIssuer();
-        const sigEncoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
-        for (const account of directAccounts) {
-            const accountPublicKey = await sigEncoder.decodePublicKey(account.publicKey)
-            const mb = Microblock.createGenesisAccountMicroblock();
-            mb.addAccountSignatureSchemeSection({ schemeId: accountPublicKey.getSignatureSchemeId() });
-            mb.addAccountPublicKeySection({ publicKey: await accountPublicKey.getPublicKeyAsBytes() });
-            mb.addAccountCreationSection({
-                sellerAccount: issuerAccountHash,
-                amount: this.genesisRunoffs.getTransferredAmountInAtomicFromIssuerToAccount(account.name)
-            });
-            const signature = await mb.sign(issuerPrivateKey);
-            mb.addAccountSignatureSection({ signature });
-            const {microblockData} = mb.serialize();
-            transactions.push(microblockData);
+        // we now proceed to the runoff
+        const transactions = [protocolInitialUpdate, microblockData];
+        const accountHashByAccountName = new Map([['issuer', issuerAccountHash]]);
+        const createsMicroblocksByVbId = new Map<Uint8Array, Microblock[]>();
+        for (const transfer of this.genesisRunoffs.getOrderedTransfers()) {
+            this.logger.log(
+                `transfer ${transfer.amount} from ${transfer.source} to ${transfer.destination}`,
+            );
+            // load the source account
+            const sourceAccountName = transfer.source;
+            const sourceAccountHash = accountHashByAccountName.get(sourceAccountName);
+            if (sourceAccountHash === undefined)
+                throw new Error(
+                    `Undefined source account hash for account named ${sourceAccountName}`,
+                );
+            const sourceAccountPrivateKey =
+                sourceAccountName === 'issuer'
+                    ? issuerPrivateKey
+                    : await this.genesisRunoffs.getPrivateKeyForAccountByName(sourceAccountName);
+            const sourceAccountExistingMicroblocks =
+                createsMicroblocksByVbId.get(sourceAccountHash) || [];
+
+            // load the destination account
+            const destinationAccountName = transfer.destination;
+            const destinationAccountHash = accountHashByAccountName.get(destinationAccountName);
+            const destinationAccountExistingMicroblocks =
+                createsMicroblocksByVbId.get(destinationAccountHash) || [];
+            if (destinationAccountHash === undefined) {
+                // create the destination account
+                const destinationAccountPublicKey =
+                    destinationAccountName === 'issuer'
+                        ? issuerPublicKey
+                        : await this.genesisRunoffs.getPublicKeyForAccountByName(
+                              destinationAccountName,
+                          );
+
+                const mb = Microblock.createGenesisAccountMicroblock();
+                mb.addAccountPublicKeySection({
+                    publicKey: await destinationAccountPublicKey.getPublicKeyAsBytes(),
+                    schemeId: destinationAccountPublicKey.getSignatureSchemeId(),
+                });
+                mb.addAccountCreationSection({
+                    sellerAccount: sourceAccountHash,
+                    amount: CMTSToken.createCMTS(transfer.amount).getAmountAsAtomic(),
+                });
+                const signature = await mb.sign(sourceAccountPrivateKey);
+                mb.addAccountSignatureSection({
+                    signature,
+                    schemeId: sourceAccountPrivateKey.getSignatureSchemeId(),
+                });
+                const { microblockData, microblockHash: createdDestinationAccountHash } =
+                    mb.serialize();
+                transactions.push(microblockData);
+                accountHashByAccountName.set(destinationAccountName, createdDestinationAccountHash);
+                createsMicroblocksByVbId.set(createdDestinationAccountHash, [
+                    ...destinationAccountExistingMicroblocks,
+                    mb,
+                ]);
+            } else {
+                this.logger.debug("Extending existing virtual blockchain during account tranfer")
+                // just transfer the account, no need to use the destination account, only the destination account hash and the source account private key
+                const mb = Microblock.createGenesisAccountMicroblock();
+                const previousMicroblocks = sourceAccountExistingMicroblocks;
+                mb.addAccountTransferSection({
+                    account: destinationAccountHash,
+                    privateReference: '',
+                    publicReference: '',
+                    amount: CMTSToken.createCMTS(transfer.amount).getAmountAsAtomic(),
+                });
+                mb.setAsSuccessorOf(previousMicroblocks[previousMicroblocks.length - 1]);
+                const signature = await mb.sign(sourceAccountPrivateKey);
+                mb.addAccountSignatureSection({
+                    signature,
+                    schemeId: sourceAccountPrivateKey.getSignatureSchemeId(),
+                });
+                const { microblockData } = mb.serialize();
+                transactions.push(microblockData);
+                createsMicroblocksByVbId.set(sourceAccountHash, [
+                    ...sourceAccountExistingMicroblocks,
+                    mb,
+                ]);
+            }
         }
 
+        await this.publishGenesisTransactions(transactions, 1);
 
-        await this.publishGenesisTransactions(transactions, 1)
-
-        const {appHash} = await this.state.getApplicationHash();
+        const { appHash } = await this.state.getApplicationHash();
         return appHash;
     }
 
@@ -465,24 +540,28 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     ) {
         // Since we are publishing transactions at the genesis, publication timestamp is at the lowest possible value.
         // The proposer address is undefined since we do not have published this node.
-        const logger = getLogger(['node', "genesis"])
+        const logger = getLogger(['node', 'genesis']);
         const blockTimestamp = Utils.getTimestampInSeconds();
-        const proposerAddress = new Uint8Array(32);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
         let txIndex = 0;
+        // we create working state to check the transaction
+        const workingState = this.state;
         for (const tx of transactions) {
             txIndex += 1;
-            logger.debug(`Handling transaction ${txIndex} on ${transactions.length}`)
+            logger.debug(`Handling transaction ${txIndex} on ${transactions.length}`);
             try {
                 const serializedMicroblock = tx;
-                const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
-                logger.debug(`Transaction parsed successfully: microblock ${parsedMicroblock.getHash().encode()}`)
+                const parsedMicroblock =
+                    Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+                logger.debug(
+                    `Transaction parsed successfully: microblock ${parsedMicroblock.getHash().encode()} (type ${parsedMicroblock.getType()})`,
+                );
 
-                // we create working state to check the transaction
-                const workingState = this.state;
+
                 const checkResult = await this.checkMicroblockLocalStateConsistency(
                     workingState,
                     parsedMicroblock,
+                    true,
                 );
                 if (checkResult.checked) {
                     const vb = checkResult.vb;
@@ -496,17 +575,33 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         tx
                     );
                 } else {
-                    logger.warn(`Microblock ${parsedMicroblock.getHash().encode()} rejected`)
+                    logger.warn(`Microblock ${parsedMicroblock.getHash().encode()} rejected`);
                 }
             } catch (e) {
-                logger.error(`An error occurred during handling of genesis microblock: ${e}`)
+                logger.error(`An error occurred during handling of genesis microblock: ${e}`);
                 if (e instanceof Error) {
-                    logger.debug(e.stack)
+                    logger.debug(e.stack);
                 }
             }
         }
 
-        const {appHash} =  await this.state.getApplicationHash();
+        // finalize the working state
+        this.logger.log(`Finalizing publication of ${transactions.length} transactions at height ${publishedBlockHeight}`);
+        await globalStateUpdater.finalizeBlockApproval(workingState, {
+            hash: Utils.getNullHash(),
+            height: publishedBlockHeight,
+            misbehavior: [],
+            next_validators_hash: Utils.getNullHash(),
+            proposer_address: Utils.getNullHash(),
+            syncing_to_height: publishedBlockHeight,
+            txs: transactions
+        });
+
+        // commit the state
+        this.logger.log(`Committing state at height ${publishedBlockHeight}`);
+        await this.state.commit();
+
+        const { appHash } = await this.state.getApplicationHash();
         return appHash;
     }
     /**
@@ -589,9 +684,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.log(
             `[ PrepareProposal - Height: ${blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(
-            `Handling ${request.txs.length} transations at ts=${blockTimestamp}`,
-        );
+        this.logger.log(`Handling ${request.txs.length} transations at ts=${blockTimestamp}`);
 
         const proposedTxs = [];
         const workingState = new GlobalState(this.db, this.storage);
@@ -653,9 +746,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.log(
             `[ ProcessProposal - Height: ${blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(
-            `Handling ${request.txs.length} transations at ts=${blockTimestamp}`,
-        );
+        this.logger.log(`Handling ${request.txs.length} transations at ts=${blockTimestamp}`);
 
         const workingState = new GlobalState(this.db, this.storage);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
@@ -720,9 +811,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.log(
             `[ FinalizeBlock - Height: ${blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(
-            `Handling ${request.txs.length} transations at ts=${blockTimestamp}`,
-        );
+        this.logger.log(`Handling ${request.txs.length} transations at ts=${blockTimestamp}`);
 
         const workingState = this.state;
         const txResults = [];
@@ -781,7 +870,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
         this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
-
         perfMeasure.end();
 
         return FinalizeBlockResponse.create({
@@ -791,7 +879,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             validator_updates: globalStateUpdater.getValidatorSetUpdates(),
             consensus_param_updates: undefined,
         });
-
     }
 
     async Commit(request: CommitRequest) {
@@ -895,7 +982,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         });
     }
 
-
     private async clearDatabase() {
         this.logger.log(`Clearing database`);
         await this.db.clear();
@@ -929,12 +1015,30 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         checkedMicroblock: Microblock,
         executedDuringGenesis = false,
     ): Promise<MicroblockCheckResult> {
+        this.logger.debug(
+            `Checking microblock local state consistency: genesis mode enabled? ${executedDuringGenesis}`,
+        );
         const microblockCheckTimer = this.perf.start('checking microblock');
         try {
             const checker = new MicroblockConsistencyChecker(workingState, checkedMicroblock);
+
+            // loading and checking virtual blockchain consistency when adding the microblock
+            this.logger.debug(`Checking virtual blockchain consistency...`);
             await checker.checkVirtualBlockchainConsistencyOrFail();
+
+            // check the consistency of the timestamp defined in the microbloc
+            this.logger.debug('Checking timestamp consistency...');
             checker.checkTimestampOrFail();
-            checker.checkGasOrFail();
+
+            // checking gas consistency (skipped when running in genesis mode)
+            if (executedDuringGenesis) {
+                this.logger.debug('Running in genesis mode, skipping gas consistency check...');
+            } else {
+                this.logger.debug('Checking gas consistency...');
+                await checker.checkGasOrFail();
+            }
+
+            this.logger.debug('Checks are done');
             const vb = checker.getVirtualBlockchain();
             return { checked: true, vb: vb };
         } catch (error) {
