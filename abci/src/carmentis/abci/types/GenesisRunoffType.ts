@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 const GenesisRunoffVestingSchema = z.object({
     name: z.string(),
-    cliffPeriod: z.number(),
-    vestingPeriod: z.number(),
+    cliffDurationInDays: z.number(),
+    vestingDurationInDays: z.number(),
 });
 
 const GenesisRunoffAccountSchema = z.object({

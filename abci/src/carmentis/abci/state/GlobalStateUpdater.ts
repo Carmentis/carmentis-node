@@ -579,6 +579,7 @@ export class GlobalStateUpdater {
                 },
                 {
                     mbHash: microblock.getHash().toBytes(),
+                    sectionIndex: section.index,
                 },
                 microblock.getTimestamp(),
             );
@@ -604,6 +605,7 @@ export class GlobalStateUpdater {
                 },
                 {
                     mbHash: microblock.getHash().toBytes(),
+                    sectionIndex: section.index,
                 },
                 microblock.getTimestamp(),
             );

@@ -80,6 +80,7 @@ import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
 import { GenesisRunoff } from './GenesisRunoff';
 import { getLogger } from '@logtape/logtape';
 import { GlobalStateUpdateCometParameters } from './types/GlobalStateUpdateCometParameters';
+import { GenesisRunoffTransactionsBuilder } from './GenesisRunoffTransactionsBuilder';
 
 const APP_VERSION = 1;
 
@@ -422,19 +423,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         // we first create the issuer account
         this.logger.log('Creating microblock for issuer account creation');
-        const issuerAccountMicroblock = Microblock.createGenesisAccountMicroblock();
-        issuerAccountMicroblock.addAccountPublicKeySection({
+        const issuerAccountCreationMicroblock = Microblock.createGenesisAccountMicroblock();
+        issuerAccountCreationMicroblock.addAccountPublicKeySection({
             publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
             schemeId: issuerPublicKey.getSignatureSchemeId(),
         });
-        issuerAccountMicroblock.addAccountTokenIssuanceSection({ amount: ECO.INITIAL_OFFER });
-        const signature = await issuerAccountMicroblock.sign(issuerPrivateKey);
-        issuerAccountMicroblock.addAccountSignatureSection({
+        issuerAccountCreationMicroblock.addAccountTokenIssuanceSection({ amount: ECO.INITIAL_OFFER });
+        const signature = await issuerAccountCreationMicroblock.sign(issuerPrivateKey);
+        issuerAccountCreationMicroblock.addAccountSignatureSection({
             signature,
             schemeId: issuerPrivateKey.getSignatureSchemeId(),
         });
         const { microblockData: issuerAccountCreationSerializedMicroblock, microblockHash: issuerAccountHash } =
-            issuerAccountMicroblock.serialize();
+            issuerAccountCreationMicroblock.serialize();
 
         // we now create the Carmentis Governance organization
         this.logger.log('Creating governance organization microblock');
@@ -509,86 +510,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             carmentisOrganizationData,
             carmentisNodeMicroblock,
         ];
-        const accountHashByAccountName = new Map([['issuer', issuerAccountHash]]);
-        const createsMicroblocksByVbId = new Map<Uint8Array, Microblock[]>();
-        for (const transfer of this.genesisRunoffs.getOrderedTransfers()) {
-            const transferredTokens = CMTSToken.createCMTS(transfer.amount);
-            this.logger.log(
-                `transfer ${transferredTokens.toString()} from ${transfer.source} to ${transfer.destination}`,
-            );
-            // load the source account
-            const sourceAccountName = transfer.source;
-            const sourceAccountHash = accountHashByAccountName.get(sourceAccountName);
-            if (sourceAccountHash === undefined)
-                throw new Error(
-                    `Undefined source account hash for account named ${sourceAccountName}`,
-                );
-            const sourceAccountPrivateKey =
-                sourceAccountName === 'issuer'
-                    ? issuerPrivateKey
-                    : await this.genesisRunoffs.getPrivateKeyForAccountByName(sourceAccountName);
-            const sourceAccountExistingMicroblocks =
-                createsMicroblocksByVbId.get(sourceAccountHash) || [];
-
-            // load the destination account
-            const destinationAccountName = transfer.destination;
-            const destinationAccountHash = accountHashByAccountName.get(destinationAccountName);
-            const destinationAccountExistingMicroblocks =
-                createsMicroblocksByVbId.get(destinationAccountHash) || [];
-            if (destinationAccountHash === undefined) {
-                // create the destination account
-                const destinationAccountPublicKey =
-                    destinationAccountName === 'issuer'
-                        ? issuerPublicKey
-                        : await this.genesisRunoffs.getPublicKeyForAccountByName(
-                              destinationAccountName,
-                          );
-
-                const mb = Microblock.createGenesisAccountMicroblock();
-                mb.addAccountPublicKeySection({
-                    publicKey: await destinationAccountPublicKey.getPublicKeyAsBytes(),
-                    schemeId: destinationAccountPublicKey.getSignatureSchemeId(),
-                });
-                mb.addAccountCreationSection({
-                    sellerAccount: sourceAccountHash,
-                    amount: CMTSToken.createCMTS(transfer.amount).getAmountAsAtomic(),
-                });
-                const signature = await mb.sign(sourceAccountPrivateKey);
-                mb.addAccountSignatureSection({
-                    signature,
-                    schemeId: sourceAccountPrivateKey.getSignatureSchemeId(),
-                });
-                const { microblockData, microblockHash: createdDestinationAccountHash } =
-                    mb.serialize();
-                transactions.push(microblockData);
-                accountHashByAccountName.set(destinationAccountName, createdDestinationAccountHash);
-                createsMicroblocksByVbId.set(createdDestinationAccountHash, [
-                    ...destinationAccountExistingMicroblocks,
-                    mb,
-                ]);
-                this.logger.debug(`Transfer of ${transferredTokens.toString()} from ${Utils.binaryToHexa(sourceAccountHash)} (${transfer.source}) to ${Utils.binaryToHexa(createdDestinationAccountHash)} (${transfer.destination})`)
-            } else {
-                this.logger.debug("Extending existing virtual blockchain during account tranfer")
-                // just transfer the account, no need to use the destination account, only the destination account hash and the source account private key
-                const mb = Microblock.createGenesisAccountMicroblock();
-                const previousMicroblocks = sourceAccountExistingMicroblocks;
-                mb.addAccountTransferSection({
-                    account: destinationAccountHash,
-                    privateReference: '',
-                    publicReference: '',
-                    amount: CMTSToken.createCMTS(transfer.amount).getAmountAsAtomic(),
-                });
-                mb.setAsSuccessorOf(previousMicroblocks[previousMicroblocks.length - 1]);
-                await mb.seal(sourceAccountPrivateKey);
-                const { microblockData } = mb.serialize();
-                transactions.push(microblockData);
-                createsMicroblocksByVbId.set(sourceAccountHash, [
-                    ...sourceAccountExistingMicroblocks,
-                    mb,
-                ]);
-                this.logger.debug(`Transfer of ${transferredTokens.toString()} from ${Utils.binaryToHexa(sourceAccountHash)} (${transfer.source}) to ${Utils.binaryToHexa(destinationAccountHash)} (${transfer.destination})`)
-            }
-        }
+        const runoffTransactionsBuilder = new GenesisRunoffTransactionsBuilder(
+            this.genesisRunoffs,
+            issuerAccountHash,
+            issuerPrivateKey,
+            issuerPublicKey,
+            issuerAccountCreationMicroblock
+        );
+        const runoffsTransactions = await runoffTransactionsBuilder.createRunoffTransactions();
+        transactions.push(...runoffsTransactions);
 
         await this.publishGenesisTransactions(transactions, 1);
 

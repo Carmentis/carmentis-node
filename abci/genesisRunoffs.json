@@ -2,8 +2,18 @@
     "vesting": [
         {
             "name": "seed",
-            "cliffPeriod": 12,
-            "vestingPeriod": 10
+            "cliffDurationInDays": 12,
+            "vestingDurationInDays": 10
+        },
+        {
+            "name": "invest",
+            "cliffDurationInDays": 0,
+            "vestingDurationInDays": 10
+        },
+        {
+            "name": "test",
+            "cliffDurationInDays": 1,
+            "vestingDurationInDays": 0
         }
     ],
     "accounts": [
@@ -24,6 +34,10 @@
         {
             "name": "invest-1",
             "publicKey": "SIG:SECP256K1:PK{039fca93b78a9a3bd96476147daf18752f775aa7f5d145439c593af17535755020}"
+        },
+        {
+            "name": "invest-3",
+            "publicKey": "SIG:SECP256K1:PK{039fcb93b78a9a3bd96476147daf18752f775aa7f5d145439c593af17535755020}"
         },
         {
             "name": "invest-2",
@@ -49,12 +63,20 @@
         {
             "source": "team-advisors",
             "destination": "invest-1",
-            "amount": 30
+            "vesting": "seed",
+            "amount": 1
         },
         {
             "source": "team-advisors",
             "destination": "invest-2",
-            "amount":  15
+            "vesting": "invest",
+            "amount":  2
+        },
+        {
+            "source": "team-advisors",
+            "destination": "invest-3",
+            "vesting": "test",
+            "amount":  3
         }
     ]
 }

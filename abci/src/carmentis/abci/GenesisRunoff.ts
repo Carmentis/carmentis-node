@@ -328,4 +328,12 @@ export class GenesisRunoff {
         }
         return await encoder.decodePublicKey(account.publicKey);
     }
+
+    getVestingByName(vestinName: string) {
+        const vesting = this.data.vesting.find((v) => v.name === vestinName);
+        if (!vesting) {
+            throw new Error(`Vesting ${vestinName} not found in genesis runoff`);
+        }
+        return vesting;
+    }
 }
