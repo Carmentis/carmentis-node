@@ -13,11 +13,12 @@ export const DB_ACCOUNT_STATE = 0x09;
 export const DB_ACCOUNT_HISTORY = 0x0a;
 export const DB_ACCOUNT_BY_PUBLIC_KEY = 0x0b;
 export const DB_ACCOUNTS_WITH_VESTING_LOCKS = 0x0c;
-export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0d;
-export const DB_ACCOUNTS = 0x0e;
-export const DB_VALIDATOR_NODES = 0x0f;
-export const DB_ORGANIZATIONS = 0x10;
-export const DB_APPLICATIONS = 0x11;
+export const DB_ESCROWS = 0x0d;
+export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0e;
+export const DB_ACCOUNTS = 0x0f;
+export const DB_VALIDATOR_NODES = 0x10;
+export const DB_ORGANIZATIONS = 0x11;
+export const DB_APPLICATIONS = 0x12;
 
 export const DB: SCHEMAS.Schema[] = [];
 
@@ -114,11 +115,24 @@ DB[DB_ACCOUNTS_WITH_VESTING_LOCKS] = {
     definition: [],
 };
 
+// escrows
+// key: escrow identifier
+DB[DB_ESCROWS] = {
+    label: 'Escrows',
+    definition: [
+        { name: 'payerAccount', type: DATA.TYPE_BIN256 },
+        { name: 'payeeAccount', type: DATA.TYPE_BIN256 },
+        { name: 'agentAccount', type: DATA.TYPE_BIN256 }
+    ],
+};
+
 // Comet address -> validator node VB identifier
 // key: Comet address
 DB[DB_VALIDATOR_NODE_BY_ADDRESS] = {
     label: 'ValidatorNodeByAddress',
-    definition: [{ name: 'validatorNodeHash', type: DATA.TYPE_BIN256 }],
+    definition: [
+        { name: 'validatorNodeHash', type: DATA.TYPE_BIN256 }
+    ],
 };
 
 // tables used as indexes
@@ -145,8 +159,10 @@ DB[DB_APPLICATIONS] = {
 const ACCOUNT_LOCK_ESCROW_PARAMETERS = {
     label: 'AccountLockEscrowParameters',
     definition: [
+        { name: 'startTime', type: DATA.TYPE_UINT48 },
         { name: 'escrowIdentifier', type: DATA.TYPE_BINARY },
-        { name: 'agentPublicKey', type: DATA.TYPE_BINARY }
+        { name: 'agentAccount', type: DATA.TYPE_BIN256 },
+        { name: 'durationDays', type: DATA.TYPE_UINT16 }
     ]
 };
 
@@ -163,7 +179,8 @@ const ACCOUNT_LOCK_VESTING_PARAMETERS = {
 const ACCOUNT_LOCK_STAKING_PARAMETERS = {
     label: 'AccountLockStakingParameters',
     definition: [
-        { name: 'nodeIdentifier', type: DATA.TYPE_BIN256 }
+        { name: 'objectType', type: DATA.TYPE_UINT8 },
+        { name: 'objectIdentifier', type: DATA.TYPE_BIN256 }
     ]
 };
 

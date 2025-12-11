@@ -59,8 +59,10 @@ interface VestingParameters {
 }
 
 interface EscrowParameters {
+    startTime: number;
     escrowIdentifier: Uint8Array;
-    agentPublicKey: any;
+    agentAccount: Uint8Array;
+    durationDays: number;
 }
 
 export interface Transfer {
@@ -291,7 +293,16 @@ export class AccountManager {
                 accountLockManager.addEscrowedTokens(
                     signedAmount,
                     escrowParameters.escrowIdentifier,
-                    escrowParameters.agentPublicKey
+                    escrowParameters.agentAccount
+                );
+                await this.db.putObject(
+                    NODE_SCHEMAS.DB_ESCROWS,
+                    escrowParameters.escrowIdentifier,
+                    {
+                        payerAccount: linkedAccountHash,
+                        payeeAccount: accountHash,
+                        agentAccount: escrowParameters.agentAccount
+                    }
                 );
                 break;
             }

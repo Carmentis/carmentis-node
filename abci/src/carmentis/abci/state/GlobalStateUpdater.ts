@@ -29,6 +29,7 @@ import { GlobalState } from './GlobalState';
 import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
 import { AccountState, AccountInformation } from '../types/AccountInformation';
 import { BlockInformation } from '../types/BlockInformation';
+import { Escrow } from '../types/Escrow';
 import { GlobalStateUpdateCometParameters } from './GlobalStateUpdateCometParameters';
 import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { LevelDb } from '../database/LevelDb';
@@ -70,6 +71,7 @@ export class GlobalStateUpdater {
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
 
         if(currentBlockDayTs != previousBlockDayTs) {
+            // update vesting locks
             const accountsWithVestingLocksIdentifiers = await database.getKeys(NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS);
 
             for(const id of accountsWithVestingLocksIdentifiers) {
@@ -82,6 +84,15 @@ export class GlobalStateUpdater {
                     accountState.locks = accountLockManager.getLocks();
                     await database.putObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id, accountState);
                 }
+            }
+
+            // update escrow locks
+            const escrowIdentifiers = await database.getKeys(NODE_SCHEMAS.DB_ESCROWS);
+
+            for(const id of escrowIdentifiers) {
+                // TODO: it would be more efficient to have a method that directly returns all objects of a table
+                const escrow = await database.getObject(NODE_SCHEMAS.DB_ESCROWS, id) as Escrow;
+                const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, escrow.payeeAccount) as AccountState;
             }
         }
     }
@@ -485,7 +496,25 @@ export class GlobalStateUpdater {
             SectionType.ACCOUNT_ESCROW_TRANSFER,
         );
         for (const section of tokenEscrowTransferSections) {
-            // TODO: to be implemented
+            const { account, amount, escrowIdentifier, agentAccount, durationDays } = section.object;
+            await accountManager.tokenTransfer(
+                {
+                    type: ECO.BK_SENT_ESCROW,
+                    payerAccount: accountVb.getId(),
+                    payeeAccount: account,
+                    amount,
+                    escrowParameters: {
+                        startTime: microblock.getTimestamp(),
+                        escrowIdentifier,
+                        agentAccount,
+                        durationDays
+                    }
+                },
+                {
+                    mbHash: microblock.getHash().toBytes(),
+                },
+                microblock.getTimestamp(),
+            );
         }
 
         // check token vesting transfers
