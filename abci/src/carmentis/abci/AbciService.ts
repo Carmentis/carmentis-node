@@ -420,15 +420,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // define variables used below
         const issuerPublicKey = await issuerPrivateKey.getPublicKey();
 
-        // we create the (single) protocol virtual blockchain
-        const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
-        protocolMicroblock.addProtocolPublicKeySection({
-            schemeId: issuerPublicKey.getSignatureSchemeId(),
-            publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
-        });
-        const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
-
-        // we create  the issuer account
+        // we first create the issuer account
         this.logger.log('Creating microblock for issuer account creation');
         const issuerAccountMicroblock = Microblock.createGenesisAccountMicroblock();
         issuerAccountMicroblock.addAccountPublicKeySection({
@@ -441,16 +433,88 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             signature,
             schemeId: issuerPrivateKey.getSignatureSchemeId(),
         });
-        const { microblockData, microblockHash: issuerAccountHash } =
+        const { microblockData: issuerAccountCreationSerializedMicroblock, microblockHash: issuerAccountHash } =
             issuerAccountMicroblock.serialize();
 
+        // we now create the Carmentis Governance organization
+        this.logger.log('Creating governance organization microblock');
+        const governanceOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
+        governanceOrganizationMicroblock.addOrganizationCreationSection({
+            accountId: issuerAccountHash,
+        });
+        governanceOrganizationMicroblock.addOrganizationDescriptionSection({
+            name: "Carmentis Governance",
+            website: "",
+            countryCode: "FR",
+            city: ""
+        })
+        await governanceOrganizationMicroblock.seal(issuerPrivateKey)
+        const { microblockData: governanceOrganizationData, microblockHash: governanceOrgId } =
+            governanceOrganizationMicroblock.serialize();
+
+
+        // we create the (single) protocol virtual blockchain
+        this.logger.log('Creating protocol microblock');
+        const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
+        protocolMicroblock.addProtocolCreationSection({
+            organizationId: governanceOrgId
+        });
+        await protocolMicroblock.seal(issuerPrivateKey)
+        const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
+
+
+        // we now create the Carmentis SAS organization
+        this.logger.log('Creating Carmentis SAS organization microblock');
+        const carmentisOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
+        carmentisOrganizationMicroblock.addOrganizationCreationSection({
+            accountId: issuerAccountHash,
+        });
+        carmentisOrganizationMicroblock.addOrganizationDescriptionSection({
+            name: "Carmentis SAS",
+            website: "",
+            countryCode: "FR",
+            city: ""
+        })
+        await carmentisOrganizationMicroblock.seal(issuerPrivateKey)
+        const { microblockData: carmentisOrganizationData, microblockHash: carmentisOrgId } =
+            carmentisOrganizationMicroblock.serialize();
+
+        // We now declare the running node as the genesis node.
+        this.logger.log('Creating genesis validator node microblock');
+        const mb = Microblock.createGenesisValidatorNodeMicroblock();
+        mb.addValidatorNodeCreationSection({
+            organizationId: carmentisOrgId,
+        });
+        const genesisValidator = request.validators[0];
+        mb.addValidatorNodeCometbftPublicKeyDeclarationSection({
+            cometPublicKey: Utils.binaryToHexa(genesisValidator.pub_key_bytes),
+            cometPublicKeyType: genesisValidator.pub_key_type,
+        });
+        mb.addValidatorNodeRpcEndpointSection({
+            rpcEndpoint: this.nodeConfig.getCometbftExposedRpcEndpoint(),
+        });
+        await mb.seal(issuerPrivateKey);
+
+
+        const {
+            microblockData: carmentisNodeMicroblock,
+        } = mb.serialize();
+
+
         // we now proceed to the runoff
-        const transactions = [protocolInitialUpdate, microblockData];
+        const transactions = [
+            issuerAccountCreationSerializedMicroblock,
+            governanceOrganizationData,
+            protocolInitialUpdate,
+            carmentisOrganizationData,
+            carmentisNodeMicroblock,
+        ];
         const accountHashByAccountName = new Map([['issuer', issuerAccountHash]]);
         const createsMicroblocksByVbId = new Map<Uint8Array, Microblock[]>();
         for (const transfer of this.genesisRunoffs.getOrderedTransfers()) {
+            const transferredTokens = CMTSToken.createCMTS(transfer.amount);
             this.logger.log(
-                `transfer ${transfer.amount} from ${transfer.source} to ${transfer.destination}`,
+                `transfer ${transferredTokens.toString()} from ${transfer.source} to ${transfer.destination}`,
             );
             // load the source account
             const sourceAccountName = transfer.source;
@@ -502,6 +566,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     ...destinationAccountExistingMicroblocks,
                     mb,
                 ]);
+                this.logger.debug(`Transfer of ${transferredTokens.toString()} from ${Utils.binaryToHexa(sourceAccountHash)} (${transfer.source}) to ${Utils.binaryToHexa(createdDestinationAccountHash)} (${transfer.destination})`)
             } else {
                 this.logger.debug("Extending existing virtual blockchain during account tranfer")
                 // just transfer the account, no need to use the destination account, only the destination account hash and the source account private key
@@ -514,17 +579,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     amount: CMTSToken.createCMTS(transfer.amount).getAmountAsAtomic(),
                 });
                 mb.setAsSuccessorOf(previousMicroblocks[previousMicroblocks.length - 1]);
-                const signature = await mb.sign(sourceAccountPrivateKey);
-                mb.addAccountSignatureSection({
-                    signature,
-                    schemeId: sourceAccountPrivateKey.getSignatureSchemeId(),
-                });
+                await mb.seal(sourceAccountPrivateKey);
                 const { microblockData } = mb.serialize();
                 transactions.push(microblockData);
                 createsMicroblocksByVbId.set(sourceAccountHash, [
                     ...sourceAccountExistingMicroblocks,
                     mb,
                 ]);
+                this.logger.debug(`Transfer of ${transferredTokens.toString()} from ${Utils.binaryToHexa(sourceAccountHash)} (${transfer.source}) to ${Utils.binaryToHexa(destinationAccountHash)} (${transfer.destination})`)
             }
         }
 

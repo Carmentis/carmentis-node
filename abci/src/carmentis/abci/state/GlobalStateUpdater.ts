@@ -175,16 +175,19 @@ export class GlobalStateUpdater {
         // we now perform the token transfer ex nihilo
         const tokenIssuanceSection = microblock.getAccountTokenIssuanceSection();
         const { amount } = tokenIssuanceSection.object;
+        const accountId = accountVb.getId();
         const tokenTransfer: Transfer = {
             type: ECO.BK_SENT_ISSUANCE,
             payerAccount: null,
-            payeeAccount: accountVb.getId(),
+            payeeAccount: accountId,
             amount,
         };
         const chainReference = {
             mbHash: microblock.getHash().toBytes(),
             sectionIndex: tokenIssuanceSection.index,
         };
+
+        this.logger.debug(`Proceeding to token issuance of ${CMTSToken.createAtomic(amount).toString()} for account ${Utils.binaryToHexa(accountId)}`)
         await accountManager.tokenTransfer(
             tokenTransfer,
             chainReference,
@@ -192,7 +195,7 @@ export class GlobalStateUpdater {
         );
 
         await accountManager.saveAccountByPublicKey(
-            accountVb.getId(),
+            accountId,
             await issuerPublicKey.getPublicKeyAsBytes(),
         );
     }
@@ -211,7 +214,7 @@ export class GlobalStateUpdater {
         this.logger.log(`Updating global state with microblock: ${microblock.getHash().encode()}`);
 
         // we ignore the microblock if it declares a new protocol VB state and there is already one defined
-        const isDeclaringNewProtocolVb = microblock.hasSection(SectionType.PROTOCOL_PUBLIC_KEY);
+        const isDeclaringNewProtocolVb = microblock.hasSection(SectionType.PROTOCOL_CREATION);
         if (isDeclaringNewProtocolVb) {
             const isProtocolVbAlreadyDefined = await globalState.isProtocolVbDefined();
             if (isProtocolVbAlreadyDefined) {
@@ -432,11 +435,12 @@ export class GlobalStateUpdater {
                     const validatorNode = await state.loadValidatorNodeVirtualBlockchain(
                         new Hash(validatorNodeHash),
                     );
-                    const validatorPublicKey: PublicSignatureKey =
-                        await validatorNode.getOrganizationPublicKey();
-                    const validatorAccountHash =
-                        accountManager.loadAccountByPublicKey(validatorPublicKey);
-                    validatorAccounts.push(validatorAccountHash);
+
+                    //const validatorPublicKey: PublicSignatureKey = await validatorNode.getOrganizationPublicKey();
+                    const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+                    //const validatorAccountHash = accountManager.loadAccountByPublicKey(validatorPublicKey);
+
+                    validatorAccounts.push(accountId.toBytes());
                 }
             }
         }
@@ -471,6 +475,11 @@ export class GlobalStateUpdater {
         }
     }
 
+    private async getAccountIdFromValidatorNode(validatorNode: ValidatorNodeVb) {
+        const orgVb = await validatorNode.getOrganizationVirtualBlockchain();
+        return orgVb.getAccountId();
+    }
+
     private async handleAccountUpdate(
         globalState: GlobalState,
         accountVb: AccountVb,
@@ -489,11 +498,13 @@ export class GlobalStateUpdater {
 
             const accountCreationSection = microblock.getAccountCreationSection();
             const { sellerAccount, amount } = accountCreationSection.object;
+            const createdAccountId = accountVb.getId();
+            this.logger.debug(`Creating account ${Utils.binaryToHexa(createdAccountId)} with ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(sellerAccount)}`)
             await accountManager.tokenTransfer(
                 {
                     type: ECO.BK_SALE,
                     payerAccount: sellerAccount,
-                    payeeAccount: accountVb.getId(),
+                    payeeAccount: createdAccountId,
                     amount,
                 },
                 {
@@ -504,7 +515,7 @@ export class GlobalStateUpdater {
             );
 
             await accountManager.saveAccountByPublicKey(
-                accountVb.getId(),
+                createdAccountId,
                 await accountPublicKey.getPublicKeyAsBytes(),
             );
         }
@@ -515,6 +526,8 @@ export class GlobalStateUpdater {
         );
         for (const section of tokenTransferSections) {
             const { account, amount } = section.object;
+            const accountIdSendingTokens = accountVb.getId();
+            this.logger.debug(`Transfering ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(accountIdSendingTokens)} to account ${Utils.binaryToHexa(account)}`)
             await accountManager.tokenTransfer(
                 {
                     type: ECO.BK_SENT_PAYMENT,

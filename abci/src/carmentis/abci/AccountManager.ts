@@ -336,6 +336,7 @@ export class AccountManager {
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.accountRadix.set(accountHash, stateHash);
+        this.logger.debug(`Storing account state for account ${Utils.binaryToHexa(accountHash)}`)
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash, record);
     }
 
@@ -397,7 +398,7 @@ export class AccountManager {
 
         const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, entry);
         const hash = this.getHistoryEntryHash(accountHash, NodeCrypto.Hashes.sha256AsBinary(record));
-
+        this.logger.debug(`Storing new entry in account history for account ${Utils.binaryToHexa(accountHash)}`)
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, hash, record);
 
         return hash;
@@ -431,7 +432,7 @@ export class AccountManager {
      */
     async saveAccountByPublicKey(accountHash: Uint8Array, publicKey: Uint8Array): Promise<void> {
         const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKey);
-
+        this.logger.debug(`Storing association between account hash ${Utils.binaryToHexa(accountHash)} with hashed public key ${Utils.binaryToHexa(keyHash)}`)
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash, accountHash);
     }
 

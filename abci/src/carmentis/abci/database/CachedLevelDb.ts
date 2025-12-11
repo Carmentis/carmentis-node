@@ -157,6 +157,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorageObject) {
+        this.logger.debug("Putting microblock storage for microblock " + Utils.binaryToHexa(microblockHeaderHash))
         return await this.putObject(
             NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
             microblockHeaderHash,
@@ -176,6 +177,7 @@ export class CachedLevelDb implements DbInterface {
     }
 
     async putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFileObject) {
+        this.logger.debug("Putting data file with key " + Utils.binaryToHexa(dataFileKey) )
         return await this.putObject(NODE_SCHEMAS.DB_DATA_FILE, dataFileKey, dataFileObject);
     }
 

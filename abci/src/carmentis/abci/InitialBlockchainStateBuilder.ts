@@ -82,6 +82,7 @@ export class InitialBlockchainStateBuilder {
     }
 
     public async createCarmentisOrganisationCreationTransaction() {
+        /*
         this.logger.verbose('Creating organisation creation transaction');
 
         const mb = Microblock.createGenesisOrganizationMicroblock();
@@ -125,6 +126,7 @@ export class InitialBlockchainStateBuilder {
         genesisNodePublicKeyType: string,
         genesisNodeCometbftRpcEndpoint: string,
     ) {
+        /*
         // We now declare the running node as the genesis node.
         const mb = Microblock.createGenesisValidatorNodeMicroblock();
         mb.addValidatorNodeDeclarationSection({
@@ -162,9 +164,10 @@ export class InitialBlockchainStateBuilder {
             genesisNodeMicroBlockHeader,
             genesisNodeMicroBlockBody,
         );
-         */
+
 
         return { genesisNodeId: validatorNodeId, genesisNodeDeclarationTransaction };
+        */
     }
 
     public async createGenesisNodeValidatorGrantTransaction(genesisNodeId: Uint8Array) {
