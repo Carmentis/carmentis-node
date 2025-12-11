@@ -79,7 +79,7 @@ import { GlobalState } from './state/GlobalState';
 import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
 import { GenesisRunoff } from './GenesisRunoff';
 import { getLogger } from '@logtape/logtape';
-import {GlobalStateUpdateCometParameters} from "./state/GlobalStateUpdateCometParameters";
+import { GlobalStateUpdateCometParameters } from './types/GlobalStateUpdateCometParameters';
 
 const APP_VERSION = 1;
 

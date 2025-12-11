@@ -4,7 +4,6 @@ import {
     CryptoEncoderFactory,
     PrivateSignatureKey,
     Secp256k1PrivateSignatureKey,
-    CryptoEncoderFactory,
 } from '@cmts-dev/carmentis-sdk/server';
 import { NodeConfigService } from '../../config/services/NodeConfigService';
 import process from 'node:process';
