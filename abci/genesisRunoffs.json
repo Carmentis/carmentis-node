@@ -49,8 +49,7 @@
         {
             "source": "team-advisors",
             "destination": "invest-1",
-            "amount": 30,
-            "vesting": "seed"
+            "amount": 30
         },
         {
             "source": "team-advisors",
