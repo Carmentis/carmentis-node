@@ -294,7 +294,7 @@ export class SnapshotsManager {
         );
 
         const temporaryPath = path.join(this.path, DB_DUMP_IN_PROGRESS_FILENAME);
-        this.logger.debug(`Writting in temporary file ${temporaryPath}`);
+        this.logger.debug(`Writing in temporary file ${temporaryPath}`);
         const handle = await open(temporaryPath, 'w');
 
         const iterator = this.db.getDbIterator();

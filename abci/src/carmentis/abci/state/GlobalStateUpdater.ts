@@ -1,5 +1,7 @@
 import {
+    AccountStakeSection,
     AccountTransferSection,
+    AccountEscrowTransferSection,
     AccountVestingTransferSection,
     AccountVb,
     AccountLockManager,
@@ -463,15 +465,52 @@ export class GlobalStateUpdater {
             );
         }
 
+        // check staking
+        const tokenStakeSections = microblock.getSectionsByType<AccountStakeSection>(
+            SectionType.ACCOUNT_STAKE,
+        );
+
+        for (const section of tokenStakeSections) {
+            const { amount, objectType, objectIdentifier } = section.object;
+            await accountManager.stake(
+                accountVb.getId(),
+                amount,
+                objectType,
+                objectIdentifier
+            );
+        }
+
+        // check token escrow transfers
+        const tokenEscrowTransferSections = microblock.getSectionsByType<AccountEscrowTransferSection>(
+            SectionType.ACCOUNT_ESCROW_TRANSFER,
+        );
+        for (const section of tokenEscrowTransferSections) {
+            // TODO: to be implemented
+        }
+
         // check token vesting transfers
         const tokenVestingTransferSections = microblock.getSectionsByType<AccountVestingTransferSection>(
             SectionType.ACCOUNT_VESTING_TRANSFER,
         );
         for (const section of tokenVestingTransferSections) {
-/*
-            await accountManager.tokenVestingTransfer(
+            const { account, amount, cliffDurationDays, vestingDurationDays } = section.object;
+            await accountManager.tokenTransfer(
+                {
+                    type: ECO.BK_SENT_VESTING,
+                    payerAccount: accountVb.getId(),
+                    payeeAccount: account,
+                    amount,
+                    vestingParameters: {
+                        startTime: microblock.getTimestamp(),
+                        cliffDurationDays,
+                        vestingDurationDays
+                    }
+                },
+                {
+                    mbHash: microblock.getHash().toBytes(),
+                },
+                microblock.getTimestamp(),
             );
-*/
         }
     }
 

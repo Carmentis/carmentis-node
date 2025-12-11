@@ -14,7 +14,7 @@ import {
     Utils,
     Lock,
 } from '@cmts-dev/carmentis-sdk/server';
-import { AccountInformation } from './types/AccountInformation';
+import { AccountState, AccountInformation } from './types/AccountInformation';
 import { Account } from './Account';
 import { Logger } from '@nestjs/common';
 import { Performance } from './Performance';
@@ -37,13 +37,6 @@ const ErrorMessages = {
     UNKNOWN_ACCOUNT_KEY_HASH: 'unknown account key hash',
     UNDEFINED_ACCOUNT_HASH: 'Cannot load information account: received undefined hash',
 } as const;
-
-interface AccountState {
-    height: number;
-    balance: number;
-    lastHistoryHash: Uint8Array;
-    locks: Lock[];
-}
 
 interface AccountHistoryEntry {
     height: number;
@@ -210,6 +203,23 @@ export class AccountManager {
     }
 
     /**
+     * Locks up a portion of the balance for staking on a given object.
+     */
+    async stake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array) {
+        const accountInformation = await this.loadAccountInformation(accountHash);
+        const accountState = accountInformation.state;
+        const accountLockManager = new AccountLockManager;
+
+        accountLockManager.setBalance(accountState.balance);
+        accountLockManager.setLocks(accountState.locks);
+        accountLockManager.stake(amount, objectType, objectIdentifier);
+        accountState.balance = accountLockManager.getBalance();
+        accountState.locks = accountLockManager.getLocks();
+
+        await this.saveState(accountHash, accountState);
+    }
+
+    /**
      * Loads the information about the account associated with the provided account hash.
      * @param accountHash - The hash of the account to load
      * @returns Account information including existence status, type, and state
@@ -219,7 +229,7 @@ export class AccountManager {
         if (accountHash === undefined)
             throw new TypeError(ErrorMessages.UNDEFINED_ACCOUNT_HASH);
         const type = Economics.getAccountTypeFromIdentifier(accountHash);
-        let state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash);
+        let state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash) as AccountState;
         const exists = !!state;
 
         if (!exists) {
@@ -234,7 +244,6 @@ export class AccountManager {
         return {
             exists: exists || type != ECO.ACCOUNT_STANDARD,
             type,
-            // @ts-expect-error state should be included in the type
             state,
         };
     }
@@ -246,8 +255,8 @@ export class AccountManager {
         amount: number,
         chainReference: unknown,
         timestamp: number,
-        vestingParameters: VestingParameters|null = null,
-        escrowParameters: EscrowParameters|null = null,
+        vestingParameters: VestingParameters | null = null,
+        escrowParameters: EscrowParameters | null = null,
     ): Promise<void> {
         const accountInformation = await this.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
@@ -267,6 +276,11 @@ export class AccountManager {
                     vestingParameters.startTime,
                     vestingParameters.cliffDurationDays,
                     vestingParameters.vestingDurationDays
+                );
+                await this.db.putObject(
+                    NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS,
+                    accountHash,
+                    {}
                 );
                 break;
             }
@@ -301,6 +315,13 @@ export class AccountManager {
             timestamp,
         );
 
+        await this.saveState(accountHash, accountState);
+    }
+
+    /**
+     * Saves an account state in the DB_ACCOUNT_STATE table and in the account radix tree.
+     */
+    private async saveState(accountHash: Uint8Array, accountState: AccountState) {
         const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 

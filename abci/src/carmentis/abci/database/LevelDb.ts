@@ -16,9 +16,6 @@ import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformationObject } from '../types/ChainInformationObject';
 
-
-
-
 export class LevelDb implements DbInterface {
     private db: Level<Uint8Array, Uint8Array>;
     private path: string;
@@ -255,7 +252,6 @@ export class LevelDb implements DbInterface {
     async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject> {
         return (await this.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, microblockHeaderHash)) as MicroblockStorageObject;
     }
-
 
     async getChainInformationObject() {
         return await this.getObject(
