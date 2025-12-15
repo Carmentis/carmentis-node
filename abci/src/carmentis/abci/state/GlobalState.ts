@@ -30,7 +30,6 @@ import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
 import { Performance } from '../Performance';
 import { GenesisRunoff } from '../GenesisRunoff';
-import { maybeGetESLintCoreRule } from '@typescript-eslint/eslint-plugin/dist/util/getESLintCoreRule';
 
 export class GlobalState extends AbstractProvider {
     private readonly logger: Logger;
