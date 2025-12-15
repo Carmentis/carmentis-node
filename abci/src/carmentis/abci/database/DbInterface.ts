@@ -3,6 +3,8 @@ import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
+import { AccountState } from '../types/AccountInformation';
+import { AccountHistoryEntry } from '../AccountManager';
 
 export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>
 
@@ -19,8 +21,8 @@ export type LevelQueryResponseType =
 
 export interface DbInterface {
     getTableCount(): number;
-    getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array>;
-    getObject(tableId: number, key: Uint8Array): Promise<object>;
+    getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined>;
+    getObject(tableId: number, key: Uint8Array): Promise<object | undefined>;
     putRaw(tableId: number, key: Uint8Array, data: Uint8Array): Promise<boolean>;
     putObject(tableId: number, key: Uint8Array, object: object): Promise<boolean>;
     getKeys(tableId: number): Promise<Uint8Array[]>;
@@ -36,4 +38,9 @@ export interface DbInterface {
         microblockStorage: MicroblockStorageObject,
     ): Promise<boolean>;
     getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject>;
+    getAccountIdByPublicKeyHash(publicKeyBytesHash: Uint8Array): Promise<Uint8Array | undefined>;
+    getAccountStateByAccountId(accountId: Uint8Array): Promise<AccountState | undefined>;
+    getAccountHistoryEntryByHistoryHash(
+        historyHash: Uint8Array,
+    ): Promise<AccountHistoryEntry | undefined>;
 }

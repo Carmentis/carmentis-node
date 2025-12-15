@@ -38,7 +38,7 @@ const ErrorMessages = {
     UNDEFINED_ACCOUNT_HASH: 'Cannot load information account: received undefined hash',
 } as const;
 
-interface AccountHistoryEntry {
+export interface AccountHistoryEntry {
     height: number;
     previousHistoryHash: Uint8Array;
     type: number;
@@ -80,7 +80,7 @@ export class AccountManager {
     private readonly perf: Performance;
     private readonly logger: Logger;
 
-    constructor(db: DbInterface, logger: Logger) {
+    constructor(db: DbInterface, logger: Logger = new Logger()) {
         this.db = db;
         this.accountRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_TOKEN_RADIX);
         this.logger = logger;
@@ -89,6 +89,25 @@ export class AccountManager {
 
     getAccountRootHash() {
         return this.accountRadix.getRootHash()
+    }
+
+    async transferToken(fromAccountId: Uint8Array, toAccountId: Uint8Array, amountInAtomics: number) {
+        const tokenTransfer: Transfer = {
+            type: ECO.BK_SALE,
+            payerAccount: fromAccountId,
+            payeeAccount: toAccountId,
+            amount: amountInAtomics,
+        };
+        const chainReference = {
+            mbHash: Utils.getNullHash(),
+            sectionIndex: 1,
+        };
+        const timestamp = Date.now();
+       await this.tokenTransfer(
+            tokenTransfer,
+            chainReference,
+            timestamp
+        );
     }
 
 
@@ -227,11 +246,15 @@ export class AccountManager {
      * @throws {TypeError} If accountHash is undefined
      */
     async loadAccountInformation(accountHash: Uint8Array): Promise<AccountInformation> {
-        if (accountHash === undefined)
+        // defensive programming
+        if (accountHash === undefined) {
             throw new TypeError(ErrorMessages.UNDEFINED_ACCOUNT_HASH);
+        }
+
+        // search for the type of account based on its hash
         const type = Economics.getAccountTypeFromIdentifier(accountHash);
-        let state = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash) as AccountState;
-        const exists = !!state;
+        let state = await this.db.getAccountStateByAccountId(accountHash);
+        const exists = state !== undefined;
 
         if (!exists) {
             state = {
@@ -363,13 +386,12 @@ export class AccountManager {
     }
 
     private async loadHistoryEntry(accountHash: Uint8Array, historyHash: Uint8Array): Promise<AccountHistoryEntry> {
-        const entry = await this.db.getObject(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, historyHash);
-
-        if (!entry) {
+        const accountHistoryEntry = await this.db.getAccountHistoryEntryByHistoryHash(historyHash);
+        if (accountHistoryEntry) {
+            return accountHistoryEntry;
+        } else {
             throw new Error(ErrorMessages.HISTORY_ENTRY_NOT_FOUND);
         }
-
-        return entry as AccountHistoryEntry;
     }
 
     private async addHistoryEntry(
@@ -415,14 +437,25 @@ export class AccountManager {
      * @throws {Error} If the public key is already in use
      */
     async checkPublicKeyAvailabilityOrFail(publicKey: Uint8Array): Promise<void> {
-        const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKey);
-
-        const accountHash = await this.db.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash);
-
-        if (accountHash) {
+        const isPublicKeyAvailable = await this.isPublicKeyAvailable(publicKey);
+        if (!isPublicKeyAvailable) {
             throw new Error(ErrorMessages.PUBLIC_KEY_IN_USE);
         }
     }
+
+    /**
+     * Checks if a public key is available in the database.
+     *
+     * @param {Uint8Array} publicKeyBytes - The public key to be checked.
+     * @return {Promise<boolean>} A promise that resolves to true if the public key is available, otherwise false.
+     */
+    async isPublicKeyAvailable(publicKeyBytes: Uint8Array): Promise<boolean> {
+        const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKeyBytes);
+        const accountHash = await this.db.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash);
+        return accountHash === undefined;
+    }
+
+
 
     /**
      * Associates an account hash with a public key.

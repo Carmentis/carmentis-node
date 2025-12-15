@@ -15,6 +15,8 @@ import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformationObject } from '../types/ChainInformationObject';
+import { AccountState } from '../types/AccountInformation';
+import { AccountHistoryEntry } from '../AccountManager';
 
 export class LevelDb implements DbInterface {
     private db: Level<Uint8Array, Uint8Array>;
@@ -23,15 +25,32 @@ export class LevelDb implements DbInterface {
     private sub: AbstractSublevel<
         Level<Uint8Array, Uint8Array>,
         string | Uint8Array<ArrayBufferLike> | Buffer,
-        Uint8Array, Uint8Array
+        Uint8Array,
+        Uint8Array
     >[] = [];
 
     private tableSchemas: Schema[];
-    private logger = getLogger(["node", "db", LevelDb.name])
+    private logger = getLogger(['node', 'db', LevelDb.name]);
 
     constructor(path: string, tableSchemas: Schema[] = NODE_SCHEMAS.DB) {
         this.path = path;
         this.tableSchemas = tableSchemas;
+    }
+
+    getAccountIdByPublicKeyHash(publicKeyBytesHash: Uint8Array): Promise<Uint8Array | undefined> {
+        return this.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, publicKeyBytesHash);
+    }
+
+    async getAccountStateByAccountId(accountId: Uint8Array): Promise<AccountState | undefined> {
+        const result = await this.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountId);
+        if (result === undefined) return undefined;
+        return result as AccountState; // TODO: do not cast type
+    }
+
+    async getAccountHistoryEntryByHistoryHash(historyHash:Uint8Array) {
+        const result = await this.getObject(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, historyHash);
+        if (result === undefined) return undefined;
+        return result as AccountHistoryEntry; // TODO: do not cast type
     }
 
     /**
@@ -102,13 +121,15 @@ export class LevelDb implements DbInterface {
         try {
             const b = await this.sub[tableId].get(key);
             if (b !== undefined) {
-                this.logger.debug(`Returning ${b.length} bytes`)
+                this.logger.debug(`Returning ${b.length} bytes`);
                 return new Uint8Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
             }
         } catch (e) {
-            this.logger.error("{e}", {e});
+            this.logger.error('{e}', { e });
         }
-        this.logger.warn(`Raw entry ${Utils.binaryToHexa(key)} not found on table ${tableId}: returning undefined`)
+        this.logger.warn(
+            `Raw entry ${Utils.binaryToHexa(key)} not found on table ${tableId}: returning undefined`,
+        );
         return undefined;
     }
 
@@ -125,16 +146,19 @@ export class LevelDb implements DbInterface {
     }
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
-        this.logger.debug(`Setting binary with key {key} on table {tableId}: {dataLength} bytes`, () => ({
-            key: Utils.binaryToHexa(key),
-            tableId,
-            dataLength: data.length,
-        }));
+        this.logger.debug(
+            `Setting binary with key {key} on table {tableId}: {dataLength} bytes`,
+            () => ({
+                key: Utils.binaryToHexa(key),
+                tableId,
+                dataLength: data.length,
+            }),
+        );
         try {
             await this.sub[tableId].put(key, data);
             return true;
         } catch (e) {
-            this.logger.error(`{e}`, {e});
+            this.logger.error(`{e}`, { e });
             return false;
         }
     }
@@ -248,18 +272,25 @@ export class LevelDb implements DbInterface {
     }
 
     async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorageObject) {
-        return await this.putObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, microblockHeaderHash, microblockStorage);
+        return await this.putObject(
+            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
+            microblockHeaderHash,
+            microblockStorage,
+        );
     }
 
     async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject> {
-        return (await this.getObject(NODE_SCHEMAS.DB_MICROBLOCK_STORAGE, microblockHeaderHash)) as MicroblockStorageObject;
+        return (await this.getObject(
+            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
+            microblockHeaderHash,
+        )) as MicroblockStorageObject;
     }
 
     async getChainInformationObject() {
-        return await this.getObject(
+        return (await this.getObject(
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-        ) as ChainInformationObject
+        )) as ChainInformationObject;
     }
 
     async initializeTable() {
@@ -272,7 +303,7 @@ export class LevelDb implements DbInterface {
         await this.putObject(
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            chainInfo
-        )
+            chainInfo,
+        );
     }
 }
