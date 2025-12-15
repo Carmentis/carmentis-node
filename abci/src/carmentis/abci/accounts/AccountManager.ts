@@ -1,7 +1,6 @@
-import { NODE_SCHEMAS } from './constants/constants';
-import { NodeCrypto } from './crypto/NodeCrypto';
+import { NODE_SCHEMAS } from '../constants/constants';
+import { NodeCrypto } from '../crypto/NodeCrypto';
 import {
-    AccountLockManager,
     CMTSToken,
     CryptographicHash,
     CryptoSchemeFactory,
@@ -12,14 +11,14 @@ import {
     SchemaSerializer,
     Sha256CryptographicHash,
     Utils,
-    Lock,
 } from '@cmts-dev/carmentis-sdk/server';
-import { AccountState, AccountInformation } from './types/AccountInformation';
-import { Account } from './Account';
+import { AccountState, AccountInformation } from '../types/AccountInformation';
+import { Account } from '../Account';
 import { Logger } from '@nestjs/common';
-import { Performance } from './Performance';
-import { DbInterface } from './database/DbInterface';
-import { RadixTree } from './RadixTree';
+import { Performance } from '../Performance';
+import { DbInterface } from '../database/DbInterface';
+import { RadixTree } from '../RadixTree';
+import { BalanceAvailability } from './BalanceAvailability';
 
 /**
  * Error messages used by AccountManager
@@ -228,11 +227,11 @@ export class AccountManager {
     async stake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array) {
         const accountInformation = await this.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
-        const accountLockManager = new AccountLockManager;
-
-        accountLockManager.setBalance(accountState.balance);
-        accountLockManager.setLocks(accountState.locks);
-        accountLockManager.stake(amount, objectType, objectIdentifier);
+        const accountLockManager = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+        accountLockManager.addNodeStaking(amount, objectIdentifier);
         accountState.balance = accountLockManager.getBalance();
         accountState.locks = accountLockManager.getLocks();
 
@@ -286,9 +285,10 @@ export class AccountManager {
         const accountState = accountInformation.state;
         const signedAmount = type & ECO.BK_PLUS ? amount : -amount;
 
-        const accountLockManager = new AccountLockManager;
-        accountLockManager.setBalance(accountState.balance);
-        accountLockManager.setLocks(accountState.locks);
+        const accountLockManager = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
 
         switch(type) {
             case ECO.BK_RECEIVED_VESTING: {
@@ -301,11 +301,7 @@ export class AccountManager {
                     vestingParameters.cliffDurationDays,
                     vestingParameters.vestingDurationDays
                 );
-                await this.db.putObject(
-                    NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS,
-                    accountHash,
-                    {}
-                );
+                await this.db.putAccountWithVestingLocks(accountHash);
                 break;
             }
             case ECO.BK_RECEIVED_ESCROW: {
@@ -317,8 +313,7 @@ export class AccountManager {
                     escrowParameters.escrowIdentifier,
                     escrowParameters.agentAccount
                 );
-                await this.db.putObject(
-                    NODE_SCHEMAS.DB_ESCROWS,
+                await this.db.putEscrow(
                     escrowParameters.escrowIdentifier,
                     {
                         payerAccount: linkedAccountHash,

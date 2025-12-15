@@ -16,7 +16,7 @@ import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformationObject } from '../types/ChainInformationObject';
 import { AccountState } from '../types/AccountInformation';
-import { AccountHistoryEntry } from '../AccountManager';
+import { AccountHistoryEntry } from '../accounts/AccountManager';
 
 export class LevelDb implements DbInterface {
     private db: Level<Uint8Array, Uint8Array>;
@@ -304,6 +304,22 @@ export class LevelDb implements DbInterface {
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
             chainInfo,
+        );
+    }
+
+    async putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean> {
+        return await this.putObject(
+            NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS,
+            accountHash,
+            {}
+        );
+    }
+
+    async putEscrow(escrowIdentifier: Uint8Array, escrowData: object): Promise<boolean> {
+        return await this.putObject(
+            NODE_SCHEMAS.DB_ESCROWS,
+            escrowIdentifier,
+            escrowData
         );
     }
 }

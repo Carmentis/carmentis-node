@@ -12,7 +12,7 @@ import {
 import { ChainInformationObject } from '../types/ChainInformationObject';
 import { getLogger } from '@logtape/logtape';
 import { AccountState } from '../types/AccountInformation';
-import { AccountHistoryEntry } from '../AccountManager';
+import { AccountHistoryEntry } from '../accounts/AccountManager';
 
 export class CachedLevelDb implements DbInterface {
     private db: LevelDb;
@@ -296,5 +296,21 @@ export class CachedLevelDb implements DbInterface {
             microblockHash,
         );
         return microblockInformation as MicroblockInformationSchema;
+    }
+
+    async putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean> {
+        return await this.putObject(
+            NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS,
+            accountHash,
+            {}
+        );
+    }
+
+    async putEscrow(escrowIdentifier: Uint8Array, escrowData: object): Promise<boolean> {
+        return await this.putObject(
+            NODE_SCHEMAS.DB_ESCROWS,
+            escrowIdentifier,
+            escrowData
+        );
     }
 }

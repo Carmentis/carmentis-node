@@ -4,7 +4,7 @@ import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
 import { AccountState } from '../types/AccountInformation';
-import { AccountHistoryEntry } from '../AccountManager';
+import { AccountHistoryEntry } from '../accounts/AccountManager';
 
 export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>
 
@@ -43,4 +43,6 @@ export interface DbInterface {
     getAccountHistoryEntryByHistoryHash(
         historyHash: Uint8Array,
     ): Promise<AccountHistoryEntry | undefined>;
+    putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean>;
+    putEscrow(escrowIdentifier: Uint8Array, escrowData: object): Promise<boolean>;
 }

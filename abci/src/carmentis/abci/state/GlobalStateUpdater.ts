@@ -4,7 +4,6 @@ import {
     AccountEscrowTransferSection,
     AccountVestingTransferSection,
     AccountVb,
-    AccountLockManager,
     Base64,
     CHAIN,
     CMTSToken,
@@ -26,7 +25,7 @@ import {
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { NODE_SCHEMAS } from '../constants/constants';
 import { Logger } from '@nestjs/common';
-import { AccountManager, Transfer } from '../AccountManager';
+import { AccountManager, Transfer } from '../accounts/AccountManager';
 import { GlobalState } from './GlobalState';
 import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
 import { AccountState, AccountInformation } from '../types/AccountInformation';
@@ -37,6 +36,7 @@ import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { LevelDb } from '../database/LevelDb';
 import { ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
 import { BlockIDFlag } from '../../../proto-ts/cometbft/types/v1/validator';
+import { BalanceAvailability } from '../accounts/BalanceAvailability';
 
 const KEY_TYPE_MAPPING = {
     'tendermint/PubKeyEd25519': 'ed25519',
@@ -78,9 +78,10 @@ export class GlobalStateUpdater {
 
             for(const id of accountsWithVestingLocksIdentifiers) {
                 const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id) as AccountState;
-                const accountLockManager = new AccountLockManager();
-                accountLockManager.setBalance(accountState.balance);
-                accountLockManager.setLocks(accountState.locks);
+                const accountLockManager = new BalanceAvailability(
+                    accountState.balance,
+                    accountState.locks,
+                );
 
                 if(accountLockManager.applyLinearVesting(currentBlockDayTs) > 0) {
                     accountState.locks = accountLockManager.getLocks();

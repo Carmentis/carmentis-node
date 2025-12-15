@@ -1,4 +1,4 @@
-import { AccountManager } from '../abci/AccountManager';
+import { AccountManager } from '../abci/accounts/AccountManager';
 import { CachedLevelDb } from '../abci/database/CachedLevelDb';
 
 import { mkdtemp, rm } from 'fs/promises'

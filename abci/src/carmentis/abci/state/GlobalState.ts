@@ -4,7 +4,7 @@ import { CachedLevelDb } from '../database/CachedLevelDb';
 import { Storage } from '../storage/Storage';
 import { CachedStorage } from '../storage/CachedStorage';
 import { RadixTree } from '../RadixTree';
-import { AccountManager } from '../AccountManager';
+import { AccountManager } from '../accounts/AccountManager';
 import {
     AbstractProvider,
     AccountVb,

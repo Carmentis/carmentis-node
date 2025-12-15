@@ -10,7 +10,7 @@ import {
 import { Logger } from '@nestjs/common';
 import { QueryCallback } from './types/QueryCallback';
 import { LevelDb } from './database/LevelDb';
-import { AccountManager } from './AccountManager';
+import { AccountManager } from './accounts/AccountManager';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { GlobalState } from './state/GlobalState';
 
@@ -184,11 +184,9 @@ export class ABCIQueryHandler {
         let remaingingAttempts = 120;
         const db = this.provider.getCachedDatabase();
 
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             const test = async () => {
-                const microblockInfo = await db.getMicroblockInformation(
-                    object.hash,
-                );
+                const microblockInfo = await db.getMicroblockInformation(object.hash);
 
                 if (microblockInfo) {
                     resolve(
@@ -205,7 +203,7 @@ export class ABCIQueryHandler {
                     }
                 }
             };
-            test();
+            await test();
         });
     }
 
