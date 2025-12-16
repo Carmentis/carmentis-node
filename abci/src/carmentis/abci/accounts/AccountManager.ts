@@ -232,7 +232,7 @@ export class AccountManager {
             accountState.locks,
         );
         accountLockManager.addNodeStaking(amount, objectIdentifier);
-        accountState.balance = accountLockManager.getBalance();
+        accountState.balance = accountLockManager.getBalanceAsAtomics();
         accountState.locks = accountLockManager.getLocks();
 
         await this.saveState(accountHash, accountState);
@@ -330,7 +330,7 @@ export class AccountManager {
         }
 
         accountState.height++;
-        accountState.balance = accountLockManager.getBalance();
+        accountState.balance = accountLockManager.getBalanceAsAtomics();
         accountState.locks = accountLockManager.getLocks();
 
         accountState.lastHistoryHash = await this.addHistoryEntry(

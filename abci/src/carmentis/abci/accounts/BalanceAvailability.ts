@@ -1,4 +1,4 @@
-import { Utils } from '@cmts-dev/carmentis-sdk/server';
+import { CMTSToken, Utils } from '@cmts-dev/carmentis-sdk/server';
 import {
     LOCK_TYPE_COUNT,
     LockType,
@@ -19,7 +19,7 @@ export class BalanceAvailability {
      * The balance of the account.
      * @private
      */
-    private balance: number;
+    private balanceInAtomics: number;
 
     /**
      * The set of locks on the account.
@@ -32,7 +32,7 @@ export class BalanceAvailability {
      * By default, the balance is 0 and there are no locks.
      */
     constructor(private initialBalance: number = 0, private initialLocks: Lock[] = []) {
-        this.balance = initialBalance;
+        this.balanceInAtomics = initialBalance;
         this.locks = initialLocks;
     }
 
@@ -40,11 +40,15 @@ export class BalanceAvailability {
      * Getters and setters for balance and locks.
      */
     setBalance(balance: number) {
-        this.balance = balance;
+        this.balanceInAtomics = balance;
+    }
+
+    getBalanceAsAtomics() {
+        return this.balanceInAtomics;
     }
 
     getBalance() {
-        return this.balance;
+        return CMTSToken.createAtomic(this.balanceInAtomics);
     }
 
     setLocks(locks: Lock[]) {
@@ -71,15 +75,17 @@ export class BalanceAvailability {
     /**
      * Adds a given amount of spendable tokens.
      */
-    addSpendableTokens(amount: number) {
-        this.balance += amount;
+    addSpendableTokens(amountInAtomics: number) {
+        this.balanceInAtomics += amountInAtomics;
     }
 
     /**
      * Adds vested tokens, given an amount, a start time as a timestamp in seconds, a cliff duration in days and a vesting duration in days.
      */
     addVestedTokens(initialVestedAmountInAtomics: number, cliffStartTimestamp: number, cliffDurationDays: number, vestingDurationDays: number) {
-        this.balance += initialVestedAmountInAtomics;
+        // Vested tokens are assumed to be received by this account.
+        // Since there are vested, there are not available (directly) but accounted in the balance.
+        this.balanceInAtomics += initialVestedAmountInAtomics;
 
         this.locks.push({
             type: LockType.Vesting,
@@ -97,7 +103,9 @@ export class BalanceAvailability {
      * Adds escrowed tokens, given an amount, an escrow identifier and an agent public key.
      */
     addEscrowedTokens(lockedAmountInAtomics: number, escrowIdentifier: Uint8Array, transferAuthorizerAccountId: Uint8Array) {
-        this.balance += lockedAmountInAtomics;
+        // Escrowed tokens are assumed to be received by this account.
+        // Since there are escrows, there are not available but accounted in the balance.
+        this.balanceInAtomics += lockedAmountInAtomics;
 
         this.locks.push({
             type: LockType.Escrow,
@@ -219,14 +227,14 @@ export class BalanceAvailability {
         }
 
         // locked amounts
-        const escrowed = lockedAmountInAtomicsByLockType.get(LockType.Escrow);
-        const vested = lockedAmountInAtomicsByLockType.get(LockType.Vesting);
-        const staked = lockedAmountInAtomicsByLockType.get(LockType.NodeStaking);
+        const escrowed = lockedAmountInAtomicsByLockType.get(LockType.Escrow) || 0;
+        const vested = lockedAmountInAtomicsByLockType.get(LockType.Vesting) || 0;
+        const staked = lockedAmountInAtomicsByLockType.get(LockType.NodeStaking) || 0;
 
 
         // the amount of stakeable tokens is the balance, minus the amount of already staked tokens, minus
         // the amount of escrowed tokens
-        const stakeable = this.balance - staked - escrowed;
+        const stakeable = this.balanceInAtomics - staked - escrowed;
 
         // the amount of releasable tokens by linear vesting is the amount of vested tokens, minus the amount
         // of staked tokens, or 0 if the difference is negative
@@ -237,10 +245,10 @@ export class BalanceAvailability {
         const locked = escrowed + Math.max(vested, staked);
 
         // the amount of spendable tokens is the balance, minus the amount of locked tokens
-        const spendable = this.balance - locked;
+        const spendable = this.balanceInAtomics - locked;
 
-        return {
-            balance: this.balance,
+        const res = {
+            balance: this.balanceInAtomics,
             escrowed,
             vested,
             releasable,
@@ -249,5 +257,22 @@ export class BalanceAvailability {
             locked,
             spendable
         };
+        return res;
+    }
+
+    getSpendable() {
+        return CMTSToken.createAtomic(this.getBreakdown().spendable);
+    }
+
+    getVested() {
+        return CMTSToken.createAtomic(this.getBreakdown().vested);
+    }
+
+    getStakeable() {
+        return CMTSToken.createAtomic(this.getBreakdown().stakeable);
+    }
+
+    getStaked() {
+        return CMTSToken.createAtomic(this.getBreakdown().staked);
     }
 }
