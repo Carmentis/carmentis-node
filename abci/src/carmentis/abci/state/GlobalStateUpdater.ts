@@ -2,6 +2,7 @@ import {
     AccountStakeSection,
     AccountTransferSection,
     AccountEscrowTransferSection,
+    AccountEscrowSettlementSection,
     AccountVestingTransferSection,
     AccountVb,
     Base64,
@@ -78,24 +79,51 @@ export class GlobalStateUpdater {
 
             for(const id of accountsWithVestingLocksIdentifiers) {
                 const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id) as AccountState;
-                const accountLockManager = new BalanceAvailability(
+                const balanceAvailability = new BalanceAvailability(
                     accountState.balance,
                     accountState.locks,
                 );
 
-                if(accountLockManager.applyLinearVesting(currentBlockDayTs) > 0) {
-                    accountState.locks = accountLockManager.getLocks();
+                if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
+                    accountState.locks = balanceAvailability.getLocks();
                     await database.putObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id, accountState);
                 }
             }
 
             // update escrow locks
+            const accountManager = globalState.getAccountManager();
             const escrowIdentifiers = await database.getKeys(NODE_SCHEMAS.DB_ESCROWS);
 
             for(const id of escrowIdentifiers) {
                 // TODO: it would be more efficient to have a method that directly returns all objects of a table
                 const escrow = await database.getObject(NODE_SCHEMAS.DB_ESCROWS, id) as Escrow;
                 const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, escrow.payeeAccount) as AccountState;
+                const balanceAvailability = new BalanceAvailability(
+                    accountState.balance,
+                    accountState.locks,
+                );
+                const escrowLocks = balanceAvailability.getEscrowLocks();
+
+                for(const lock of escrowLocks) {
+                    if(currentBlockDayTs > Utils.addDaysToTimestamp(lock.parameters.startTimestamp, lock.parameters.durationDays)) {
+                        // the escrow has expired: the funds are sent back from payee to payer
+                        const tokenTransfer: Transfer = {
+                            type: ECO.BK_SENT_EXPIRED_ESCROW,
+                            payerAccount: escrow.payeeAccount,
+                            payeeAccount: escrow.payerAccount,
+                            amount: lock.lockedAmountInAtomics
+                        };
+                        const chainReference = {
+                            height: cometParameters.blockHeight
+                        };
+
+                        await accountManager.tokenTransfer(
+                            tokenTransfer,
+                            chainReference,
+                            cometParameters.blockTimestamp
+                        );
+                    }
+                }
             }
         }
     }
@@ -564,7 +592,7 @@ export class GlobalStateUpdater {
             SectionType.ACCOUNT_ESCROW_TRANSFER,
         );
         for (const section of tokenEscrowTransferSections) {
-            const { account, amount, escrowIdentifier, agentAccount, durationDays } = section.object;
+            const { account, amount, identifier, agentAccount, durationDays } = section.object;
             await accountManager.tokenTransfer(
                 {
                     type: ECO.BK_SENT_ESCROW,
@@ -572,9 +600,10 @@ export class GlobalStateUpdater {
                     payeeAccount: account,
                     amount,
                     escrowParameters: {
-                        startTime: microblock.getTimestamp(),
-                        escrowIdentifier,
-                        agentAccount,
+                        identifier,
+                        fundEmitterAccountId: account,
+                        transferAuthorizerAccountId: agentAccount,
+                        startTimestamp: microblock.getTimestamp(),
                         durationDays
                     }
                 },
@@ -584,6 +613,19 @@ export class GlobalStateUpdater {
                 },
                 microblock.getTimestamp(),
             );
+        }
+
+        // check token escrow settlements
+        const tokenEscrowSettlementSections = microblock.getSectionsByType<AccountEscrowSettlementSection>(
+            SectionType.ACCOUNT_ESCROW_SETTLEMENT,
+        );
+        for (const section of tokenEscrowSettlementSections) {
+            const { identifier, confirmed } = section.object;
+            const chainReference = {
+                mbHash: microblock.getHash().toBytes(),
+                sectionIndex: section.index
+            };
+            await accountManager.escrowSettlement(accountVb.getId(), identifier, confirmed, microblock.getTimestamp(), chainReference);
         }
 
         // check token vesting transfers
@@ -599,7 +641,8 @@ export class GlobalStateUpdater {
                     payeeAccount: account,
                     amount,
                     vestingParameters: {
-                        startTime: microblock.getTimestamp(),
+                        initialVestedAmountInAtomics: amount,
+                        cliffStartTimestamp: microblock.getTimestamp(),
                         cliffDurationDays,
                         vestingDurationDays
                     }

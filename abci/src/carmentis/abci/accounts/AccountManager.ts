@@ -6,6 +6,9 @@ import {
     CryptoSchemeFactory,
     ECO,
     Economics,
+    LockType,
+    EscrowParameters,
+    VestingParameters,
     INITIAL_OFFER,
     PublicSignatureKey,
     SchemaSerializer,
@@ -13,6 +16,7 @@ import {
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { AccountState, AccountInformation } from '../types/AccountInformation';
+import { Escrow } from '../types/Escrow';
 import { Account } from '../Account';
 import { Logger } from '@nestjs/common';
 import { Performance } from '../Performance';
@@ -49,19 +53,6 @@ export interface AccountHistoryEntry {
 
 interface AccountHistory {
     list: AccountHistoryEntry[];
-}
-
-interface VestingParameters {
-    startTime: number;
-    cliffDurationDays: number;
-    vestingDurationDays: number;
-}
-
-interface EscrowParameters {
-    startTime: number;
-    escrowIdentifier: Uint8Array;
-    agentAccount: Uint8Array;
-    durationDays: number;
 }
 
 export interface Transfer {
@@ -222,18 +213,71 @@ export class AccountManager {
     }
 
     /**
+     * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
+     */
+    async escrowSettlement(account: Uint8Array, identifier: Uint8Array, confirmed: boolean, timestamp: number, chainReference: unknown) {
+        const escrow = <Escrow>await this.db.getObject(NODE_SCHEMAS.DB_ESCROWS, identifier);
+
+        // make sure that this escrow exists
+        if(escrow === undefined) {
+            throw new Error(`rejected escrow settlement: unknown or out-of-date escrow identifier`);
+        }
+        // make sure that the caller is the agent
+        if(!Utils.binaryIsEqual(account, escrow.agentAccount)) {
+            throw new Error(`rejected escrow settlement: caller is not the agent`);
+        }
+
+        // retrieve the lock from the payee account, get the amount, then remove the lock
+        const accountInformation = await this.loadAccountInformation(escrow.payeeAccount);
+        const payeeAccountState = accountInformation.state;
+        const lockIndex = payeeAccountState.locks.findIndex((lock) =>
+            lock.type == LockType.Escrow &&
+            Utils.binaryIsEqual(lock.parameters.identifier, identifier)
+        );
+
+        if(lockIndex === -1) {
+            throw new Error(`PANIC - unable to find the lock of the escrow to be settled`);
+        }
+
+        const amount = payeeAccountState.locks[lockIndex].lockedAmountInAtomics;
+
+        payeeAccountState.locks.splice(lockIndex, 1);
+
+        await this.saveState(escrow.payeeAccount, payeeAccountState);
+
+        // if the escrow is canceled, send the funds back to the payer
+        if(!confirmed) {
+            const tokenTransfer: Transfer = {
+                type: ECO.BK_SENT_ESCROW_REFUND,
+                payerAccount: escrow.payeeAccount,
+                payeeAccount: escrow.payerAccount,
+                amount
+            };
+
+            await this.tokenTransfer(
+                tokenTransfer,
+                chainReference,
+                timestamp
+            );
+        }
+
+        // remove the escrow from the DB
+        await this.db.del(NODE_SCHEMAS.DB_ESCROWS, identifier);
+    }
+
+    /**
      * Locks up a portion of the balance for staking on a given object.
      */
     async stake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array) {
         const accountInformation = await this.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
-        const accountLockManager = new BalanceAvailability(
+        const balanceAvailability = new BalanceAvailability(
             accountState.balance,
             accountState.locks,
         );
-        accountLockManager.addNodeStaking(amount, objectIdentifier);
-        accountState.balance = accountLockManager.getBalanceAsAtomics();
-        accountState.locks = accountLockManager.getLocks();
+        balanceAvailability.addNodeStaking(amount, objectIdentifier);
+        accountState.balance = balanceAvailability.getBalanceAsAtomics();
+        accountState.locks = balanceAvailability.getLocks();
 
         await this.saveState(accountHash, accountState);
     }
@@ -285,7 +329,7 @@ export class AccountManager {
         const accountState = accountInformation.state;
         const signedAmount = type & ECO.BK_PLUS ? amount : -amount;
 
-        const accountLockManager = new BalanceAvailability(
+        const balanceAvailability = new BalanceAvailability(
             accountState.balance,
             accountState.locks,
         );
@@ -295,12 +339,7 @@ export class AccountManager {
                 if(vestingParameters === null) {
                     throw new Error('Vesting parameters are missing');
                 }
-                accountLockManager.addVestedTokens(
-                    signedAmount,
-                    vestingParameters.startTime,
-                    vestingParameters.cliffDurationDays,
-                    vestingParameters.vestingDurationDays
-                );
+                balanceAvailability.addVestedTokens(signedAmount, vestingParameters);
                 await this.db.putAccountWithVestingLocks(accountHash);
                 break;
             }
@@ -308,30 +347,26 @@ export class AccountManager {
                 if(escrowParameters === null) {
                     throw new Error('Escrow parameters are missing');
                 }
-                accountLockManager.addEscrowedTokens(
-                    signedAmount,
-                    escrowParameters.escrowIdentifier,
-                    escrowParameters.agentAccount
-                );
+                balanceAvailability.addEscrowedTokens(signedAmount, escrowParameters);
                 await this.db.putEscrow(
-                    escrowParameters.escrowIdentifier,
+                    escrowParameters.identifier,
                     {
                         payerAccount: linkedAccountHash,
                         payeeAccount: accountHash,
-                        agentAccount: escrowParameters.agentAccount
+                        agentAccount: escrowParameters.transferAuthorizerAccountId
                     }
                 );
                 break;
             }
             default: {
-                accountLockManager.addSpendableTokens(signedAmount);
+                balanceAvailability.addSpendableTokens(signedAmount);
                 break;
             }
         }
 
         accountState.height++;
-        accountState.balance = accountLockManager.getBalanceAsAtomics();
-        accountState.locks = accountLockManager.getLocks();
+        accountState.balance = balanceAvailability.getBalanceAsAtomics();
+        accountState.locks = balanceAvailability.getLocks();
 
         accountState.lastHistoryHash = await this.addHistoryEntry(
             accountState,

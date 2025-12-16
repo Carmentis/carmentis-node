@@ -59,7 +59,6 @@ export class BalanceAvailability {
         return this.locks;
     }
 
-
     getNodeStakingLocks() {
         return this.locks.filter((lock) => lock.type == LockType.NodeStaking);
     }
@@ -82,7 +81,7 @@ export class BalanceAvailability {
     /**
      * Adds vested tokens, given an amount, a start time as a timestamp in seconds, a cliff duration in days and a vesting duration in days.
      */
-    addVestedTokens(initialVestedAmountInAtomics: number, cliffStartTimestamp: number, cliffDurationDays: number, vestingDurationDays: number) {
+    addVestedTokens(initialVestedAmountInAtomics: number, vestingParameters: VestingParameters) {
         // Vested tokens are assumed to be received by this account.
         // Since there are vested, there are not available (directly) but accounted in the balance.
         this.balanceInAtomics += initialVestedAmountInAtomics;
@@ -90,19 +89,14 @@ export class BalanceAvailability {
         this.locks.push({
             type: LockType.Vesting,
             lockedAmountInAtomics: initialVestedAmountInAtomics,
-            parameters: {
-                initialVestedAmountInAtomics: initialVestedAmountInAtomics,
-                cliffStartTimestamp,
-                cliffDurationDays,
-                vestingDurationDays
-            }
+            parameters: vestingParameters
         });
     }
 
     /**
      * Adds escrowed tokens, given an amount, an escrow identifier and an agent public key.
      */
-    addEscrowedTokens(lockedAmountInAtomics: number, escrowIdentifier: Uint8Array, transferAuthorizerAccountId: Uint8Array) {
+    addEscrowedTokens(lockedAmountInAtomics: number, escrowParameters: EscrowParameters) {
         // Escrowed tokens are assumed to be received by this account.
         // Since there are escrows, there are not available but accounted in the balance.
         this.balanceInAtomics += lockedAmountInAtomics;
@@ -110,10 +104,7 @@ export class BalanceAvailability {
         this.locks.push({
             type: LockType.Escrow,
             lockedAmountInAtomics: lockedAmountInAtomics,
-            parameters: {
-                fundEmitterAccountId: escrowIdentifier,
-                transferAuthorizerAccountId: transferAuthorizerAccountId
-            }
+            parameters: escrowParameters
         });
     }
 
@@ -230,7 +221,6 @@ export class BalanceAvailability {
         const escrowed = lockedAmountInAtomicsByLockType.get(LockType.Escrow) || 0;
         const vested = lockedAmountInAtomicsByLockType.get(LockType.Vesting) || 0;
         const staked = lockedAmountInAtomicsByLockType.get(LockType.NodeStaking) || 0;
-
 
         // the amount of stakeable tokens is the balance, minus the amount of already staked tokens, minus
         // the amount of escrowed tokens
