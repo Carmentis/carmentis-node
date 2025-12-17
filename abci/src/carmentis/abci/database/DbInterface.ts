@@ -3,8 +3,8 @@ import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
-import { AccountState } from '../types/AccountInformation';
 import { AccountHistoryEntry } from '../accounts/AccountManager';
+import {AccountState} from "@cmts-dev/carmentis-sdk/server";
 
 export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>
 

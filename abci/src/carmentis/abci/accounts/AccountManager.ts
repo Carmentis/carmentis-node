@@ -18,7 +18,6 @@ import {
     AccountState,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Escrow } from '../types/Escrow';
-import { Account } from '../Account';
 import { Logger } from '@nestjs/common';
 import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
@@ -296,7 +295,7 @@ export class AccountManager {
 
         // search for the type of account based on its hash
         const type = Economics.getAccountTypeFromIdentifier(accountHash);
-        let state = await this.db.getAccountStateByAccountId(accountHash);
+        let state: AccountState = await this.db.getAccountStateByAccountId(accountHash);
         const exists = state !== undefined;
 
         if (!exists) {
@@ -349,7 +348,7 @@ export class AccountManager {
                 }
                 balanceAvailability.addEscrowedTokens(signedAmount, escrowParameters);
                 await this.db.putEscrow(
-                    escrowParameters.identifier,
+                    escrowParameters.escrowIdentifier,
                     {
                         payerAccount: linkedAccountHash,
                         payeeAccount: accountHash,

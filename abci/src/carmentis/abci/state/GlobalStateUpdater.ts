@@ -4,6 +4,8 @@ import {
     AccountEscrowTransferSection,
     AccountEscrowSettlementSection,
     AccountVestingTransferSection,
+    AccountState,
+    AccountInformation,
     AccountVb,
     Base64,
     CHAIN,
@@ -29,7 +31,6 @@ import { Logger } from '@nestjs/common';
 import { AccountManager, Transfer } from '../accounts/AccountManager';
 import { GlobalState } from './GlobalState';
 import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
-import { AccountState, AccountInformation } from '../types/AccountInformation';
 import { BlockInformation } from '../types/BlockInformation';
 import { Escrow } from '../types/Escrow';
 import { GlobalStateUpdateCometParameters } from '../types/GlobalStateUpdateCometParameters';

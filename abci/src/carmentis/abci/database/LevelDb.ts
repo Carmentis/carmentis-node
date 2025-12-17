@@ -2,6 +2,7 @@ import { Level } from 'level';
 import { NODE_SCHEMAS } from '../constants/constants';
 import {
     CHAIN,
+    AccountState,
     Schema,
     SchemaSerializer,
     SchemaUnserializer,
@@ -15,11 +16,11 @@ import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformationObject } from '../types/ChainInformationObject';
-import { AccountState } from '../types/AccountInformation';
 import { AccountHistoryEntry } from '../accounts/AccountManager';
 import * as v from 'valibot';
 import {
-    BlockContent, BlockContentSchema,
+    BlockContent,
+    BlockContentSchema,
     BlockInformation,
     BlockInformationSchema,
     ValidatorNodeByAddress,

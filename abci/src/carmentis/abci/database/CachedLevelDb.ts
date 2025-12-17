@@ -5,6 +5,7 @@ import { NODE_SCHEMAS } from '../constants/constants';
 import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import {
     CHAIN,
+    AccountState,
     Microblock,
     MicroblockInformation,
     MicroblockInformationSchema,
@@ -12,7 +13,6 @@ import {
 } from '@cmts-dev/carmentis-sdk/server';
 import { ChainInformationObject } from '../types/ChainInformationObject';
 import { getLogger } from '@logtape/logtape';
-import { AccountState } from '../types/AccountInformation';
 import { AccountHistoryEntry } from '../accounts/AccountManager';
 import * as v from 'valibot';
 
