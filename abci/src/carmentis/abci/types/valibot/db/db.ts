@@ -90,7 +90,7 @@ export type BlockInformation = v.InferOutput<typeof BlockInformationSchema>;
 export const BlockContentSchema = v.object({
     microblocks: v.array(v.object({
         hash: uint8array(),
-        vbIdentifier: uint8array(),
+        vbId: uint8array(),
         vbType: v.number(),
         height: v.number(),
         size: v.number(),
