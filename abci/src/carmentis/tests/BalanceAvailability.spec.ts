@@ -66,9 +66,12 @@ describe("Balance availability", () => {
         const vestingDuration = 10;
         balanceAvailability.addVestedTokens(
             amountToVest.getAmountAsAtomic(),
-            cliffStartTimestamp,
-            cliffDuration,
-            vestingDuration,
+            {
+                cliffStartTimestamp,
+                cliffDurationDays: cliffDuration,
+                vestingDurationDays: vestingDuration,
+                initialVestedAmountInAtomics: amountToVest.getAmountAsAtomic(),
+            },
         );
         assertVested(balanceAvailability, amountToVest);
         assertSpendable(balanceAvailability, spendableTokens);

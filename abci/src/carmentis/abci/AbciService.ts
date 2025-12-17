@@ -46,14 +46,18 @@ import { Storage } from './storage/Storage';
 import { Performance } from './Performance';
 
 import {
+    AbciQueryEncoder,
+    AbciResponse,
+    AbciResponseType,
     AccountVb,
+    BlockchainUtils,
     CHAIN,
     CMTSToken,
     CryptoEncoderFactory,
     ECO,
     EncoderFactory,
     FeesCalculationFormulaFactory,
-    GenesisSnapshotDTO,
+    GenesisSnapshotAbciResponse,
     MessageSerializer,
     MessageUnserializer,
     Microblock,
@@ -61,7 +65,9 @@ import {
     NetworkProvider,
     PrivateSignatureKey,
     SCHEMAS,
+    SectionLabel,
     SECTIONS,
+    SectionType,
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { LevelDb } from './database/LevelDb';
@@ -164,19 +170,22 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async forwardAbciQueryToHandler(serializedQuery: Uint8Array) {
-        const messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
-        const messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
-        // We deserialize the query to identity the request type and content.
-        const { type, object } = messageUnserializer.unserialize(serializedQuery);
-        this.logger.log(`Received query ${SCHEMAS.NODE_MESSAGES[type].label} (${type})`);
+        const abciRequest = AbciQueryEncoder.decodeAbciRequest(serializedQuery);
+        this.logger.log(`Receiving request of type ${abciRequest.requestType}`)
         try {
-            return await this.abciQueryHandler.handleQuery(type, object);
+            const response = await this.abciQueryHandler.handleAbciRequest(abciRequest);
+            return AbciQueryEncoder.encodeAbciResponse(response);
         } catch (error) {
-            this.logger.error(error);
-            const errorMsg = error instanceof Error ? error.toString() : 'error';
-            return messageSerializer.serialize(SCHEMAS.MSG_ERROR, {
-                error: errorMsg,
-            });
+            const errorMsg = error instanceof Error ? error.toString() : 'Unknown error';
+            this.logger.error(`ABCI query execution failed due to the following error: ${errorMsg}`);
+            if (error instanceof Error) {
+                this.logger.debug(error.stack)
+            }
+            const errorResponse: AbciResponse = {
+                responseType: AbciResponseType.ERROR,
+                error: errorMsg
+            }
+            return AbciQueryEncoder.encodeAbciResponse(errorResponse);
         }
     }
 
@@ -338,7 +347,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             genesisChunks.push(chunk);
         }
 
-        const genesisState: GenesisSnapshotDTO = {
+        const genesisState: GenesisSnapshotAbciResponse = {
+            responseType: AbciResponseType.GENESIS_SNAPSHOT,
             base64EncodedChunks: genesisChunks.map((chunk) => base64Encoder.encode(chunk)),
         };
 
@@ -424,31 +434,37 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // we first create the issuer account
         this.logger.log('Creating microblock for issuer account creation');
         const issuerAccountCreationMicroblock = Microblock.createGenesisAccountMicroblock();
-        issuerAccountCreationMicroblock.addAccountPublicKeySection({
-            publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
-            schemeId: issuerPublicKey.getSignatureSchemeId(),
-        });
-        issuerAccountCreationMicroblock.addAccountTokenIssuanceSection({ amount: ECO.INITIAL_OFFER });
-        const signature = await issuerAccountCreationMicroblock.sign(issuerPrivateKey);
-        issuerAccountCreationMicroblock.addAccountSignatureSection({
-            signature,
-            schemeId: issuerPrivateKey.getSignatureSchemeId(),
-        });
+        issuerAccountCreationMicroblock.addSections([
+            {
+                type: SectionType.ACCOUNT_PUBLIC_KEY,
+                publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
+                schemeId: issuerPublicKey.getSignatureSchemeId(),
+            },
+            {
+                type: SectionType.ACCOUNT_TOKEN_ISSUANCE,
+                amount: ECO.INITIAL_OFFER
+            }
+        ])
+        await issuerAccountCreationMicroblock.seal(issuerPrivateKey);
         const { microblockData: issuerAccountCreationSerializedMicroblock, microblockHash: issuerAccountHash } =
             issuerAccountCreationMicroblock.serialize();
 
         // we now create the Carmentis Governance organization
         this.logger.log('Creating governance organization microblock');
         const governanceOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
-        governanceOrganizationMicroblock.addOrganizationCreationSection({
-            accountId: issuerAccountHash,
-        });
-        governanceOrganizationMicroblock.addOrganizationDescriptionSection({
-            name: "Carmentis Governance",
-            website: "",
-            countryCode: "FR",
-            city: ""
-        })
+        governanceOrganizationMicroblock.addSections([
+            {
+                type: SectionType.ORG_CREATION,
+                accountId: issuerAccountHash,
+            },
+            {
+                type: SectionType.ORG_DESCRIPTION,
+                name: "Carmentis Governance",
+                website: "",
+                countryCode: "FR",
+                city: ""
+            }
+        ])
         await governanceOrganizationMicroblock.seal(issuerPrivateKey)
         const { microblockData: governanceOrganizationData, microblockHash: governanceOrgId } =
             governanceOrganizationMicroblock.serialize();
@@ -457,7 +473,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // we create the (single) protocol virtual blockchain
         this.logger.log('Creating protocol microblock');
         const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
-        protocolMicroblock.addProtocolCreationSection({
+        protocolMicroblock.addSection({
+            type: SectionType.PROTOCOL_CREATION,
             organizationId: governanceOrgId
         });
         await protocolMicroblock.seal(issuerPrivateKey)
@@ -467,15 +484,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // we now create the Carmentis SAS organization
         this.logger.log('Creating Carmentis SAS organization microblock');
         const carmentisOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
-        carmentisOrganizationMicroblock.addOrganizationCreationSection({
-            accountId: issuerAccountHash,
-        });
-        carmentisOrganizationMicroblock.addOrganizationDescriptionSection({
-            name: "Carmentis SAS",
-            website: "",
-            countryCode: "FR",
-            city: ""
-        })
+        carmentisOrganizationMicroblock.addSections([
+            {
+                type: SectionType.ORG_CREATION,
+                accountId: issuerAccountHash,
+            },
+            {
+                type: SectionType.ORG_DESCRIPTION,
+                name: "Carmentis SAS",
+                website: "",
+                countryCode: "FR",
+                city: ""
+            }
+        ])
         await carmentisOrganizationMicroblock.seal(issuerPrivateKey)
         const { microblockData: carmentisOrganizationData, microblockHash: carmentisOrgId } =
             carmentisOrganizationMicroblock.serialize();
@@ -483,17 +504,22 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // We now declare the running node as the genesis node.
         this.logger.log('Creating genesis validator node microblock');
         const mb = Microblock.createGenesisValidatorNodeMicroblock();
-        mb.addValidatorNodeCreationSection({
-            organizationId: carmentisOrgId,
-        });
         const genesisValidator = request.validators[0];
-        mb.addValidatorNodeCometbftPublicKeyDeclarationSection({
-            cometPublicKey: Utils.binaryToHexa(genesisValidator.pub_key_bytes),
-            cometPublicKeyType: genesisValidator.pub_key_type,
-        });
-        mb.addValidatorNodeRpcEndpointSection({
-            rpcEndpoint: this.nodeConfig.getCometbftExposedRpcEndpoint(),
-        });
+        mb.addSections([
+            {
+                type: SectionType.VN_CREATION,
+                organizationId: carmentisOrgId,
+            },
+            {
+                type: SectionType.VN_COMETBFT_PUBLIC_KEY_DECLARATION,
+                cometPublicKey: Utils.binaryToHexa(genesisValidator.pub_key_bytes),
+                cometPublicKeyType: genesisValidator.pub_key_type,
+            },
+            {
+                type: SectionType.VN_RPC_ENDPOINT,
+                rpcEndpoint: this.nodeConfig.getCometbftExposedRpcEndpoint(),
+            }
+        ])
         await mb.seal(issuerPrivateKey);
 
 
@@ -619,8 +645,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 const vb = checkResult.vb;
                 this.logger.log(`Type: ${CHAIN.VB_NAME[vb.getType()]}`);
                 for (const section of parsedMicroblock.getAllSections()) {
-                    const sectionLabel = SECTIONS.DEF[vb.getType()][section.type].label;
-                    const sectionLengthInBytes = section.data.length;
+                    const serializedSection = BlockchainUtils.encodeSection(section);
+                    const sectionLabel = SectionLabel.getSectionLabelFromSection(section);
+                    //const sectionLabel = SECTIONS.DEF[vb.getType()][section.type].label;
+                    const sectionLengthInBytes = serializedSection.length;
                     const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
                     this.logger.log(message);
                 }

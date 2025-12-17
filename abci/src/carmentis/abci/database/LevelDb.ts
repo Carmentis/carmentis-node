@@ -17,6 +17,14 @@ import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformationObject } from '../types/ChainInformationObject';
 import { AccountState } from '../types/AccountInformation';
 import { AccountHistoryEntry } from '../accounts/AccountManager';
+import * as v from 'valibot';
+import {
+    BlockContent, BlockContentSchema,
+    BlockInformation,
+    BlockInformationSchema,
+    ValidatorNodeByAddress,
+    ValidatorNodeByAddressSchema,
+} from '../types/valibot/db/db';
 
 export class LevelDb implements DbInterface {
     private db: Level<Uint8Array, Uint8Array>;
@@ -133,7 +141,7 @@ export class LevelDb implements DbInterface {
         return undefined;
     }
 
-    async getObject(tableId: number, key: Uint8Array) {
+    async getObject(tableId: number, key: Uint8Array): Promise<object | undefined> {
         this.logger.debug(`Accessing object with key {key} on table {tableId}`, () => ({
             key: Utils.binaryToHexa(key),
             tableId,
@@ -321,5 +329,31 @@ export class LevelDb implements DbInterface {
             escrowIdentifier,
             escrowData
         );
+    }
+
+    async getValidatorNodeByAddress(nodeAddress: Uint8Array): Promise<ValidatorNodeByAddress> {
+        const response = await this.getObject(
+            NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
+            nodeAddress
+        );
+        return v.parse(ValidatorNodeByAddressSchema, response);
+    }
+
+    async getBlockInformation(height: number): Promise<BlockInformation | null> {
+        const dataObject = await this.getObject(
+            NODE_SCHEMAS.DB_BLOCK_INFORMATION,
+            LevelDb.convertHeightToTableKey(height),
+        );
+        if (dataObject === undefined) return null;
+        return v.parse(BlockInformationSchema, dataObject);
+    }
+
+    async getBlockContent(height: number): Promise<BlockContent | undefined> {
+        const dataObject = await this.getObject(
+            NODE_SCHEMAS.DB_BLOCK_CONTENT,
+            LevelDb.convertHeightToTableKey(height),
+        );
+        if (dataObject === undefined) return null;
+        return v.parse(BlockContentSchema, dataObject);
     }
 }

@@ -6,6 +6,7 @@ import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import {
     CHAIN,
     Microblock,
+    MicroblockInformation,
     MicroblockInformationSchema,
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
@@ -13,6 +14,7 @@ import { ChainInformationObject } from '../types/ChainInformationObject';
 import { getLogger } from '@logtape/logtape';
 import { AccountState } from '../types/AccountInformation';
 import { AccountHistoryEntry } from '../accounts/AccountManager';
+import * as v from 'valibot';
 
 export class CachedLevelDb implements DbInterface {
     private db: LevelDb;
@@ -267,6 +269,10 @@ export class CachedLevelDb implements DbInterface {
         return this.getRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
     }
 
+    async getVirtualBlockchainState(vbIdentifier: Uint8Array) {
+        // TODO
+    }
+
     async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array) {
         this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
             identifier: Utils.binaryToHexa(identifier),
@@ -279,7 +285,7 @@ export class CachedLevelDb implements DbInterface {
         return this.getRaw(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, microblockHash);
     }
 
-    async setMicroblockInformation(microblock: Microblock, info: MicroblockInformationSchema) {
+    async setMicroblockInformation(microblock: Microblock, info: MicroblockInformation) {
         this.logger.debug(
             `Setting microblock information for microblock ${microblock.getHash().encode()}`,
         );
@@ -287,7 +293,7 @@ export class CachedLevelDb implements DbInterface {
         await this.putObject(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, hash, info);
     }
 
-    async getMicroblockInformation(microblockHash: Uint8Array) {
+    async getMicroblockInformation(microblockHash: Uint8Array): Promise<MicroblockInformation> {
         this.logger.debug(
             `Getting information for microblock ${Utils.binaryToHexa(microblockHash)}`,
         );
@@ -295,7 +301,7 @@ export class CachedLevelDb implements DbInterface {
             NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION,
             microblockHash,
         );
-        return microblockInformation as MicroblockInformationSchema;
+        return v.parse(MicroblockInformationSchema, microblockInformation);
     }
 
     async putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean> {

@@ -15,6 +15,7 @@ import {
     Hash,
     Microblock,
     MicroblockBody,
+    MicroblockHeader,
     MicroblockHeaderObject,
     PrivateSignatureKey,
     ProtocolInternalState,
@@ -140,7 +141,7 @@ export class GlobalState extends AbstractProvider {
         return BlockchainUtils.decodeMicroblockBody(serializedBody);
     }
 
-    async getMicroblockHeader(microblockHash: Hash): Promise<MicroblockHeaderObject | null> {
+    async getMicroblockHeader(microblockHash: Hash): Promise<MicroblockHeader | null> {
         const serializedHeader = await this.cachedStorage.readSerializedMicroblockHeader(
             microblockHash.toBytes(),
         );
@@ -286,9 +287,8 @@ export class GlobalState extends AbstractProvider {
      */
     async storeMicroblock(expirationDay: number, virtualBlockchain: VirtualBlockchain, microblock: Microblock, transaction: Uint8Array) {
         await this.cachedStorage.addMicroblockToBuffer(expirationDay, microblock, transaction);
-        const { headerData: serializedHeader } = microblock.serialize();
         await this.cachedDb.setMicroblockInformation(microblock, {
-            header: serializedHeader,
+            header: microblock.getHeader(),
             virtualBlockchainId: virtualBlockchain.getId(),
             virtualBlockchainType: virtualBlockchain.getType(),
         });
