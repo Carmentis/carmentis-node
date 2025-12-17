@@ -1,4 +1,4 @@
-import { CMTSToken, Microblock, PrivateSignatureKey, PublicSignatureKey, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { CMTSToken, Microblock, PrivateSignatureKey, PublicSignatureKey, SectionType, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { GenesisRunoff } from './GenesisRunoff';
 import { getLogger } from '@logtape/logtape';
 
@@ -73,7 +73,8 @@ export class GenesisRunoffTransactionsBuilder {
             if (transfer.vesting === undefined) {
                 this.logger.info("No vesting, just transfer the tokens")
                 const mb = Microblock.createGenesisAccountMicroblock();
-                mb.addAccountTransferSection({
+                mb.addSection({
+                    type: SectionType.ACCOUNT_TRANSFER,
                     account: destinationAccountHash,
                     privateReference: '',
                     publicReference: '',
@@ -87,7 +88,8 @@ export class GenesisRunoffTransactionsBuilder {
                 const vesting = this.getVestingParametersFromVestingName(transfer.vesting);
                 this.logger.info(`Vesting detected: cliff of ${vesting.cliffDurationInDays} days and vesting of ${vesting.vestingDurationInDays} days`)
                 const mb = Microblock.createGenesisAccountMicroblock();
-                mb.addAccountVestingTransferSection({
+                mb.addSection({
+                    type: SectionType.ACCOUNT_VESTING_TRANSFER,
                     account: destinationAccountHash,
                     cliffDurationDays: vesting.cliffDurationInDays,
                     privateReference: "",
@@ -201,14 +203,18 @@ export class GenesisRunoffTransactionsBuilder {
 
     private async createZeroBalanceAccount( accountPublicKey: PublicSignatureKey, sourceAccountPrivateKey: PrivateSignatureKey, sourceAccountHash: Uint8Array<ArrayBufferLike> ) {
         const mb = Microblock.createGenesisAccountMicroblock();
-        mb.addAccountPublicKeySection({
-            publicKey: await accountPublicKey.getPublicKeyAsBytes(),
-            schemeId: accountPublicKey.getSignatureSchemeId(),
-        });
-        mb.addAccountCreationSection({
-            sellerAccount: sourceAccountHash,
-            amount: 0,
-        });
+        mb.addSections([
+            {
+                type: SectionType.ACCOUNT_PUBLIC_KEY,
+                publicKey: await accountPublicKey.getPublicKeyAsBytes(),
+                schemeId: accountPublicKey.getSignatureSchemeId(),
+            },
+            {
+                type: SectionType.ACCOUNT_CREATION,
+                sellerAccount: sourceAccountHash,
+                amount: 0,
+            }
+        ])
         await mb.seal(sourceAccountPrivateKey);
         const { microblockData, microblockHash } =
             mb.serialize();

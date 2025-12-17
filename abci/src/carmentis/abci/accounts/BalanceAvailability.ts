@@ -220,7 +220,7 @@ export class BalanceAvailability {
         // locked amounts
         const escrowed = lockedAmountInAtomicsByLockType.get(LockType.Escrow) || 0;
         const vested = lockedAmountInAtomicsByLockType.get(LockType.Vesting) || 0;
-        const staked = lockedAmountInAtomicsByLockType.get(LockType.NodeStaking) || 0;
+        const staked = lockedAmountInAtomicsByLockType.get(LockType.Staking) || 0;
 
         // the amount of stakeable tokens is the balance, minus the amount of already staked tokens, minus
         // the amount of escrowed tokens

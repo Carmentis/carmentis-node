@@ -14,8 +14,9 @@ import {
     SchemaSerializer,
     Sha256CryptographicHash,
     Utils,
+    AccountInformation,
+    AccountState,
 } from '@cmts-dev/carmentis-sdk/server';
-import { AccountState, AccountInformation } from '../types/AccountInformation';
 import { Escrow } from '../types/Escrow';
 import { Account } from '../Account';
 import { Logger } from '@nestjs/common';
@@ -505,7 +506,7 @@ export class AccountManager {
      * @returns The account hash associated with the public key
      * @throws {Error} If no account is found for the given key hash
      */
-    async loadAccountByPublicKeyHash(keyHash: Uint8Array): Promise<Uint8Array> {
+    async loadAccountIdByPublicKeyHash(keyHash: Uint8Array): Promise<Uint8Array> {
         const accountHash = await this.db.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash);
 
         if (!accountHash) {
@@ -527,7 +528,7 @@ export class AccountManager {
     }
 
     async loadAccountByPublicKey(publicSignatureKey: PublicSignatureKey) {
-        return this.loadAccountByPublicKeyHash(
+        return this.loadAccountIdByPublicKeyHash(
             await AccountManager.getAccountHashFromPublicSignatureKey(publicSignatureKey),
         );
     }

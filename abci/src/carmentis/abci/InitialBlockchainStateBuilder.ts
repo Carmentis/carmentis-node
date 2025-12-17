@@ -8,7 +8,7 @@ import {
     Microblock,
     PrivateSignatureKey,
     Provider,
-    PublicSignatureKey,
+    PublicSignatureKey, SectionType,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
 import { GlobalState } from './state/GlobalState';
@@ -75,7 +75,11 @@ export class InitialBlockchainStateBuilder {
             this.issuerPublicKey,
         );
         const signature = await microblock.sign(this.issuerPrivateKey);
-        microblock.addAccountSignatureSection({ signature, schemeId: this.issuerPublicKey.getSignatureSchemeId() });
+        microblock.addSection({
+            type: SectionType.SIGNATURE,
+            signature,
+            schemeId: this.issuerPublicKey.getSignatureSchemeId()
+        });
 
         const { microblockData } = microblock.serialize();
         return microblockData;
@@ -168,19 +172,5 @@ export class InitialBlockchainStateBuilder {
 
         return { genesisNodeId: validatorNodeId, genesisNodeDeclarationTransaction };
         */
-    }
-
-    public async createGenesisNodeValidatorGrantTransaction(genesisNodeId: Uint8Array) {
-        // We now load the genesis validator node and set the voting power to 10.
-        const node = await this.state.loadAccountVirtualBlockchain(Hash.from(genesisNodeId));
-        const microblock = await node.createMicroblock();
-        microblock.addValidatorNodeVotingPowerUpdateSection({
-            votingPower: 10,
-        });
-        const signature = await microblock.sign(this.issuerPrivateKey);
-        microblock.addValidatorNodeSignatureSection({ signature, schemeId: this.issuerPublicKey.getSignatureSchemeId() });
-
-        const { microblockData } = microblock.serialize();
-        return microblockData;
     }
 }

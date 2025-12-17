@@ -105,7 +105,11 @@ export class GlobalStateUpdater {
                 const escrowLocks = balanceAvailability.getEscrowLocks();
 
                 for(const lock of escrowLocks) {
-                    if(currentBlockDayTs > Utils.addDaysToTimestamp(lock.parameters.startTimestamp, lock.parameters.durationDays)) {
+                    const isEscrowLockExpired = currentBlockDayTs > Utils.addDaysToTimestamp(
+                        lock.parameters.startTimestamp,
+                        lock.parameters.durationDays
+                    );
+                    if (isEscrowLockExpired) {
                         // the escrow has expired: the funds are sent back from payee to payer
                         const tokenTransfer: Transfer = {
                             type: ECO.BK_SENT_EXPIRED_ESCROW,
@@ -202,31 +206,34 @@ export class GlobalStateUpdater {
         );
 
         // we now perform the token transfer ex nihilo
-        const tokenIssuanceSection = microblock.getAccountTokenIssuanceSection();
-        const { amount } = tokenIssuanceSection.object;
-        const accountId = accountVb.getId();
-        const tokenTransfer: Transfer = {
-            type: ECO.BK_SENT_ISSUANCE,
-            payerAccount: null,
-            payeeAccount: accountId,
-            amount,
-        };
-        const chainReference = {
-            mbHash: microblock.getHash().toBytes(),
-            sectionIndex: tokenIssuanceSection.index,
-        };
+        for (const [sectionIndex, section] of microblock.getAllSections().entries()) {
+            if (section.type !== SectionType.ACCOUNT_TOKEN_ISSUANCE) continue;
+            const { amount } = section;
+            const accountId = accountVb.getId();
+            const tokenTransfer: Transfer = {
+                type: ECO.BK_SENT_ISSUANCE,
+                payerAccount: null,
+                payeeAccount: accountId,
+                amount,
+            };
+            const chainReference = {
+                mbHash: microblock.getHash().toBytes(),
+                sectionIndex,
+            };
 
-        this.logger.debug(`Proceeding to token issuance of ${CMTSToken.createAtomic(amount).toString()} for account ${Utils.binaryToHexa(accountId)}`)
-        await accountManager.tokenTransfer(
-            tokenTransfer,
-            chainReference,
-            microblock.getTimestamp(), //context.timestamp,
-        );
+            this.logger.debug(`Proceeding to token issuance of ${CMTSToken.createAtomic(amount).toString()} for account ${Utils.binaryToHexa(accountId)}`)
+            await accountManager.tokenTransfer(
+                tokenTransfer,
+                chainReference,
+                microblock.getTimestamp(), //context.timestamp,
+            );
 
-        await accountManager.saveAccountByPublicKey(
-            accountId,
-            await issuerPublicKey.getPublicKeyAsBytes(),
-        );
+            await accountManager.saveAccountByPublicKey(
+                accountId,
+                await issuerPublicKey.getPublicKeyAsBytes(),
+            );
+        }
+
     }
 
     private async handleProtocolUpdate(virtualBlockchain: ProtocolVb, microblock: Microblock) {
@@ -270,7 +277,7 @@ export class GlobalStateUpdater {
         const protocolParameters = await globalState.getProtocolVariables();
         const feesCalculationVersion = protocolParameters.getFeesCalculationVersion();
         const signatureSection = microblock.getLastSignatureSection();
-        const usedSignatureSchemeId = signatureSection.object.schemeId;
+        const usedSignatureSchemeId = signatureSection.schemeId;
         const usedFeesCalculationFormula =
             FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(
                 feesCalculationVersion,
@@ -382,13 +389,6 @@ export class GlobalStateUpdater {
             (count, ndx) => count + this.newObjectCounts[ndx],
         );
         await database.putChainInformationObject(chainInfoObject);
-        /*
-        await database.putObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            chainInfoObject,
-        );
-         */
     }
 
     getValidatorSetUpdates(): ValidatorSetUpdate[] {
@@ -516,144 +516,138 @@ export class GlobalStateUpdater {
     ): Promise<void> {
         const accountManager = globalState.getAccountManager();
 
-        // check account creation
-        const hasAccountCreationSection = microblock.hasSection(SectionType.ACCOUNT_CREATION);
-        if (hasAccountCreationSection) {
-            // checking the availability of the public key
-            const accountPublicKey = await accountVb.getPublicKey();
-            await accountManager.checkPublicKeyAvailabilityOrFail(
-                await accountPublicKey.getPublicKeyAsBytes(),
-            );
 
-            const accountCreationSection = microblock.getAccountCreationSection();
-            const { sellerAccount, amount } = accountCreationSection.object;
-            const createdAccountId = accountVb.getId();
-            this.logger.debug(`Creating account ${Utils.binaryToHexa(createdAccountId)} with ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(sellerAccount)}`)
-            await accountManager.tokenTransfer(
-                {
-                    type: ECO.BK_SALE,
-                    payerAccount: sellerAccount,
-                    payeeAccount: createdAccountId,
+        for (const [sectionIndex, section] of microblock.getAllSections().entries()) {
+            const sectionType = section.type;
+
+            // check account creation
+            if (sectionType === SectionType.ACCOUNT_CREATION) {
+                // checking the availability of the public key
+                const accountPublicKey = await accountVb.getPublicKey();
+                await accountManager.checkPublicKeyAvailabilityOrFail(
+                    await accountPublicKey.getPublicKeyAsBytes(),
+                );
+
+                const { sellerAccount, amount } = section;
+                const createdAccountId = accountVb.getId();
+                this.logger.debug(`Creating account ${Utils.binaryToHexa(createdAccountId)} with ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(sellerAccount)}`)
+                await accountManager.tokenTransfer(
+                    {
+                        type: ECO.BK_SALE,
+                        payerAccount: sellerAccount,
+                        payeeAccount: createdAccountId,
+                        amount,
+                    },
+                    {
+                        mbHash: microblock.getHash().toBytes(),
+                        sectionIndex,
+                    },
+                    microblock.getTimestamp(),
+                );
+
+                await accountManager.saveAccountByPublicKey(
+                    createdAccountId,
+                    await accountPublicKey.getPublicKeyAsBytes(),
+                );
+            }
+
+
+            // check token standard transfers
+            if (sectionType === SectionType.ACCOUNT_TRANSFER) {
+                const { account, amount } = section;
+                const accountIdSendingTokens = accountVb.getId();
+                this.logger.debug(`Transfering ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(accountIdSendingTokens)} to account ${Utils.binaryToHexa(account)}`)
+                await accountManager.tokenTransfer(
+                    {
+                        type: ECO.BK_SENT_PAYMENT,
+                        payerAccount: accountVb.getId(),
+                        payeeAccount: account,
+                        amount,
+                    },
+                    {
+                        mbHash: microblock.getHash().toBytes(),
+                        sectionIndex,
+                    },
+                    microblock.getTimestamp(),
+                );
+            }
+
+
+            // check staking
+            if (sectionType === SectionType.ACCOUNT_STAKE) {
+                const { amount, objectType, objectIdentifier } = section;
+                await accountManager.stake(
+                    accountVb.getId(),
                     amount,
-                },
-                {
+                    objectType,
+                    objectIdentifier
+                );
+            }
+
+
+            // check token escrow transfers
+            if (sectionType === SectionType.ACCOUNT_ESCROW_TRANSFER) {
+                const { account, amount, escrowIdentifier, agentAccount, durationDays } = section;
+                await accountManager.tokenTransfer(
+                    {
+                        type: ECO.BK_SENT_ESCROW,
+                        payerAccount: accountVb.getId(),
+                        payeeAccount: account,
+                        amount,
+                        escrowParameters: {
+                            escrowIdentifier,
+                            fundEmitterAccountId: account,
+                            transferAuthorizerAccountId: agentAccount,
+                            startTimestamp: microblock.getTimestamp(),
+                            durationDays
+                        }
+                    },
+                    {
+                        mbHash: microblock.getHash().toBytes(),
+                        sectionIndex,
+                    },
+                    microblock.getTimestamp(),
+                );
+            }
+
+
+            // check token escrow settlements
+            if (sectionType === SectionType.ACCOUNT_ESCROW_SETTLEMENT) {
+                const { escrowIdentifier, confirmed } = section;
+                const chainReference = {
                     mbHash: microblock.getHash().toBytes(),
-                    sectionIndex: accountCreationSection.index,
-                },
-                microblock.getTimestamp(),
-            );
+                    sectionIndex
+                };
+                await accountManager.escrowSettlement(accountVb.getId(), escrowIdentifier, confirmed, microblock.getTimestamp(), chainReference);
+            }
 
-            await accountManager.saveAccountByPublicKey(
-                createdAccountId,
-                await accountPublicKey.getPublicKeyAsBytes(),
-            );
+
+            // check token vesting transfers
+            if (sectionType === SectionType.ACCOUNT_VESTING_TRANSFER) {
+                const { account, amount, cliffDurationDays, vestingDurationDays } = section;
+                await accountManager.tokenTransfer(
+                    {
+                        type: ECO.BK_SENT_VESTING,
+                        payerAccount: accountVb.getId(),
+                        payeeAccount: account,
+                        amount,
+                        vestingParameters: {
+                            initialVestedAmountInAtomics: amount,
+                            cliffStartTimestamp: microblock.getTimestamp(),
+                            cliffDurationDays,
+                            vestingDurationDays
+                        }
+                    },
+                    {
+                        mbHash: microblock.getHash().toBytes(),
+                        sectionIndex,
+                    },
+                    microblock.getTimestamp(),
+                );
+            }
+
         }
 
-        // check token standard transfers
-        const tokenTransferSections = microblock.getSectionsByType<AccountTransferSection>(
-            SectionType.ACCOUNT_TRANSFER,
-        );
-        for (const section of tokenTransferSections) {
-            const { account, amount } = section.object;
-            const accountIdSendingTokens = accountVb.getId();
-            this.logger.debug(`Transfering ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(accountIdSendingTokens)} to account ${Utils.binaryToHexa(account)}`)
-            await accountManager.tokenTransfer(
-                {
-                    type: ECO.BK_SENT_PAYMENT,
-                    payerAccount: accountVb.getId(),
-                    payeeAccount: account,
-                    amount,
-                },
-                {
-                    mbHash: microblock.getHash().toBytes(),
-                    sectionIndex: section.index,
-                },
-                microblock.getTimestamp(),
-            );
-        }
-
-        // check staking
-        const tokenStakeSections = microblock.getSectionsByType<AccountStakeSection>(
-            SectionType.ACCOUNT_STAKE,
-        );
-
-        for (const section of tokenStakeSections) {
-            const { amount, objectType, objectIdentifier } = section.object;
-            await accountManager.stake(
-                accountVb.getId(),
-                amount,
-                objectType,
-                objectIdentifier
-            );
-        }
-
-        // check token escrow transfers
-        const tokenEscrowTransferSections = microblock.getSectionsByType<AccountEscrowTransferSection>(
-            SectionType.ACCOUNT_ESCROW_TRANSFER,
-        );
-        for (const section of tokenEscrowTransferSections) {
-            const { account, amount, escrowIdentifier, agentAccount, durationDays } = section.object;
-            await accountManager.tokenTransfer(
-                {
-                    type: ECO.BK_SENT_ESCROW,
-                    payerAccount: accountVb.getId(),
-                    payeeAccount: account,
-                    amount,
-                    escrowParameters: {
-                        escrowIdentifier,
-                        fundEmitterAccountId: account,
-                        transferAuthorizerAccountId: agentAccount,
-                        startTimestamp: microblock.getTimestamp(),
-                        durationDays
-                    }
-                },
-                {
-                    mbHash: microblock.getHash().toBytes(),
-                    sectionIndex: section.index,
-                },
-                microblock.getTimestamp(),
-            );
-        }
-
-        // check token escrow settlements
-        const tokenEscrowSettlementSections = microblock.getSectionsByType<AccountEscrowSettlementSection>(
-            SectionType.ACCOUNT_ESCROW_SETTLEMENT,
-        );
-        for (const section of tokenEscrowSettlementSections) {
-            const { escrowIdentifier, confirmed } = section.object;
-            const chainReference = {
-                mbHash: microblock.getHash().toBytes(),
-                sectionIndex: section.index
-            };
-            await accountManager.escrowSettlement(accountVb.getId(), escrowIdentifier, confirmed, microblock.getTimestamp(), chainReference);
-        }
-
-        // check token vesting transfers
-        const tokenVestingTransferSections = microblock.getSectionsByType<AccountVestingTransferSection>(
-            SectionType.ACCOUNT_VESTING_TRANSFER,
-        );
-        for (const section of tokenVestingTransferSections) {
-            const { account, amount, cliffDurationDays, vestingDurationDays } = section.object;
-            await accountManager.tokenTransfer(
-                {
-                    type: ECO.BK_SENT_VESTING,
-                    payerAccount: accountVb.getId(),
-                    payeeAccount: account,
-                    amount,
-                    vestingParameters: {
-                        initialVestedAmountInAtomics: amount,
-                        cliffStartTimestamp: microblock.getTimestamp(),
-                        cliffDurationDays,
-                        vestingDurationDays
-                    }
-                },
-                {
-                    mbHash: microblock.getHash().toBytes(),
-                    sectionIndex: section.index,
-                },
-                microblock.getTimestamp(),
-            );
-        }
     }
 
     private async handleValidatorNodeUpdate(
@@ -661,29 +655,21 @@ export class GlobalStateUpdater {
         virtualBlockchain: ValidatorNodeVb,
         microblock: Microblock,
     ) {
-        // update the public key of the validators
-        const publicKeyDeclarationSections = microblock.getSectionsByType(
-            SectionType.VN_COMETBFT_PUBLIC_KEY_DECLARATION,
-        );
-        if (publicKeyDeclarationSections.length === 1) {
-            await this.validatorNodePublicKeyDeclarationCallback(
-                globalState,
-                virtualBlockchain,
-                publicKeyDeclarationSections[0],
-            );
-        }
-
-        // update the voting power
-        const votingPowerUpdateSections =
-            microblock.getSectionsByType<ValidatorNodeVotingPowerUpdateSection>(
-                SectionType.VN_VOTING_POWER_UPDATE,
-            );
-        if (votingPowerUpdateSections.length === 1) {
-            await this.validatorNodeVotingPowerUpdateCallback(
-                globalState,
-                virtualBlockchain,
-                votingPowerUpdateSections[0],
-            );
+        for (const section of microblock.getAllSections()) {
+            const sectionType = section.type;
+            if (sectionType === SectionType.VN_COMETBFT_PUBLIC_KEY_DECLARATION) {
+                await this.validatorNodePublicKeyDeclarationCallback(
+                    globalState,
+                    virtualBlockchain,
+                    section,
+                );
+            } else if (sectionType === SectionType.VN_VOTING_POWER_UPDATE) {
+                await this.validatorNodeVotingPowerUpdateCallback(
+                    globalState,
+                    virtualBlockchain,
+                    section,
+                );
+            }
         }
     }
 
@@ -693,9 +679,9 @@ export class GlobalStateUpdater {
     private async validatorNodePublicKeyDeclarationCallback(
         globalState: GlobalState,
         vb: ValidatorNodeVb,
-        section: Section<ValidatorNodeCometbftPublicKeyDeclarationSection>,
+        section: ValidatorNodeCometbftPublicKeyDeclarationSection,
     ) {
-        const { cometPublicKeyType, cometPublicKey } = section.object;
+        const { cometPublicKeyType, cometPublicKey } = section;
         const cometPublicKeyBytes = Base64.decodeBinary(cometPublicKey);
         const cometAddress =
             CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
@@ -722,7 +708,7 @@ export class GlobalStateUpdater {
     private async validatorNodeVotingPowerUpdateCallback(
         globalState: GlobalState,
         vb: ValidatorNodeVb,
-        section: Section<ValidatorNodeVotingPowerUpdateSection>,
+        section: ValidatorNodeVotingPowerUpdateSection,
     ) {
         const publicKeyDeclaration = await vb.getCometbftPublicKeyDeclaration();
         const cometPublicKeyBytes = Base64.decodeBinary(publicKeyDeclaration.cometbftPublicKey);
