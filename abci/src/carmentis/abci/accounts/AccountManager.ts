@@ -93,13 +93,12 @@ export class AccountManager {
             sectionIndex: 1,
         };
         const timestamp = Date.now();
-       await this.tokenTransfer(
+        await this.tokenTransfer(
             tokenTransfer,
             chainReference,
             timestamp
         );
     }
-
 
     /**
      * Processes a token transfer between accounts.
@@ -215,8 +214,8 @@ export class AccountManager {
     /**
      * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
      */
-    async escrowSettlement(account: Uint8Array, identifier: Uint8Array, confirmed: boolean, timestamp: number, chainReference: unknown) {
-        const escrow = <Escrow>await this.db.getObject(NODE_SCHEMAS.DB_ESCROWS, identifier);
+    async escrowSettlement(account: Uint8Array, escrowIdentifier: Uint8Array, confirmed: boolean, timestamp: number, chainReference: unknown) {
+        const escrow = <Escrow>await this.db.getObject(NODE_SCHEMAS.DB_ESCROWS, escrowIdentifier);
 
         // make sure that this escrow exists
         if(escrow === undefined) {
@@ -232,7 +231,7 @@ export class AccountManager {
         const payeeAccountState = accountInformation.state;
         const lockIndex = payeeAccountState.locks.findIndex((lock) =>
             lock.type == LockType.Escrow &&
-            Utils.binaryIsEqual(lock.parameters.identifier, identifier)
+            Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier)
         );
 
         if(lockIndex === -1) {
@@ -262,7 +261,7 @@ export class AccountManager {
         }
 
         // remove the escrow from the DB
-        await this.db.del(NODE_SCHEMAS.DB_ESCROWS, identifier);
+        await this.db.del(NODE_SCHEMAS.DB_ESCROWS, escrowIdentifier);
     }
 
     /**

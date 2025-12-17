@@ -23,6 +23,7 @@ import {
     ListSnapshotsResponse,
     LoadSnapshotChunkRequest,
     LoadSnapshotChunkResponse,
+    Misbehavior,
     OfferSnapshotRequest,
     OfferSnapshotResponse,
     OfferSnapshotResult,
@@ -563,7 +564,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         workingState,
                         updatedVirtualBlockchain,
                         parsedMicroblock,
-                        { blockHeight: publishedBlockHeight, blockTimestamp },
+                        { blockHeight: publishedBlockHeight, blockTimestamp, blockMisbehaviors: [] },
                         tx
                     );
                 } else {
@@ -655,6 +656,18 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     /**
+     * Extract the relevant Comet parameters from a Comet request
+     * This supports PrepareProposalRequest, ProcessProposalRequest and FinalizeBlockRequest
+     */
+    extractCometParameters(request: PrepareProposalRequest|ProcessProposalRequest|FinalizeBlockRequest): GlobalStateUpdateCometParameters {
+        const blockHeight = Number(request.height);
+        const blockTimestamp = Number(request.time.seconds);
+        const blockMisbehaviors: Misbehavior[] = request.misbehavior;
+
+        return { blockHeight, blockTimestamp, blockMisbehaviors };
+    }
+
+    /**
      * Prepares a proposal by validating transactions against specific criteria
      * and returns a prepared proposal response containing only valid transactions.
      *
@@ -669,20 +682,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      * object containing the filtered list of valid transactions.
      */
     async PrepareProposal(request: PrepareProposalRequest) {
-        // TODO check these two variables
-        const blockHeight = +request.height;
-        const blockTimestamp = +(request.time?.seconds ?? 0); // TODO(explain): why zero, it might break the consensus
+        const cometParameters = this.extractCometParameters(request);
 
         this.logger.log(
-            `[ PrepareProposal - Height: ${blockHeight} ]  --------------------------------------------------------`,
+            `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(`Handling ${request.txs.length} transations at ts=${blockTimestamp}`);
+        this.logger.log(`Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`);
 
         const proposedTxs = [];
         const workingState = new GlobalState(this.db, this.storage);
         //const cache = this.getCacheInstance(request.txs);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
-        const cometParameters: GlobalStateUpdateCometParameters = { blockHeight, blockTimestamp };
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
 
@@ -733,16 +743,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      */
     async ProcessProposal(request: ProcessProposalRequest) {
         const perfMeasure = this.perf.start('ProcessProposal');
-        const blockHeight = +request.height;
-        const blockTimestamp = +(request.time?.seconds ?? 0);
+        const cometParameters = this.extractCometParameters(request);
+
         this.logger.log(
-            `[ ProcessProposal - Height: ${blockHeight} ]  --------------------------------------------------------`,
+            `[ ProcessProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(`Handling ${request.txs.length} transations at ts=${blockTimestamp}`);
+        this.logger.log(`Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`);
 
         const workingState = new GlobalState(this.db, this.storage);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
-        const cometParameters: GlobalStateUpdateCometParameters = { blockHeight, blockTimestamp };
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
 
@@ -796,19 +805,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     async FinalizeBlock(request: FinalizeBlockRequest) {
         const perfMeasure = this.perf.start('FinalizeBlock');
-
-        const blockHeight = +request.height;
-        const blockTimestamp = +(request.time?.seconds ?? 0);
+        const cometParameters = this.extractCometParameters(request);
 
         this.logger.log(
-            `[ FinalizeBlock - Height: ${blockHeight} ]  --------------------------------------------------------`,
+            `[ FinalizeBlock - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(`Handling ${request.txs.length} transations at ts=${blockTimestamp}`);
+        this.logger.log(`Handling ${request.txs.length} transactions at ts=$cometParameters.{blockTimestamp}`);
 
         const workingState = this.state;
         const txResults = [];
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
-        const cometParameters: GlobalStateUpdateCometParameters = { blockHeight, blockTimestamp };
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
 

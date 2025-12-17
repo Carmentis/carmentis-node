@@ -592,7 +592,7 @@ export class GlobalStateUpdater {
             SectionType.ACCOUNT_ESCROW_TRANSFER,
         );
         for (const section of tokenEscrowTransferSections) {
-            const { account, amount, identifier, agentAccount, durationDays } = section.object;
+            const { account, amount, escrowIdentifier, agentAccount, durationDays } = section.object;
             await accountManager.tokenTransfer(
                 {
                     type: ECO.BK_SENT_ESCROW,
@@ -600,7 +600,7 @@ export class GlobalStateUpdater {
                     payeeAccount: account,
                     amount,
                     escrowParameters: {
-                        identifier,
+                        escrowIdentifier,
                         fundEmitterAccountId: account,
                         transferAuthorizerAccountId: agentAccount,
                         startTimestamp: microblock.getTimestamp(),
@@ -620,12 +620,12 @@ export class GlobalStateUpdater {
             SectionType.ACCOUNT_ESCROW_SETTLEMENT,
         );
         for (const section of tokenEscrowSettlementSections) {
-            const { identifier, confirmed } = section.object;
+            const { escrowIdentifier, confirmed } = section.object;
             const chainReference = {
                 mbHash: microblock.getHash().toBytes(),
                 sectionIndex: section.index
             };
-            await accountManager.escrowSettlement(accountVb.getId(), identifier, confirmed, microblock.getTimestamp(), chainReference);
+            await accountManager.escrowSettlement(accountVb.getId(), escrowIdentifier, confirmed, microblock.getTimestamp(), chainReference);
         }
 
         // check token vesting transfers
