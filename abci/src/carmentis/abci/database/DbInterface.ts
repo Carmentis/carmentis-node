@@ -1,10 +1,10 @@
 import { DataFileObject } from '../types/DataFileObject';
-import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
 import { AccountHistoryEntry } from '../accounts/AccountManager';
 import {AccountState} from "@cmts-dev/carmentis-sdk/server";
+import { MicroblockStorage } from '../types/valibot/storage/MicroblockStorage';
 
 export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>
 
@@ -35,9 +35,9 @@ export interface DbInterface {
     putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFileObject): Promise<boolean>;
     putMicroblockStorage(
         microblockHeaderHash: Uint8Array,
-        microblockStorage: MicroblockStorageObject,
+        microblockStorage: MicroblockStorage,
     ): Promise<boolean>;
-    getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject>;
+    getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorage>;
     getAccountIdByPublicKeyHash(publicKeyBytesHash: Uint8Array): Promise<Uint8Array | undefined>;
     getAccountStateByAccountId(accountId: Uint8Array): Promise<AccountState | undefined>;
     getAccountHistoryEntryByHistoryHash(

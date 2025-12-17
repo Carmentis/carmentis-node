@@ -30,14 +30,6 @@ export type VbRadix = v.InferOutput<typeof VbRadixSchema>;
 export const TokenRadixSchema = v.object({});
 export type TokenRadix = v.InferOutput<typeof TokenRadixSchema>;
 
-// MicroblockStorage
-export const MicroblockStorageSchema = v.object({
-    fileIdentifier: v.number(),
-    offset: v.number(),
-    size: v.number(),
-});
-export type MicroblockStorage = v.InferOutput<typeof MicroblockStorageSchema>;
-
 // AccountByPublicKey
 export const AccountByPublicKeySchema = v.object({
     accountHash: uint8array(),

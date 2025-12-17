@@ -12,7 +12,6 @@ import {
 import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { getLogger } from '@logtape/logtape';
 import { DataFileObject } from '../types/DataFileObject';
-import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformationObject } from '../types/ChainInformationObject';
@@ -26,6 +25,7 @@ import {
     ValidatorNodeByAddress,
     ValidatorNodeByAddressSchema,
 } from '../types/valibot/db/db';
+import { MicroblockStorage, MicroblockStorageSchema } from '../types/valibot/storage/MicroblockStorage';
 
 export class LevelDb implements DbInterface {
     private db: Level<Uint8Array, Uint8Array>;
@@ -280,7 +280,7 @@ export class LevelDb implements DbInterface {
         return await this.putObject(NODE_SCHEMAS.DB_DATA_FILE, dataFileKey, dataFileObject);
     }
 
-    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorageObject) {
+    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorage) {
         return await this.putObject(
             NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
             microblockHeaderHash,
@@ -288,11 +288,11 @@ export class LevelDb implements DbInterface {
         );
     }
 
-    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject> {
-        return (await this.getObject(
+    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorage> {
+        return v.parse(MicroblockStorageSchema, await this.getObject(
             NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
             microblockHeaderHash,
-        )) as MicroblockStorageObject;
+        ));
     }
 
     async getChainInformationObject() {

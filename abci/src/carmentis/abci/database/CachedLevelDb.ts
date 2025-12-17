@@ -2,7 +2,6 @@ import { LevelDb } from './LevelDb';
 import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { DataFileObject } from '../types/DataFileObject';
 import { NODE_SCHEMAS } from '../constants/constants';
-import { MicroblockStorageObject } from '../types/MicroblockStorageObject';
 import {
     CHAIN,
     AccountState,
@@ -15,6 +14,7 @@ import { ChainInformationObject } from '../types/ChainInformationObject';
 import { getLogger } from '@logtape/logtape';
 import { AccountHistoryEntry } from '../accounts/AccountManager';
 import * as v from 'valibot';
+import { MicroblockStorage, MicroblockStorageSchema } from '../types/valibot/storage/MicroblockStorage';
 
 export class CachedLevelDb implements DbInterface {
     private db: LevelDb;
@@ -177,7 +177,7 @@ export class CachedLevelDb implements DbInterface {
         return new Uint8Array(Buffer.from(str, 'hex'));
     }
 
-    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorageObject) {
+    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorage) {
         this.logger.debug(
             'Putting microblock storage for microblock ' + Utils.binaryToHexa(microblockHeaderHash),
         );
@@ -188,11 +188,11 @@ export class CachedLevelDb implements DbInterface {
         );
     }
 
-    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorageObject> {
-        return (await this.getObject(
+    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorage> {
+        return v.parse(MicroblockStorageSchema, await this.getObject(
             NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
             microblockHeaderHash,
-        )) as MicroblockStorageObject;
+        ));
     }
 
     async getDataFileFromDataFileKey(dbFileKey: Uint8Array<ArrayBuffer>): Promise<DataFileObject> {
