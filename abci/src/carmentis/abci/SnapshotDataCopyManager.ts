@@ -65,7 +65,7 @@ export class SnapshotDataCopyManager {
         await handle.close();
     }
 
-    getShortFilePath(filePath) {
+    getShortFilePath(filePath: string) {
         return filePath.split(path.sep).slice(-2).join(path.sep);
     }
 }

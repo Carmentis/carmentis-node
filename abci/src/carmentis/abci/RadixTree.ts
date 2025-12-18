@@ -151,7 +151,7 @@ export class RadixTree {
             let msk = (node[0] << 8) | node[1];
             const nibble = (key[depth >> 1] >> (4 * (depth & 1))) & 0xf;
             let update = 0;
-            let hashList = [];
+            let hashList: Uint8Array[] = [];
 
             if (msk) {
                 //console.log('already standard');

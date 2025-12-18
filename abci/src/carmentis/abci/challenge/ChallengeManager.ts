@@ -52,8 +52,7 @@ export class ChallengeManager {
             const fileRank = getRandom48() % filesCount;
             const [fileIdentifier, fileSize] = fileEntries[fileRank];
             const filePath = this.storage.getFilePath(fileIdentifier);
-            const pendingTxs = this.storage.containsFile(fileIdentifier)
-                ? this.storage.getPendingTransactionsByFileIdentifier(fileIdentifier) : [];
+            const pendingTxs = this.storage.getPendingTransactionsByFileIdentifier(fileIdentifier) ?? [];
 
             const challengeFile = new ChallengeFile(filePath, pendingTxs);
             await challengeFile.open();

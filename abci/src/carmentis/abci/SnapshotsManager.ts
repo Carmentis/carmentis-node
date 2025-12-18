@@ -14,6 +14,7 @@ import { SCHEMAS, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/serv
 import { Logger } from '@nestjs/common';
 import { getLogger } from '@logtape/logtape';
 import { ChainInformationObject } from './types/ChainInformationObject';
+import { StoredSnapshot, StoredSnapshotSchema } from './types/valibot/snapshots/StoredSnapshot';
 
 const FORMAT = 1;
 const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
@@ -24,13 +25,17 @@ const DB_SUFFIX = '-db.bin';
 const JSON_SUFFIX = '.json';
 const DB_DUMP_IN_PROGRESS_FILENAME = 'db-dump-in-progress.bin';
 const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
+import * as v from 'valibot';
+import { ChainInformationSchema } from './types/valibot/db/db';
+import {decode} from 'cbor-x';
+import { NodeEncoder } from './NodeEncoder';
 
 export class SnapshotsManager {
     db: LevelDb;
     path: string;
     private logger = getLogger(['node', 'snapshots', SnapshotsManager.name])
 
-    constructor(db: LevelDb, path: string, logger: Logger) {
+    constructor(db: LevelDb, path: string, logger: unknown) {
         this.db = db;
         this.path = path;
     }
@@ -38,17 +43,19 @@ export class SnapshotsManager {
     /**
      * Keeps up to n of the most recent snapshots and deletes the rest.
      */
-    async clear(n) {
+    async clear(n: number) {
         const list = await this.getList();
 
         list.sort((a, b) => b.height - a.height);
 
         while (list.length > n) {
             const entry = list.pop();
-            await rm(path.join(this.path, entry.metadata.jsonFile));
-            await rm(path.join(this.path, entry.metadata.dbFile));
-            await rm(path.join(this.path, entry.metadata.chunksFile));
-            this.logger.info(`Removed snapshot for height ${entry.height}`);
+            if (entry !== undefined) {
+                await rm(path.join(this.path, entry.metadata.jsonFile));
+                await rm(path.join(this.path, entry.metadata.dbFile));
+                await rm(path.join(this.path, entry.metadata.chunksFile));
+                this.logger.info(`Removed snapshot for height ${entry.height}`);
+            }
         }
     }
 
@@ -63,7 +70,7 @@ export class SnapshotsManager {
         // Once we've switched to Node 24, we should use this cleaner and safer version:
         // const regex = new RegExp(`^${RegExp.escape(SNAPSHOT_PREFIX)}\\d{9}${RegExp.escape(JSON_SUFFIX)}$`);
         const regex = new RegExp(`^${SNAPSHOT_PREFIX}\\d{9}\\${JSON_SUFFIX}$`);
-        const list = [];
+        const list: StoredSnapshot[] = [];
 
         for (const entry of entries) {
             if (!entry.isFile() || !regex.test(entry.name)) {
@@ -74,9 +81,9 @@ export class SnapshotsManager {
 
             try {
                 const content = fs.readFileSync(filePath);
-                const object = JSON.parse(content.toString());
+                const res = v.parse(StoredSnapshotSchema, JSON.parse(content.toString()));
 
-                list.push(object);
+                list.push(res);
             } catch (error) {
                 this.logger.error(`{error}`, () => ({error}));
             }
@@ -259,7 +266,7 @@ export class SnapshotsManager {
 
         const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + JSON_SUFFIX);
 
-        const snapshotObject = {
+        const snapshotObject: StoredSnapshot = {
             height,
             format: FORMAT,
             chunks,
@@ -298,9 +305,9 @@ export class SnapshotsManager {
         const handle = await open(temporaryPath, 'w');
 
         const iterator = this.db.getDbIterator();
-        const files = [];
+        const files: [number, number][] = [];
         let earliestFileIdentifier = 0xff000000;
-        let height;
+        let height: number | undefined = undefined;
         let size = 0;
 
         for await (const [key, value] of iterator) {
@@ -313,22 +320,33 @@ export class SnapshotsManager {
 
             // if this is the DB_CHAIN_INFORMATION record, collect the height
             if (key[1] == chainInfoTableChar0 && key[2] == chainInfoTableChar1) {
+                const serializedChainInfo = value;
+                const chainInfo = NodeEncoder.decodeChainInformation(serializedChainInfo);
+                height = chainInfo.height;
+                /*
                 const chainInfoUnserializer = new SchemaUnserializer<ChainInformationObject>(
                     NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_CHAIN_INFORMATION],
                 );
                 const chainInfoObject = chainInfoUnserializer.unserialize(value);
-                height = chainInfoObject.height;
+
+                 */
             }
             // if this is a DB_DATA_FILE record, collect the file identifier and size
             else if (key[1] == dataFileTableChar0 && key[2] == dataFileTableChar1) {
                 const fileIdentifier = [4, 5, 6, 7].reduce((t, n) => t * 0x100 + key[n], 0);
-                const dataFileObject: any = dataFileUnserializer.unserialize(value);
-                files.push([fileIdentifier, dataFileObject.fileSize]);
+                const serializedDataFile = value;
+                const dataFile = NodeEncoder.decodeDataFile(serializedDataFile);
+                //const dataFileObject = dataFileUnserializer.unserialize(value);
+                files.push([fileIdentifier, dataFile.fileSize]);
                 earliestFileIdentifier = Math.min(earliestFileIdentifier, fileIdentifier);
             }
         }
         await handle.close();
 
+        // abort if height not defined;
+        if (height === undefined) {
+            throw new Error('height not defined');
+        }
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
         this.logger.info(`Moving temporary file ${temporaryPath} -> ${dbFilePath}`)
         await rename(temporaryPath, dbFilePath);
@@ -414,8 +432,8 @@ export class SnapshotsManager {
      * Creates the chunks file.
      */
     private async createChunksFile(height: number, files: [number, number][]) {
-        const chunks = [];
-        let currentChunk = [];
+        const chunks: Uint8Array[][] = [];
+        let currentChunk: Uint8Array[] = [];
         let currentChunkSize = 0;
 
         for (const [fileIdentifier, fileSize] of files) {

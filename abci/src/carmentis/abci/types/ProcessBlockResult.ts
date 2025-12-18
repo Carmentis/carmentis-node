@@ -5,7 +5,7 @@ import { ExecTxResult } from '../../../proto-ts/cometbft/abci/v1/types';
  */
 export interface ProcessedMicroblock {
     hash: Uint8Array;
-    vbIdentifier: Uint8Array;
+    vbId: Uint8Array;
     vbType: number;
     height: number;
     size: number;

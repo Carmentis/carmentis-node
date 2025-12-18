@@ -1,33 +1,15 @@
 import { Level } from 'level';
 import { NODE_SCHEMAS } from '../constants/constants';
-import {
-    CHAIN,
-    AccountState,
-    Schema,
-    SchemaSerializer,
-    SchemaUnserializer,
-    Utils,
-    VirtualBlockchainType,
-} from '@cmts-dev/carmentis-sdk/server';
-import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
+import { CHAIN, Schema, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk/server';
+import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { getLogger } from '@logtape/logtape';
-import { DataFileObject } from '../types/DataFileObject';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
-import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
-import { ChainInformationObject } from '../types/ChainInformationObject';
-import { AccountHistoryEntry } from '../accounts/AccountManager';
-import * as v from 'valibot';
-import {
-    BlockContent,
-    BlockContentSchema,
-    BlockInformation,
-    BlockInformationSchema,
-    ValidatorNodeByAddress,
-    ValidatorNodeByAddressSchema,
-} from '../types/valibot/db/db';
-import { MicroblockStorage, MicroblockStorageSchema } from '../types/valibot/storage/MicroblockStorage';
+import { AbstractIteratorOptions } from 'abstract-level';
+import { ChainInformation } from '../types/valibot/db/db';
+import { NodeEncoder } from '../NodeEncoder';
+import { AbstractLevelDb } from './AbstractLevelDb';
 
-export class LevelDb implements DbInterface {
+export class LevelDb extends AbstractLevelDb {
     private db: Level<Uint8Array, Uint8Array>;
     private path: string;
     //private sub: AbstractSublevel<Level<Uint8Array, Uint8Array>,Uint8Array,Uint8Array,Uint8Array>[] = [];
@@ -40,26 +22,16 @@ export class LevelDb implements DbInterface {
 
     private tableSchemas: Schema[];
     private logger = getLogger(['node', 'db', LevelDb.name]);
+    private static encoding  = {
+        keyEncoding: 'view',
+        valueEncoding: 'view',
+    };
 
     constructor(path: string, tableSchemas: Schema[] = NODE_SCHEMAS.DB) {
+        super()
         this.path = path;
         this.tableSchemas = tableSchemas;
-    }
-
-    getAccountIdByPublicKeyHash(publicKeyBytesHash: Uint8Array): Promise<Uint8Array | undefined> {
-        return this.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, publicKeyBytesHash);
-    }
-
-    async getAccountStateByAccountId(accountId: Uint8Array): Promise<AccountState | undefined> {
-        const result = await this.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountId);
-        if (result === undefined) return undefined;
-        return result as AccountState; // TODO: do not cast type
-    }
-
-    async getAccountHistoryEntryByHistoryHash(historyHash:Uint8Array) {
-        const result = await this.getObject(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, historyHash);
-        if (result === undefined) return undefined;
-        return result as AccountHistoryEntry; // TODO: do not cast type
+        this.db = new Level(this.path, LevelDb.encoding);
     }
 
     /**
@@ -89,16 +61,13 @@ export class LevelDb implements DbInterface {
 
     initialize() {
         this.logger.info(`Initializing LevelDB at ${this.path}`);
-        const encoding = {
-            keyEncoding: 'view',
-            valueEncoding: 'view',
-        };
 
-        this.db = new Level(this.path, encoding);
+
+
         const nTables = this.getTableCount();
         this.sub = [];
         for (let n = 0; n < nTables; n++) {
-            this.sub[n] = this.db.sublevel(Utils.numberToHexa(n, 2), encoding);
+            this.sub[n] = this.db.sublevel(Utils.numberToHexa(n, 2), LevelDb.encoding);
         }
     }
 
@@ -115,6 +84,9 @@ export class LevelDb implements DbInterface {
     }
 
     async clear() {
+        if (this.db.status !== 'open') {
+            await this.open()
+        }
         await this.db.clear();
     }
 
@@ -142,17 +114,6 @@ export class LevelDb implements DbInterface {
         return undefined;
     }
 
-    async getObject(tableId: number, key: Uint8Array): Promise<object | undefined> {
-        this.logger.debug(`Accessing object with key {key} on table {tableId}`, () => ({
-            key: Utils.binaryToHexa(key),
-            tableId,
-        }));
-        const data = await this.getRaw(tableId, key);
-        if (data === undefined) {
-            return data;
-        }
-        return this.unserialize(tableId, data);
-    }
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
         this.logger.debug(
@@ -172,19 +133,10 @@ export class LevelDb implements DbInterface {
         }
     }
 
-    async putObject(tableId: number, key: Uint8Array, object: any) {
-        this.logger.debug(`Setting object with key {key} on table {tableId}: {object}`, () => ({
-            key: Utils.binaryToHexa(key),
-            tableId,
-            object,
-        }));
-        const data = this.serialize(tableId, object);
-        return await this.putRaw(tableId, key, data);
-    }
 
     async getKeys(tableId: number): Promise<Uint8Array[]> {
         const table = this.sub[tableId];
-        const keys = [];
+        const keys: Uint8Array[] = [];
 
         for await (const [key] of table.iterator()) {
             keys.push(key);
@@ -197,17 +149,16 @@ export class LevelDb implements DbInterface {
      *
      * @param {number} tableId - The identifier of the table to execute the query on.
      * @param {AbstractIteratorOptions<Uint8Array<ArrayBufferLike>, Uint8Array<ArrayBufferLike>>} query - The query options for the iterator.
-     * @return {Promise<Iterator | null>} A promise that resolves to the result of the query iterator on success, or null if an error occurs.
+     * @return {Promise<Iterator | undefined>} A promise that resolves to the result of the query iterator on success, or undefined if an error occurs.
      */
     async query(
         tableId: number,
         query?: LevelQueryIteratorOptions,
     ): Promise<LevelQueryResponseType> {
-        try {
+        if (query) {
             return this.sub[tableId].iterator(query);
-        } catch (e) {
-            console.error(e);
-            return null;
+        } else {
+            return this.sub[tableId].iterator();
         }
     }
 
@@ -261,100 +212,30 @@ export class LevelDb implements DbInterface {
         return obj;
     }
 
-    serialize(tableId: number, object: object) {
-        const serializer = new SchemaSerializer(NODE_SCHEMAS.DB[tableId]);
-        const data = serializer.serialize(object);
-        return data;
-    }
-
-    unserialize(tableId: number, data: Uint8Array) {
-        const unserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[tableId]);
-        return unserializer.unserialize(data);
-    }
-
-    async getDataFileFromDataFileKey(dbFileKey: Uint8Array<ArrayBuffer>): Promise<DataFileObject> {
-        return (await this.getObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey)) as DataFileObject;
-    }
-
-    async putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFileObject) {
-        return await this.putObject(NODE_SCHEMAS.DB_DATA_FILE, dataFileKey, dataFileObject);
-    }
-
-    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorage) {
-        return await this.putObject(
-            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
-            microblockHeaderHash,
-            microblockStorage,
-        );
-    }
-
-    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorage> {
-        return v.parse(MicroblockStorageSchema, await this.getObject(
-            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
-            microblockHeaderHash,
-        ));
-    }
-
-    async getChainInformationObject() {
-        return (await this.getObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-        )) as ChainInformationObject;
-    }
-
     async initializeTable() {
-        const chainInfo: ChainInformationObject = {
+        const chainInfo: ChainInformation = {
             height: 0,
             lastBlockTimestamp: 0,
             microblockCount: 0,
             objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0), // TODO: use version-based constants
         };
-        await this.putObject(
+        await this.putRaw(
             NODE_SCHEMAS.DB_CHAIN_INFORMATION,
             NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            chainInfo,
+            NodeEncoder.encodeChainInformation(chainInfo),
         );
     }
 
-    async putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean> {
-        return await this.putObject(
-            NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS,
-            accountHash,
-            {}
-        );
-    }
-
-    async putEscrow(escrowIdentifier: Uint8Array, escrowData: object): Promise<boolean> {
-        return await this.putObject(
-            NODE_SCHEMAS.DB_ESCROWS,
-            escrowIdentifier,
-            escrowData
-        );
-    }
-
-    async getValidatorNodeByAddress(nodeAddress: Uint8Array): Promise<ValidatorNodeByAddress> {
-        const response = await this.getObject(
-            NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
-            nodeAddress
-        );
-        return v.parse(ValidatorNodeByAddressSchema, response);
-    }
-
-    async getBlockInformation(height: number): Promise<BlockInformation | null> {
-        const dataObject = await this.getObject(
-            NODE_SCHEMAS.DB_BLOCK_INFORMATION,
-            LevelDb.convertHeightToTableKey(height),
-        );
-        if (dataObject === undefined) return null;
-        return v.parse(BlockInformationSchema, dataObject);
-    }
-
-    async getBlockContent(height: number): Promise<BlockContent | undefined> {
-        const dataObject = await this.getObject(
-            NODE_SCHEMAS.DB_BLOCK_CONTENT,
-            LevelDb.convertHeightToTableKey(height),
-        );
-        if (dataObject === undefined) return null;
-        return v.parse(BlockContentSchema, dataObject);
+    async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
+        const vbType = virtualBlockchain.getType();
+        const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
+        if (indexTableId != -1) {
+            await this.putRaw(indexTableId, virtualBlockchain.getId(), Utils.getNullHash());
+        } else {
+            // no need to index this type of virtual blockchain
+            this.logger.debug(
+                `Ignore virtual blockchain from index: virtual blockchain type ${virtualBlockchain.getType()} is ignored`,
+            );
+        }
     }
 }

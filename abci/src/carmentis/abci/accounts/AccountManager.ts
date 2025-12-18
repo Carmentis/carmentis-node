@@ -16,6 +16,7 @@ import {
     Utils,
     AccountInformation,
     AccountState,
+    BlockchainUtils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Escrow } from '../types/Escrow';
 import { Logger } from '@nestjs/common';
@@ -23,6 +24,9 @@ import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
 import { RadixTree } from '../RadixTree';
 import { BalanceAvailability } from './BalanceAvailability';
+import { AccountHistory } from '../types/valibot/account/AccountHistory';
+import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
+import { NodeEncoder } from '../NodeEncoder';
 
 /**
  * Error messages used by AccountManager
@@ -41,19 +45,6 @@ const ErrorMessages = {
     UNDEFINED_ACCOUNT_HASH: 'Cannot load information account: received undefined hash',
 } as const;
 
-export interface AccountHistoryEntry {
-    height: number;
-    previousHistoryHash: Uint8Array;
-    type: number;
-    timestamp: number;
-    linkedAccount: Uint8Array;
-    amount: number;
-    chainReference: Uint8Array;
-}
-
-interface AccountHistory {
-    list: AccountHistoryEntry[];
-}
 
 export interface Transfer {
     type: number;
@@ -126,10 +117,7 @@ export class AccountManager {
 
         const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
         const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
-
-        const feesPayerAccount = transfer.payerAccount;
-        const isFeesPayerAccount = feesPayerAccount instanceof Uint8Array;
-        if (!isFeesPayerAccount) {
+        if (transfer.payerAccount === null) {
             this.logger.warn(ErrorMessages.UNDEFINED_FEES_PAYER);
             payerBalance = null;
         } else {
@@ -178,7 +166,7 @@ export class AccountManager {
 
         perfMeasure.event('before updates');
 
-        if (payerBalance !== null) {
+        if (payerBalance !== null && transfer.payerAccount !== null) {
             await this.update(
                 transfer.type,
                 transfer.payerAccount,
@@ -191,7 +179,7 @@ export class AccountManager {
             );
         }
 
-        if (payeeBalance !== null) {
+        if (payeeBalance !== null && transfer.payeeAccount !== null) {
             await this.update(
                 transfer.type ^ 1,
                 transfer.payeeAccount,
@@ -215,7 +203,7 @@ export class AccountManager {
      * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
      */
     async escrowSettlement(account: Uint8Array, escrowIdentifier: Uint8Array, confirmed: boolean, timestamp: number, chainReference: unknown) {
-        const escrow = <Escrow>await this.db.getObject(NODE_SCHEMAS.DB_ESCROWS, escrowIdentifier);
+        const escrow = await this.db.getEscrow(escrowIdentifier);
 
         // make sure that this escrow exists
         if(escrow === undefined) {
@@ -295,23 +283,26 @@ export class AccountManager {
 
         // search for the type of account based on its hash
         const type = Economics.getAccountTypeFromIdentifier(accountHash);
-        let state: AccountState = await this.db.getAccountStateByAccountId(accountHash);
-        const exists = state !== undefined;
-
-        if (!exists) {
-            state = {
-                height: 0,
-                balance: 0,
-                lastHistoryHash: Utils.getNullHash(),
-                locks: [],
+        const state = await this.db.getAccountStateByAccountId(accountHash);
+        if (state !== undefined) {
+            return {
+                exists: true,
+                type,
+                state,
+            };
+        } else {
+            return {
+                exists: type != ECO.ACCOUNT_STANDARD,
+                type,
+                state: {
+                    height: 0,
+                    balance: 0,
+                    lastHistoryHash: Utils.getNullHash(),
+                    locks: [],
+                },
             };
         }
 
-        return {
-            exists: exists || type != ECO.ACCOUNT_STANDARD,
-            type,
-            state,
-        };
     }
 
     private async update(
@@ -343,9 +334,16 @@ export class AccountManager {
                 break;
             }
             case ECO.BK_RECEIVED_ESCROW: {
-                if(escrowParameters === null) {
+                // reject if escrow parameters are missing
+                if (escrowParameters === null) {
                     throw new Error('Escrow parameters are missing');
                 }
+
+                // the payer account must exist because it has sent funds to the escrow account
+                if (linkedAccountHash === null) {
+                    throw new Error('Received undefined linked account hash for escrow transfer: SHOULD NOT HAPPEN');
+                }
+
                 balanceAvailability.addEscrowedTokens(signedAmount, escrowParameters);
                 await this.db.putEscrow(
                     escrowParameters.escrowIdentifier,
@@ -384,7 +382,8 @@ export class AccountManager {
      * Saves an account state in the DB_ACCOUNT_STATE table and in the account radix tree.
      */
     private async saveState(accountHash: Uint8Array, accountState: AccountState) {
-        const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountState);
+        const record = BlockchainUtils.encodeAccountState(accountState);
+        //const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.accountRadix.set(accountHash, stateHash);
@@ -402,7 +401,7 @@ export class AccountManager {
      */
     async loadHistory(accountHash: Uint8Array, lastHistoryHash: Uint8Array, maxRecords: number): Promise<AccountHistory> {
         let historyHash = lastHistoryHash;
-        const list = [];
+        const list: AccountHistoryEntry[] = [];
 
         while (maxRecords-- && !Utils.binaryIsEqual(historyHash, Utils.getNullHash())) {
             const entry = await this.loadHistoryEntry(accountHash, historyHash);
@@ -447,7 +446,8 @@ export class AccountManager {
             chainReference: chainReferenceBinary,
         };
 
-        const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, entry);
+        const record = NodeEncoder.encodeAccountHistoryEntry(entry);
+        //const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, entry);
         const hash = this.getHistoryEntryHash(accountHash, NodeCrypto.Hashes.sha256AsBinary(record));
         this.logger.debug(`Storing new entry in account history for account ${Utils.binaryToHexa(accountHash)}`)
         await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, hash, record);
@@ -582,7 +582,8 @@ export class AccountManager {
             timestamp,
         );
 
-        const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountState);
+        const record = BlockchainUtils.encodeAccountState(accountState);
+        //const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.accountRadix.set(accountHash, stateHash);

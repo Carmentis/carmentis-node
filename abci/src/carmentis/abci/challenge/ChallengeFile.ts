@@ -1,18 +1,20 @@
 import { FileHandle, open } from 'node:fs/promises';
+import { getLogger } from '@logtape/logtape';
 
 /**
   This class allows reading a file that may have updates (i.e. pending transactions) that have not yet been flushed to disk.
   It is used during a storage challenge.
 */
 export class ChallengeFile {
-    filePath: string;
-    handle: FileHandle;
-    pendingData: Uint8Array;
-    size: number;
+    private logger = getLogger(['node', 'challenge', ChallengeFile.name])
+    private filePath: string;
+    private handle?: FileHandle;
+    private pendingData: Uint8Array;
+    private size: number;
 
     constructor(filePath: string, pendingTxs: Uint8Array[]) {
         this.filePath = filePath;
-
+        this.size = 0;
         const pendingDataSize = pendingTxs.reduce((sz, arr) => sz + arr.length, 0);
         this.pendingData = new Uint8Array(pendingDataSize);
         let ptr = 0;
@@ -30,12 +32,18 @@ export class ChallengeFile {
             this.size = stats.size;
         }
         catch(err) {
-            this.handle = null;
+            this.handle = undefined;
             this.size = 0;
         }
     }
 
     async read(buffer: Uint8Array, bufferOffset: number, size: number, fileOffset: number) {
+        // reject if the handle is not open
+        if (!this.handle) {
+            this.logger.warn(`Attempt to read at file ${this.filePath} but handle is not defined: aborting`)
+            throw new Error(`Cannot read at ${this.filePath}: handle not open`)
+        }
+
         let bytesRead = 0;
         const sizeToReadFromDisk = Math.max(0, Math.min(fileOffset + size, this.size) - fileOffset);
 
@@ -59,8 +67,9 @@ export class ChallengeFile {
     }
 
     async close() {
-        if(this.handle !== null) {
+        if (this.handle) {
             await this.handle.close();
+            this.handle = undefined;
         }
     }
 }

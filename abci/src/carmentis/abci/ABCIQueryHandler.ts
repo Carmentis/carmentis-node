@@ -41,7 +41,6 @@ import {
     VirtualBlockchainUpdateAbciResponse,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
-import { QueryCallback } from './types/QueryCallback';
 import { LevelDb } from './database/LevelDb';
 import { AccountManager } from './accounts/AccountManager';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
@@ -109,7 +108,7 @@ export class ABCIQueryHandler {
 
     async getChainInformation(request: GetChainInformationAbciRequest): Promise<ChainInformationAbciResponse> {
         this.logger.verbose(`getChainInformation`);
-        const chainInfo = await this.db.getChainInformationObject();
+        const chainInfo = await this.db.getChainInformation();
         return {
             responseType: AbciResponseType.CHAIN_INFORMATION,
             ...chainInfo
@@ -120,7 +119,7 @@ export class ABCIQueryHandler {
         const requestedBlockHeight = request.height;
         this.logger.verbose(`Request to get information for block ${requestedBlockHeight} `);
         const blockInformation = await this.db.getBlockInformation(requestedBlockHeight);
-        if (blockInformation === null) throw new Error(`No information found for block ${requestedBlockHeight}`);
+        if (blockInformation === undefined) throw new Error(`No information found for block ${requestedBlockHeight}`);
         return {
             responseType: AbciResponseType.BLOCK_INFORMATION,
             ...blockInformation
@@ -131,10 +130,15 @@ export class ABCIQueryHandler {
         const requestedBlockHeight = request.height;
         this.logger.verbose(`Request to get content for block ${requestedBlockHeight}`);
         const blockContent = await this.db.getBlockContent(requestedBlockHeight);
-        return {
-            responseType: AbciResponseType.BLOCK_CONTENT,
-            ...blockContent
+        if (blockContent === undefined) {
+            throw new Error(`No block found at height ${requestedBlockHeight}`)
+        } else {
+            return {
+                responseType: AbciResponseType.BLOCK_CONTENT,
+                ...blockContent
+            }
         }
+
     }
 
     async getVirtualBlockchainState(request: GetVirtualBlockchainStateAbciRequest): Promise<VirtualBlockchainStateAbciResponse> {
@@ -180,6 +184,7 @@ export class ABCIQueryHandler {
             const header = await this.provider.getMicroblockHeader(
                 Hash.from(microblockHash)
             );
+            if (!header) throw new Error('Cannot recover all the headers of the virtual blockchain.')
             headers.push(BlockchainUtils.encodeMicroblockHeader(header));
         }
 
@@ -197,6 +202,7 @@ export class ABCIQueryHandler {
         const microblockHash: Uint8Array = request.hash;
         const cachedDb = this.provider.getCachedDatabase();
         const microblockInfo = await cachedDb.getMicroblockInformation(microblockHash);
+        if (microblockInfo === undefined) throw new Error(`Microblock with hash ${Utils.binaryToHexa(microblockHash)} not found`);
         return {
             responseType: AbciResponseType.MICROBLOCK_INFORMATION,
             ...microblockInfo
@@ -274,6 +280,7 @@ export class ABCIQueryHandler {
 
     async getValidatorNodeByAddress(request: GetValidatorNodeByAddressAbciRequest): Promise<ValidatorNodeByAddressAbciResponse> {
         const dataObject = await this.db.getValidatorNodeByAddress(request.address);
+        if (dataObject === undefined) throw new Error(`Validator node with address ${Utils.binaryToHexa(request.address)} not found`);
         const validatorNodeHash = dataObject.validatorNodeHash;
         return {
             responseType: AbciResponseType.VALIDATOR_NODE_BY_ADDRESS,

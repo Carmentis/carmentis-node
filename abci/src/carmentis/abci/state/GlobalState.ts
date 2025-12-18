@@ -78,12 +78,23 @@ export class GlobalState extends AbstractProvider {
         // we now search for the microblock hashes contained in the virtual blockchain
         const latestMicroblockHash = vbState.lastMicroblockHash;
         const latestMicroblockHeader = await this.getMicroblockHeader(Hash.from(latestMicroblockHash));
+        if (latestMicroblockHeader === null) {
+            this.logger.warn(`Microblock ${Utils.binaryToHexa(latestMicroblockHash)} not found in database: returning null`);
+            return null;
+        }
+
         let currentMicroblockHeader = latestMicroblockHeader;
         const microblockHashes = [ latestMicroblockHash ]
         for (let currentMicroblockHeight = currentMicroblockHeader.height; currentMicroblockHeight > 1; currentMicroblockHeight--) {
             const previousMicrolockHash = currentMicroblockHeader.previousHash;
             microblockHashes.push(previousMicrolockHash);
+
+            // obtain the previous microblock header
             const previousMicroblockHeader= await this.getMicroblockHeader(Hash.from(previousMicrolockHash));
+            if (previousMicroblockHeader === null) {
+                this.logger.warn(`Microblock ${Utils.binaryToHexa(previousMicrolockHash)} not found in database during chain recovery (highly corrupted storage): returning null`);
+                return null;
+            }
             currentMicroblockHeader = previousMicroblockHeader;
         }
 
@@ -101,8 +112,14 @@ export class GlobalState extends AbstractProvider {
            const protocolVbStatus = await this.getVirtualBlockchainState(
                protocolVirtualBlockchainIdentifier,
            );
-           const internalState = protocolVbStatus.internalState;
-           return ProtocolInternalState.createFromObject(internalState);
+           if (protocolVbStatus !== null) {
+               const internalState = protocolVbStatus.internalState;
+               return ProtocolInternalState.createFromObject(internalState);
+           } else {
+               this.logger.warn("Protocol VB id found but VB status cannot be loaded: returning default protocol variables")
+               return ProtocolInternalState.createInitialState()
+           }
+
        } catch (e) {
            if (e instanceof Error) {
                this.logger.warn("Unabled to return the protocol variables: " + e.message + `(${e.stack})`)
@@ -117,7 +134,7 @@ export class GlobalState extends AbstractProvider {
     ): Promise<VirtualBlockchainState | null> {
         const serializedVbState =
             await this.cachedDb.getSerializedVirtualBlockchainState(virtualBlockchainId);
-        if (serializedVbState !== null) {
+        if (serializedVbState !== undefined) {
             return BlockchainUtils.decodeVirtualBlockchainState(serializedVbState);
         } else {
             this.logger.warn(
@@ -138,14 +155,18 @@ export class GlobalState extends AbstractProvider {
         const serializedBody = await this.cachedStorage.readSerializedMicroblockBody(
             microblockHash.toBytes(),
         );
-        return BlockchainUtils.decodeMicroblockBody(serializedBody);
+        return serializedBody ?
+            BlockchainUtils.decodeMicroblockBody(serializedBody) :
+            null;
     }
 
     async getMicroblockHeader(microblockHash: Hash): Promise<MicroblockHeader | null> {
         const serializedHeader = await this.cachedStorage.readSerializedMicroblockHeader(
             microblockHash.toBytes(),
         );
-        return BlockchainUtils.decodeMicroblockHeader(serializedHeader);
+        return serializedHeader ?
+            BlockchainUtils.decodeMicroblockHeader(serializedHeader) :
+            null;
     }
 
     async getVirtualBlockchainIdContainingMicroblock(microblockHash: Hash): Promise<Hash> {
@@ -153,6 +174,7 @@ export class GlobalState extends AbstractProvider {
         const microblockInformation = await this.cachedDb.getMicroblockInformation(
             microblockHash.toBytes(),
         );
+        if (microblockInformation === undefined) throw new Error(`Cannot find vb containing microblock: Microblock ${microblockHash.encode()} not found`);
         return Hash.from(microblockInformation.virtualBlockchainId);
     }
 
@@ -160,6 +182,7 @@ export class GlobalState extends AbstractProvider {
         const result: MicroblockBody[] = [];
         for (const hash of microblockHashes) {
             const serializedBody = await this.cachedStorage.readSerializedMicroblockBody(hash);
+            if (serializedBody === undefined) throw new Error(`Body for microblock ${Utils.binaryToHexa(hash)} not found`);
             const body = BlockchainUtils.decodeMicroblockBody(serializedBody);
             result.push(body);
         }
@@ -294,29 +317,14 @@ export class GlobalState extends AbstractProvider {
         });
     }
 
-    private async getSerializedVirtualBlockchainState(
-        vbIdentifier: Uint8Array,
-    ): Promise<Uint8Array> {
-        const serializedVbState =
-            await this.cachedDb.getSerializedVirtualBlockchainState(vbIdentifier);
-        return serializedVbState;
-    }
+
 
     async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
         if (virtualBlockchain.getHeight() === 1) {
             this.logger.debug(
                 `Add virtual blockchain ${Utils.binaryToHexa(virtualBlockchain.getId())} to index`,
             );
-            const vbType = virtualBlockchain.getType();
-            const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
-            if (indexTableId != -1) {
-                await this.cachedDb.putObject(indexTableId, virtualBlockchain.getId(), {});
-            } else {
-                // no need to index this type of virtual blockchain
-                this.logger.debug(
-                    `Ignore virtual blockchain from index: virtual blockchain type ${virtualBlockchain.getType()} is ignored`,
-                );
-            }
+            await this.db.indexVirtualBlockchain(virtualBlockchain);
         } else {
             // in this case, the virtual blockchain is (and should be) already indexed so no need to index it again
         }

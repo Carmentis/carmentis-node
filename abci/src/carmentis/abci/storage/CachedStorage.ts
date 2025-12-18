@@ -30,7 +30,7 @@ export class CachedStorage implements IStorage {
         this.contentToBeWritten = new Map();
     }
 
-    async readFullMicroblock(hash: Uint8Array) {
+    async readFullMicroblock(hash: Uint8Array): Promise<Uint8Array | undefined> {
         this.logger.debug(`Reading serialized microblock ${Utils.binaryToHexa(hash)}`);
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_FULL);
     }
@@ -38,7 +38,7 @@ export class CachedStorage implements IStorage {
     /**
      * Reads a microblock header from its hash.
      */
-    async readSerializedMicroblockHeader(hash: Uint8Array) {
+    async readSerializedMicroblockHeader(hash: Uint8Array): Promise<Uint8Array | undefined> {
         this.logger.debug(`Reading serialized header of microblock ${Utils.binaryToHexa(hash)}`);
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_HEADER);
     }
@@ -46,7 +46,7 @@ export class CachedStorage implements IStorage {
     /**
      * Reads a microblock body from its hash.
      */
-    async readSerializedMicroblockBody(hash: Uint8Array) {
+    async readSerializedMicroblockBody(hash: Uint8Array): Promise<Uint8Array|undefined> {
         this.logger.debug(`Reading serialized body of microblock ${Utils.binaryToHexa(hash)}`);
         return await this.readMicroblock(hash, MicroblockReadingMode.READ_BODY);
     }
@@ -54,7 +54,7 @@ export class CachedStorage implements IStorage {
     /**
      * Reads a full microblock, microblock header or microblock body from its hash.
      */
-    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode) {
+    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode): Promise<Uint8Array | undefined> {
         // we first search in the cache
         const stringHash = Utils.binaryToHexa(hash);
         const cachedSerializedMicroblock = this.cachedSerializedMicroblockByHash.get(stringHash);
@@ -80,7 +80,7 @@ export class CachedStorage implements IStorage {
         const storageInfo = await this.db.getMicroblockStorage(hash);
         if (!storageInfo) {
             this.logger.warn(`Microblock ${stringHash} not found`);
-            return new Uint8Array();
+            return undefined;
         }
 
         const filePath = this.getFilePath(storageInfo.fileIdentifier);
@@ -164,9 +164,8 @@ export class CachedStorage implements IStorage {
 
         // we add the transaction in the buffer
         this.cachedSerializedMicroblockByHash.set(stringMicroblockHash, serializedMicroblock);
-        let cacheObject: BufferedTransactions;
-        if (this.contentToBeWritten.has(fileIdentifier)) {
-            cacheObject = this.contentToBeWritten.get(fileIdentifier);
+        const cacheObject = this.contentToBeWritten.get(fileIdentifier);;
+        if (cacheObject !== undefined) {
             cacheObject.transactionsToWrite.push(serializedMicroblock);
         } else {
             this.contentToBeWritten.set(fileIdentifier, {
@@ -220,6 +219,10 @@ export class CachedStorage implements IStorage {
 
     getPendingTransactionsByFileIdentifier(fileIdentifier: FileIdentifier) {
         const bufferedTransactions = this.contentToBeWritten.get(fileIdentifier);
+        if (bufferedTransactions === undefined) {
+            this.logger.debug("No pending transactions for fileIdentifier " + fileIdentifier + " found in cache")
+            return undefined;
+        }
         return bufferedTransactions.transactionsToWrite;
     }
 
@@ -230,11 +233,11 @@ export class CachedStorage implements IStorage {
         const buffer = new Uint8Array(CHALLENGE_PARTS_PER_FILE * CHALLENGE_BYTES_PER_PART);
         let prngValue = seed;
         let prngCounter = 0;
-        let hash: Uint8Array = Utils.getNullHash();
+        let hash: Uint8Array = Utils.getundefinedHash();
 
         const dataFileTable = await this.db.getFullTable(NODE_SCHEMAS.DB_DATA_FILE);
 
-        if (dataFileTable === null) {
+        if (dataFileTable === undefined) {
             return hash;
         }
 

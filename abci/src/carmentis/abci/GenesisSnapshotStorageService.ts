@@ -12,13 +12,15 @@ import * as v from 'valibot';
 export class GenesisSnapshotStorageService {
 
     private logger: Logger = new Logger(GenesisSnapshotStorageService.name);
-    private readonly genesisSnapshotPath: string;
 
     constructor(
-        nodeConfig: NodeConfigService,
+        private readonly nodeConfig: NodeConfigService,
     ) {
-        const {genesisSnapshotFilePath} = nodeConfig.getStoragePaths();
-        this.genesisSnapshotPath = genesisSnapshotFilePath;
+    }
+
+    private get genesisSnapshotPath() {
+        const {genesisSnapshotFilePath} = this.nodeConfig.getStoragePaths();
+        return genesisSnapshotFilePath;
     }
 
     async writeGenesisSnapshotChunksToDiskFromEncodedChunks(chunks: Uint8Array[]) {

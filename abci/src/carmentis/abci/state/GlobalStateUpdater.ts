@@ -40,7 +40,7 @@ import { ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
 import { BlockIDFlag } from '../../../proto-ts/cometbft/types/v1/validator';
 import { BalanceAvailability } from '../accounts/BalanceAvailability';
 
-const KEY_TYPE_MAPPING = {
+const KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',
 };
 
@@ -67,10 +67,16 @@ export class GlobalStateUpdater {
         cometParameters: GlobalStateUpdateCometParameters
     ) {
         const database = globalState.getCachedDatabase();
+        /*
         const previousBlockInformation = await database.getObject(
             NODE_SCHEMAS.DB_BLOCK_INFORMATION,
             this.heightToTableKey(cometParameters.blockHeight - 1)
         ) as BlockInformation;
+         */
+        const previousBlockInformation = await database.getBlockInformation(cometParameters.blockHeight - 1);
+        if (!previousBlockInformation) {
+            throw new Error(`Previous block information not found for block height ${cometParameters.blockHeight - 1}`);
+        }
         const previousBlockDayTs = Utils.addDaysToTimestamp(previousBlockInformation.timestamp, 0);
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
 
@@ -79,16 +85,23 @@ export class GlobalStateUpdater {
             const accountsWithVestingLocksIdentifiers = await database.getKeys(NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS);
 
             for(const id of accountsWithVestingLocksIdentifiers) {
-                const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id) as AccountState;
-                const balanceAvailability = new BalanceAvailability(
-                    accountState.balance,
-                    accountState.locks,
-                );
+                const accountState = await database.getAccountStateByAccountId(id);
+                if (accountState) {
+                    //const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id) as AccountState;
+                    const balanceAvailability = new BalanceAvailability(
+                        accountState.balance,
+                        accountState.locks,
+                    );
 
-                if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
-                    accountState.locks = balanceAvailability.getLocks();
-                    await database.putObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id, accountState);
+                    if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
+                        accountState.locks = balanceAvailability.getLocks();
+                        await database.putAccountState(id, accountState);
+                        //await database.putObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id, accountState);
+                    }
+                } else {
+                    // TODO: handle undefined account state
                 }
+
             }
 
             // update escrow locks
@@ -97,8 +110,17 @@ export class GlobalStateUpdater {
 
             for(const id of escrowIdentifiers) {
                 // TODO: it would be more efficient to have a method that directly returns all objects of a table
-                const escrow = await database.getObject(NODE_SCHEMAS.DB_ESCROWS, id) as Escrow;
-                const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, escrow.payeeAccount) as AccountState;
+                const escrow = await database.getEscrow(id);
+                if (escrow == null) {
+                    throw new Error(`Escrow ${id.toString()} not found`);
+                }
+                //const escrow = await database.getObject(NODE_SCHEMAS.DB_ESCROWS, id) as Escrow;
+                const accountState = await database.getAccountStateByAccountId(escrow.payeeAccount);
+                if (accountState === undefined) throw new Error(
+                    `Escrow ${id.toString()} refers to an unknown account ${escrow.payeeAccount.toString()}`
+                )
+
+                //const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, escrow.payeeAccount) as AccountState;
                 const balanceAvailability = new BalanceAvailability(
                     accountState.balance,
                     accountState.locks,
@@ -171,7 +193,7 @@ export class GlobalStateUpdater {
         }
         this.processedAndAcceptedMicroblocks.push({
             hash: microblock.getHashAsBytes(), //vb.currentMicroblock.hash,
-            vbIdentifier: virtualBlockchain.getId(),
+            vbId: virtualBlockchain.getId(),
             vbType: virtualBlockchain.getType(),
             height: virtualBlockchain.getHeight(),
             size: transaction.length,
@@ -332,7 +354,7 @@ export class GlobalStateUpdater {
         }
         this.processedAndAcceptedMicroblocks.push({
             hash: microblock.getHashAsBytes(), //vb.currentMicroblock.hash,
-            vbIdentifier: virtualBlockchain.getId(),
+            vbId: virtualBlockchain.getId(),
             vbType: virtualBlockchain.getType(),
             height: virtualBlockchain.getHeight(),
             size: transaction.length,
@@ -381,7 +403,7 @@ export class GlobalStateUpdater {
         });
 
         const database = state.getCachedDatabase();
-        const chainInfoObject = await database.getChainInformationObject();
+        const chainInfoObject = await database.getChainInformation();
         chainInfoObject.height = blockHeight;
         chainInfoObject.lastBlockTimestamp = blockTimestamp;
         chainInfoObject.microblockCount += this.processedAndAcceptedMicroblocks.length;
@@ -389,7 +411,7 @@ export class GlobalStateUpdater {
         chainInfoObject.objectCounts = chainInfoObject.objectCounts.map(
             (count, ndx) => count + this.newObjectCounts[ndx],
         );
-        await database.putChainInformationObject(chainInfoObject);
+        await database.putChainInformation(chainInfoObject);
     }
 
     getValidatorSetUpdates(): ValidatorSetUpdate[] {
@@ -406,13 +428,17 @@ export class GlobalStateUpdater {
         microblockCount: number,
     ) {
         const db = state.getCachedDatabase();
-        await db.putObject(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(height), {
-            hash,
-            timestamp,
-            proposerAddress,
-            size,
-            microblockCount,
-        });
+        await db.putBlockInformation(
+            height,
+            {
+                hash,
+                timestamp,
+                proposerAddress,
+                size,
+                microblockCount,
+            }
+        )
+        //await db.putObject(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(height), );
     }
 
     private async storeBlockContentInBuffer(
@@ -421,9 +447,13 @@ export class GlobalStateUpdater {
         microblocks: ProcessedMicroblock[],
     ) {
         const db = state.getCachedDatabase();
+        await db.putBlockContent(height, { microblocks });
+        /*
         await db.putObject(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(height), {
             microblocks,
         });
+
+         */
     }
 
     private heightToTableKey(height: number) {
@@ -443,11 +473,17 @@ export class GlobalStateUpdater {
             return;
         }
 
-        const validatorAccounts = [];
+        const validatorAccounts: Uint8Array[] = [];
         const votes = request.decided_last_commit?.votes || [];
         const stateDb = state.getCachedDatabase();
         for (const vote of votes) {
-            if (vote.block_id_flag === BlockIDFlag.BLOCK_ID_FLAG_COMMIT) {
+            if (vote.block_id_flag === BlockIDFlag.BLOCK_ID_FLAG_COMMIT ) {
+                // skip if validator field not set in the vote
+                if (vote.validator == null) {
+                    this.logger.warn(`Received undefined validator in commit vote: skipping vote`);
+                    continue;
+                }
+
                 // TODO: clean
                 const address = Utils.bufferToUint8Array(vote.validator.address);
                 const validatorNodeHash = await stateDb.getRaw(
@@ -485,7 +521,8 @@ export class GlobalStateUpdater {
         const feesRest = pendingFees % nValidators;
         const feesQuotient = (pendingFees - feesRest) / nValidators;
         const blockHeight = request.height;
-        const blockTimestamp = request.time.seconds;
+        const defaultTimestamp = 0;
+        const timeInRequest = request.time?.seconds ?? defaultTimestamp;
         for (const n in validatorAccounts) {
             const paidFees =
                 (+n + blockHeight) % nValidators < feesRest ? feesQuotient + 1 : feesQuotient;
@@ -500,7 +537,7 @@ export class GlobalStateUpdater {
                 {
                     height: blockHeight - 1,
                 },
-                blockTimestamp,
+                timeInRequest,
             );
         }
     }
@@ -726,8 +763,7 @@ export class GlobalStateUpdater {
         pubKeyType: string,
         pubKeyBytes: Uint8Array,
     ) {
-        const translatedPubKeyType = KEY_TYPE_MAPPING[pubKeyType];
-
+        const translatedPubKeyType= KEY_TYPE_MAPPING[pubKeyType];
         if (!translatedPubKeyType) {
             this.logger.error(`invalid key type '${pubKeyType}' for validator set update`);
             return false;

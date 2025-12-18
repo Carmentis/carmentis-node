@@ -45,7 +45,7 @@ describe('AccountManager', () => {
         const accountManager = new AccountManager(db);
 
         // should create several zero-balance accounts based on public keys
-        const publicKeys = [];
+        const publicKeys: PublicSignatureKey[] = [];
         const accountIds: Uint8Array[] = [];
 
         // we now create the account for the issuer

@@ -16,7 +16,7 @@ import process from 'node:process';
 export class KeyManagementService implements OnModuleInit {
 
     private logger = new Logger(KeyManagementService.name);
-    private privateKey: PrivateSignatureKey;
+    private privateKey?: PrivateSignatureKey;
 
     constructor(private nodeConfig: NodeConfigService) {}
 
@@ -41,6 +41,10 @@ export class KeyManagementService implements OnModuleInit {
         } else if (typeof specifiedEnvVarName === 'string') {
             this.logger.log(`Retrieving private key from env variable ${specifiedEnvVarName}...`);
             retrievedPrivateKey = await this.loadPrivateKeyFromEnvVar(specifiedEnvVarName);
+        } else {
+            const errorMsg = "No private key source provided"
+            this.logger.error(errorMsg);
+            throw new Error(errorMsg);
         }
 
         // log the success (or not) of the private key retrieval
@@ -82,7 +86,7 @@ export class KeyManagementService implements OnModuleInit {
         return await encoder.decodePrivateKey(encodedPrivateKey);
     }
 
-    getIssuerPrivateKey(): PrivateSignatureKey | undefined {
+    getIssuerPrivateKey(): PrivateSignatureKey {
         if (this.privateKey === undefined)
             throw new Error(
                 'Issuer (genesis) private key is not defined: Have you specified a retrieval method in the config file?',

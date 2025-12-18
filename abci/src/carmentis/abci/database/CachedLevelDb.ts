@@ -1,28 +1,18 @@
 import { LevelDb } from './LevelDb';
-import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
-import { DataFileObject } from '../types/DataFileObject';
+import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { NODE_SCHEMAS } from '../constants/constants';
-import {
-    CHAIN,
-    AccountState,
-    Microblock,
-    MicroblockInformation,
-    MicroblockInformationSchema,
-    Utils,
-} from '@cmts-dev/carmentis-sdk/server';
-import { ChainInformationObject } from '../types/ChainInformationObject';
+import { CHAIN, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { getLogger } from '@logtape/logtape';
-import { AccountHistoryEntry } from '../accounts/AccountManager';
-import * as v from 'valibot';
-import { MicroblockStorage, MicroblockStorageSchema } from '../types/valibot/storage/MicroblockStorage';
+import { AbstractLevelDb } from './AbstractLevelDb';
 
-export class CachedLevelDb implements DbInterface {
+export class CachedLevelDb extends AbstractLevelDb {
     private db: LevelDb;
     private readonly updateCache: Map<string, Uint8Array>[];
     private readonly deletionCache: Set<string>[];
     private logger = getLogger(['node', 'db', CachedLevelDb.name]);
 
     constructor(db: LevelDb) {
+        super();
         this.db = db;
         this.updateCache = [];
         this.deletionCache = [];
@@ -33,22 +23,6 @@ export class CachedLevelDb implements DbInterface {
             this.updateCache[tableId] = new Map();
             this.deletionCache[tableId] = new Set();
         }
-    }
-
-    getAccountIdByPublicKeyHash(publicKeyBytesHash: Uint8Array): Promise<Uint8Array | undefined> {
-        return this.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, publicKeyBytesHash);
-    }
-
-    async getAccountStateByAccountId(accountId: Uint8Array): Promise<AccountState | undefined> {
-        const result = await this.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountId);
-        if (result === undefined) return undefined;
-        return result as AccountState; // TODO: do not cast type
-    }
-
-    async getAccountHistoryEntryByHistoryHash(historyHash:Uint8Array) {
-        const result = await this.getObject(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, historyHash);
-        if (result === undefined) return undefined;
-        return result as AccountHistoryEntry;
     }
 
     getTableCount() {
@@ -70,15 +44,17 @@ export class CachedLevelDb implements DbInterface {
         const nTable = this.db.getTableCount();
 
         for (let tableId = 0; tableId < nTable; tableId++) {
-            const putList = [];
+            const putList: [Uint8Array, Uint8Array][] = [];
             for (const [keyStr, value] of this.updateCache[tableId]) {
-                putList.push([CachedLevelDb.decodeKey(keyStr), value]);
+                const decodedKey = CachedLevelDb.decodeKey(keyStr);
+                putList.push([decodedKey, value]);
             }
             batch.put(tableId, putList);
 
-            const delList = [];
+            const delList: Uint8Array[] = [];
             for (const keyStr of this.deletionCache[tableId]) {
-                delList.push(CachedLevelDb.decodeKey(keyStr));
+                const decodedKey = CachedLevelDb.decodeKey(keyStr);
+                delList.push(decodedKey);
             }
             batch.del(tableId, delList);
         }
@@ -96,15 +72,6 @@ export class CachedLevelDb implements DbInterface {
         return await this.db.getRaw(tableId, key);
     }
 
-    async getObject(tableId: number, key: Uint8Array): Promise<object | undefined> {
-        const data = await this.getRaw(tableId, key);
-
-        if (data === undefined) {
-            return undefined;
-        }
-        return this.db.unserialize(tableId, data);
-    }
-
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
         this.logger.debug(
             `Storing raw data with key ${Utils.binaryToHexa(key)} on table ${tableId} in buffer: ${data.length} bytes`,
@@ -114,14 +81,6 @@ export class CachedLevelDb implements DbInterface {
         this.deletionCache[tableId].delete(keyStr);
         this.updateCache[tableId].set(keyStr, data);
         return true;
-    }
-
-    async putObject(tableId: number, key: Uint8Array, object: any) {
-        this.logger.debug(
-            `Storing object -${Utils.binaryToHexa(key)} on table ${tableId} in buffer`,
-        );
-        const data = this.db.serialize(tableId, object);
-        return await this.putRaw(tableId, key, data);
     }
 
     async getKeys(tableId: number): Promise<Uint8Array[]> {
@@ -139,11 +98,11 @@ export class CachedLevelDb implements DbInterface {
         throw new Error(`query() is not implemented on CachedLevelDb`);
     }
 
-    async getFullTable(tableId: number) {
+    async getFullTable(tableId: number): Promise<Uint8Array[][]> {
         const committedData = await this.db.getFullTable(tableId);
-
         if (committedData === null) {
-            return null;
+            this.logger.warn("No committed data found for table " + tableId + " in cache")
+            throw new Error('No cached')
         }
 
         const cachedData = [...this.updateCache[tableId].entries()].map(([key, value]) => {
@@ -161,47 +120,12 @@ export class CachedLevelDb implements DbInterface {
         return true;
     }
 
-    serialize(tableId: number, object: object) {
-        return this.db.serialize(tableId, object);
-    }
-
-    unserialize(tableId: number, data: Uint8Array): object {
-        return this.db.unserialize(tableId, data);
-    }
-
     static encodeKey(key: Uint8Array) {
         return Buffer.from(key).toString('hex');
     }
 
     static decodeKey(str: string) {
         return new Uint8Array(Buffer.from(str, 'hex'));
-    }
-
-    async putMicroblockStorage(microblockHeaderHash, microblockStorage: MicroblockStorage) {
-        this.logger.debug(
-            'Putting microblock storage for microblock ' + Utils.binaryToHexa(microblockHeaderHash),
-        );
-        return await this.putObject(
-            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
-            microblockHeaderHash,
-            microblockStorage,
-        );
-    }
-
-    async getMicroblockStorage(microblockHeaderHash: Uint8Array): Promise<MicroblockStorage> {
-        return v.parse(MicroblockStorageSchema, await this.getObject(
-            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
-            microblockHeaderHash,
-        ));
-    }
-
-    async getDataFileFromDataFileKey(dbFileKey: Uint8Array<ArrayBuffer>): Promise<DataFileObject> {
-        return (await this.getObject(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey)) as DataFileObject;
-    }
-
-    async putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFileObject) {
-        this.logger.debug('Putting data file with key ' + Utils.binaryToHexa(dataFileKey));
-        return await this.putObject(NODE_SCHEMAS.DB_DATA_FILE, dataFileKey, dataFileObject);
     }
 
     async getFullDataFileTable() {
@@ -234,43 +158,8 @@ export class CachedLevelDb implements DbInterface {
         return protocolVirtualBlockchainIdentifiers[0];
     }
 
-    async getProtocolVariables() {
-        const protocolTableId = LevelDb.getTableIdFromVirtualBlockchainType(CHAIN.VB_PROTOCOL);
-        const protocolVirtualBlockchainIdentifier =
-            await this.getProtocolVirtualBlockchainIdentifier();
-        return await this.getObject(protocolTableId, protocolVirtualBlockchainIdentifier);
-    }
-
-    async getChainInformationObject() {
-        this.logger.debug('Getting chain information');
-        const result = (await this.getObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-        )) as ChainInformationObject;
-        if (result !== undefined) return result;
-        return {
-            microblockCount: 0,
-            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0),
-        } as ChainInformationObject;
-    }
-
-    async putChainInformationObject(chainInfoObject: ChainInformationObject) {
-        this.logger.debug(
-            `Setting chain information at height ${chainInfoObject.height}: ${chainInfoObject.microblockCount} microblocks, ${chainInfoObject.objectCounts} object created`,
-        );
-        await this.putObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            chainInfoObject,
-        );
-    }
-
     async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array) {
         return this.getRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
-    }
-
-    async getVirtualBlockchainState(vbIdentifier: Uint8Array) {
-        // TODO
     }
 
     async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array) {
@@ -279,44 +168,5 @@ export class CachedLevelDb implements DbInterface {
             dataLength: serializedState.length,
         }));
         await this.putRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
-    }
-
-    getSerializedMicroblockInformation(microblockHash: Uint8Array) {
-        return this.getRaw(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, microblockHash);
-    }
-
-    async setMicroblockInformation(microblock: Microblock, info: MicroblockInformation) {
-        this.logger.debug(
-            `Setting microblock information for microblock ${microblock.getHash().encode()}`,
-        );
-        const hash = microblock.getHashAsBytes();
-        await this.putObject(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, hash, info);
-    }
-
-    async getMicroblockInformation(microblockHash: Uint8Array): Promise<MicroblockInformation> {
-        this.logger.debug(
-            `Getting information for microblock ${Utils.binaryToHexa(microblockHash)}`,
-        );
-        const microblockInformation = await this.getObject(
-            NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION,
-            microblockHash,
-        );
-        return v.parse(MicroblockInformationSchema, microblockInformation);
-    }
-
-    async putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean> {
-        return await this.putObject(
-            NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS,
-            accountHash,
-            {}
-        );
-    }
-
-    async putEscrow(escrowIdentifier: Uint8Array, escrowData: object): Promise<boolean> {
-        return await this.putObject(
-            NODE_SCHEMAS.DB_ESCROWS,
-            escrowIdentifier,
-            escrowData
-        );
     }
 }

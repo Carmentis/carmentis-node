@@ -141,9 +141,10 @@ export class GenesisRunoff {
                 vestedReceipts.add(transfer.destination);
             } else {
                 // Only count non-vested amounts as available
+                const destBalance = balances.get(transfer.destination) || 0;
                 balances.set(
                     transfer.destination,
-                    balances.get(transfer.destination) + transfer.amount,
+                     destBalance + transfer.amount,
                 );
             }
         }
@@ -163,7 +164,8 @@ export class GenesisRunoff {
             if (!balances.has(transfer.source)) {
                 balances.set(transfer.source, 0);
             }
-            balances.set(transfer.source, balances.get(transfer.source) - transfer.amount);
+            const sourceBalance = balances.get(transfer.source) || 0;
+            balances.set(transfer.source, sourceBalance - transfer.amount);
         }
 
         // Check that no account has negative balance
@@ -261,7 +263,12 @@ export class GenesisRunoff {
             if (!adjacencyList.has(source)) {
                 adjacencyList.set(source, []);
             }
-            adjacencyList.get(source).push(destination);
+            const adjacencyListForSource = adjacencyList.get(source);
+            if (adjacencyListForSource) {
+                adjacencyListForSource.push(destination);
+            } else {
+                adjacencyList.set(source, [destination]);
+            }
 
             // Increment in-degree for destination
             inDegree.set(destination, (inDegree.get(destination) || 0) + 1);
@@ -280,12 +287,13 @@ export class GenesisRunoff {
 
         while (queue.length > 0) {
             const current = queue.shift();
+            if (!current) continue;
             ordered.push(current);
 
             // For each neighbor, decrease in-degree
             const neighbors = adjacencyList.get(current) || [];
             for (const neighbor of neighbors) {
-                inDegree.set(neighbor, inDegree.get(neighbor) - 1);
+                inDegree.set(neighbor, (inDegree.get(neighbor) || 0) - 1);
                 if (inDegree.get(neighbor) === 0) {
                     queue.push(neighbor);
                 }
@@ -314,9 +322,10 @@ export class GenesisRunoff {
     getPrivateKeyForAccountByName(sourceAccountName: string) {
         const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
         const account = this.data.accounts.find((acc) => acc.name === sourceAccountName);
-        if (!account) {
-            throw new Error(`Account ${sourceAccountName} not found in genesis runoff`);
-        }
+        if (!account) throw new Error(`Account ${sourceAccountName} not found in genesis runoff`);
+        if (!account.privateKey) throw new Error(
+            `Account ${sourceAccountName} does not have a private key defined in the genesis runoff`
+        )
         return encoder.decodePrivateKey(account.privateKey);
     }
 

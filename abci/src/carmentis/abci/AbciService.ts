@@ -39,7 +39,7 @@ import {
     VerifyVoteExtensionResponse,
 } from '../../proto-ts/cometbft/abci/v1/types';
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { KeyManagementService } from './services/KeyManagementService';
 import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
@@ -50,37 +50,25 @@ import {
     AbciQueryEncoder,
     AbciResponse,
     AbciResponseType,
-    AccountVb,
     BlockchainUtils,
     CHAIN,
-    CMTSToken,
-    CryptoEncoderFactory,
     ECO,
     EncoderFactory,
-    FeesCalculationFormulaFactory,
     GenesisSnapshotAbciResponse,
-    MessageSerializer,
-    MessageUnserializer,
     Microblock,
     MicroblockConsistencyChecker,
     NetworkProvider,
     PrivateSignatureKey,
-    SCHEMAS,
     SectionLabel,
-    SECTIONS,
     SectionType,
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { LevelDb } from './database/LevelDb';
 import { SnapshotsManager } from './SnapshotsManager';
-import { SectionCallback } from './types/SectionCallback';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
-import { NODE_SCHEMAS } from './constants/constants';
 import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
-import { InitialBlockchainStateBuilder } from './InitialBlockchainStateBuilder';
 import { AbciHandlerInterface } from './AbciHandlerInterface';
 import { NodeConfigService } from '../config/services/NodeConfigService';
-import { Context } from './types/Context';
 import { MicroblockCheckResult } from './types/MicroblockCheckResult';
 import { GlobalState } from './state/GlobalState';
 import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
@@ -97,19 +85,19 @@ const KEY_TYPE_MAPPING = {
 
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
-    private logger = new Logger(AbciService.name);
+    private logger = getLogger(['node', AbciService.name]);
     private perf: Performance;
 
     // The ABCI query handler is used to handle queries sent to the application via the abci_query method.
-    private abciQueryHandler: ABCIQueryHandler;
+    private abciQueryHandler?: ABCIQueryHandler;
 
     private isCatchingUp: boolean;
-    private readonly storage: Storage;
-    private readonly db: LevelDb;
+    private storage?: Storage;
+    private db?: LevelDb;
 
-    private state: GlobalState;
-    private snapshot: SnapshotsManager;
-    private importedSnapshot: SnapshotProto;
+    private state?: GlobalState;
+    private snapshot?: SnapshotsManager;
+    private importedSnapshot?: SnapshotProto;
     private genesisRunoffs: GenesisRunoff;
 
     constructor(
@@ -118,6 +106,40 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         private readonly kms: KeyManagementService,
         private genesisSnapshotStorage: GenesisSnapshotStorageService,
     ) {
+        this.isCatchingUp = false;
+        this.perf = new Performance(this.logger, true);
+        this.genesisRunoffs = GenesisRunoff.noRunoff();
+    }
+
+    private getStorage(): Storage {
+        if (!this.storage) {
+            throw new Error('Storage is not initialized');
+        }
+        return this.storage;
+    }
+
+    private getLevelDb(): LevelDb {
+        if (!this.db) {
+            throw new Error('LevelDb is not initialized');
+        }
+        return this.db;
+    }
+
+    private getSnapshot(): SnapshotsManager {
+        if (!this.snapshot) {
+            throw new Error('SnapshotsManager is not initialized');
+        }
+        return this.snapshot;
+    }
+
+    private getGlobalState(): GlobalState {
+        if (!this.state) {
+            throw new Error('GlobalState is not initialized');
+        }
+        return this.state;
+    }
+
+    async onModuleInit() {
         // define the paths where are stored the database, the storage and the snapshots.
         const {
             rootStoragePath: abciStoragePath,
@@ -128,11 +150,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreateNoRunoff(
             this.nodeConfig.getGenesisRunoffFilePath(),
         );
-        this.logger.log(`ABCI storage at ${abciStoragePath}`);
-        this.perf = new Performance(this.logger, true);
+        this.logger.info(`ABCI storage at ${abciStoragePath}`);
+
         this.db = new LevelDb(dbStoragePath);
+        this.db.initialize();
         this.storage = new Storage(this.db, microblocksStoragePath);
-        this.isCatchingUp = false;
 
         // creates the snapshot system
         const snapshotPath = snapshotStoragePath;
@@ -144,10 +166,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             this.db,
             this.genesisSnapshotStorage,
         );
-    }
-
-    async onModuleInit() {
-        this.db.initialize();
     }
 
     /**
@@ -171,32 +189,43 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async forwardAbciQueryToHandler(serializedQuery: Uint8Array) {
+        // we reject the query if the handler is not initialized yet.
+        if (this.abciQueryHandler === undefined) {
+            this.logger.error(`ABCI query handler is not initialized yet.`);
+            return AbciQueryEncoder.encodeAbciResponse({
+                responseType: AbciResponseType.ERROR,
+                error: 'ABCI query handler is not initialized yet.',
+            });
+        }
+
         const abciRequest = AbciQueryEncoder.decodeAbciRequest(serializedQuery);
-        this.logger.log(`Receiving request of type ${abciRequest.requestType}`)
+        this.logger.info(`Receiving request of type ${abciRequest.requestType}`);
         try {
             const response = await this.abciQueryHandler.handleAbciRequest(abciRequest);
             return AbciQueryEncoder.encodeAbciResponse(response);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.toString() : 'Unknown error';
-            this.logger.error(`ABCI query execution failed due to the following error: ${errorMsg}`);
+            this.logger.error(
+                `ABCI query execution failed due to the following error: ${errorMsg}`,
+            );
             if (error instanceof Error) {
-                this.logger.debug(error.stack)
+                this.logger.debug(error.stack ?? 'No stack provided');
             }
             const errorResponse: AbciResponse = {
                 responseType: AbciResponseType.ERROR,
-                error: errorMsg
-            }
+                error: errorMsg,
+            };
             return AbciQueryEncoder.encodeAbciResponse(errorResponse);
         }
     }
 
     async Info(request: InfoRequest) {
-        this.logger.log(`info`);
+        this.logger.info(`info`);
         this.isCatchingUp = false;
-        const chainInformation = await this.db.getChainInformationObject();
+        const chainInformation = await this.getLevelDb().getChainInformation();
         const last_block_height = chainInformation?.height || 0;
         if (last_block_height === 0) {
-            this.logger.log(`(Info) Aborting info request because the chain is empty.`);
+            this.logger.info(`(Info) Aborting info request because the chain is empty.`);
             return InfoResponse.create({
                 version: '1',
                 data: 'Carmentis ABCI application',
@@ -204,11 +233,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 last_block_height,
             });
         } else {
-            const { appHash } = await this.state.getApplicationHash();
+            const { appHash } = await this.getGlobalState().getApplicationHash();
 
             const hex = EncoderFactory.bytesToHexEncoder();
-            this.logger.log(`(Info) last_block_height: ${last_block_height}`);
-            this.logger.log(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
+            this.logger.info(`(Info) last_block_height: ${last_block_height}`);
+            this.logger.info(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
 
             return InfoResponse.create({
                 version: '1',
@@ -221,7 +250,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async InitChain(request: InitChainRequest) {
-        this.logger.log(`[ InitChain ] --------------------------------------------------------`);
+        this.logger.info(`[ InitChain ] --------------------------------------------------------`);
 
         // we start by cleaning database, snapshots and storage
         await this.clearDatabase();
@@ -231,12 +260,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // depending on if the current node is a genesis node or not
         const isGenesisNode = this.isGenesisNode(request);
         if (isGenesisNode) {
-            this.logger.log(`This node is the genesis node.`);
+            this.logger.info(`This node is the genesis node.`);
             const issuerPrivateKey = this.kms.getIssuerPrivateKey();
             const appHash = await this.initChainAsGenesis(request, issuerPrivateKey);
             return this.createInitChainResponse(appHash);
         } else {
-            this.logger.log(`This node is not the genesis node.`);
+            this.logger.info(`This node is not the genesis node.`);
             const appHash = await this.initChainAsNode(request);
             return this.createInitChainResponse(appHash);
         }
@@ -277,7 +306,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
             genesisSnapshot,
         );
-        const { appHash } = await this.state.getApplicationHash();
+        const { appHash } = await this.getGlobalState().getApplicationHash();
         return appHash;
     }
 
@@ -286,7 +315,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++) {
             const chunk = genesisSnapshotChunks[chunkIndex];
             const isLastChunk = chunkIndex === genesisSnapshotChunks.length - 1;
-            await this.snapshot.loadReceivedChunk(this.storage, chunkIndex, chunk, isLastChunk);
+            await this.getSnapshot().loadReceivedChunk(
+                this.getStorage(),
+                chunkIndex,
+                chunk,
+                isLastChunk,
+            );
         }
     }
 
@@ -295,10 +329,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         issuerPrivateKey: PrivateSignatureKey,
     ) {
         // initialize the database
-        await this.db.initializeTable();
+        await this.getLevelDb().initializeTable();
 
         await this.storeInitialValidatorSet(request);
-        this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
+        this.logger.info(`Creating initial state for initial height ${request.initial_height}`);
         const appHash = await this.publishInitialBlockchainState(issuerPrivateKey, request);
 
         // we create the genesis state snapshot and export it.
@@ -309,13 +343,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async storeGenesisStateSnapshotInSnapshotsFolder() {
-        this.logger.log(`Creating genesis snapshot`);
-        await this.snapshot.create();
+        this.logger.info(`Creating genesis snapshot`);
+        await this.getSnapshot().create();
     }
 
     private async searchGenesisSnapshotChunksFromGenesisNode() {
+        // we raise an exception if the url is not provided
         const genesisNodeUrl = this.nodeConfig.getGenesisSnapshotRpcEndpoint();
-        this.logger.verbose(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`);
+        if (genesisNodeUrl === undefined) {
+            throw new Error(
+                `The genesis snapshot RPC endpoint is not defined. Please provide it in the configuration file.`,
+            );
+        }
+        this.logger.debug(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`);
         const provider = new NetworkProvider(genesisNodeUrl);
         const snapshot = await provider.getGenesisSnapshot();
         const encoder = EncoderFactory.bytesToBase64Encoder();
@@ -334,14 +374,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         // we generate and export the genesis state as a snapshot
         const numberOfChunksToExport = 4; // TODO(explain): why 4?
-        const genesisChunks = [];
+        const genesisChunks: Uint8Array[] = [];
         for (
             let chunkIndexToExport = 0;
             chunkIndexToExport < numberOfChunksToExport;
             chunkIndexToExport++
         ) {
-            const chunk = await this.snapshot.getChunk(
-                this.storage,
+            const chunk = await this.getSnapshot().getChunk(
+                this.getStorage(),
                 chainHeightAfterGenesis,
                 chunkIndexToExport,
             );
@@ -408,19 +448,27 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async storeInitialValidatorSet(request: InitChainRequest) {
+        const db = this.getLevelDb();
         for (const validator of request.validators) {
             const address = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
             );
-            const record = await this.db.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address);
+            const record = await db.getValidatorNodeByAddress(address);
+            //const record = await db.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address);
 
             if (!record) {
-                this.logger.log(`Adding unknown validator address: ${Utils.binaryToHexa(address)}`);
-                await this.db.putRaw(
+                this.logger.info(
+                    `Adding unknown validator address: ${Utils.binaryToHexa(address)}`,
+                );
+                await db.putValidatorNode(address);
+                /*
+                await db.putRaw(
                     NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
                     address,
                     Utils.getNullHash(),
                 );
+
+                 */
             }
         }
     }
@@ -433,7 +481,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const issuerPublicKey = await issuerPrivateKey.getPublicKey();
 
         // we first create the issuer account
-        this.logger.log('Creating microblock for issuer account creation');
+        this.logger.info('Creating microblock for issuer account creation');
         const issuerAccountCreationMicroblock = Microblock.createGenesisAccountMicroblock();
         issuerAccountCreationMicroblock.addSections([
             {
@@ -443,15 +491,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             },
             {
                 type: SectionType.ACCOUNT_TOKEN_ISSUANCE,
-                amount: ECO.INITIAL_OFFER
-            }
-        ])
+                amount: ECO.INITIAL_OFFER,
+            },
+        ]);
         await issuerAccountCreationMicroblock.seal(issuerPrivateKey);
-        const { microblockData: issuerAccountCreationSerializedMicroblock, microblockHash: issuerAccountHash } =
-            issuerAccountCreationMicroblock.serialize();
+        const {
+            microblockData: issuerAccountCreationSerializedMicroblock,
+            microblockHash: issuerAccountHash,
+        } = issuerAccountCreationMicroblock.serialize();
 
         // we now create the Carmentis Governance organization
-        this.logger.log('Creating governance organization microblock');
+        this.logger.info('Creating governance organization microblock');
         const governanceOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
         governanceOrganizationMicroblock.addSections([
             {
@@ -460,30 +510,28 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             },
             {
                 type: SectionType.ORG_DESCRIPTION,
-                name: "Carmentis Governance",
-                website: "",
-                countryCode: "FR",
-                city: ""
-            }
-        ])
-        await governanceOrganizationMicroblock.seal(issuerPrivateKey)
+                name: 'Carmentis Governance',
+                website: '',
+                countryCode: 'FR',
+                city: '',
+            },
+        ]);
+        await governanceOrganizationMicroblock.seal(issuerPrivateKey);
         const { microblockData: governanceOrganizationData, microblockHash: governanceOrgId } =
             governanceOrganizationMicroblock.serialize();
 
-
         // we create the (single) protocol virtual blockchain
-        this.logger.log('Creating protocol microblock');
+        this.logger.info('Creating protocol microblock');
         const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
         protocolMicroblock.addSection({
             type: SectionType.PROTOCOL_CREATION,
-            organizationId: governanceOrgId
+            organizationId: governanceOrgId,
         });
-        await protocolMicroblock.seal(issuerPrivateKey)
+        await protocolMicroblock.seal(issuerPrivateKey);
         const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
 
-
         // we now create the Carmentis SAS organization
-        this.logger.log('Creating Carmentis SAS organization microblock');
+        this.logger.info('Creating Carmentis SAS organization microblock');
         const carmentisOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
         carmentisOrganizationMicroblock.addSections([
             {
@@ -492,18 +540,18 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             },
             {
                 type: SectionType.ORG_DESCRIPTION,
-                name: "Carmentis SAS",
-                website: "",
-                countryCode: "FR",
-                city: ""
-            }
-        ])
-        await carmentisOrganizationMicroblock.seal(issuerPrivateKey)
+                name: 'Carmentis SAS',
+                website: '',
+                countryCode: 'FR',
+                city: '',
+            },
+        ]);
+        await carmentisOrganizationMicroblock.seal(issuerPrivateKey);
         const { microblockData: carmentisOrganizationData, microblockHash: carmentisOrgId } =
             carmentisOrganizationMicroblock.serialize();
 
         // We now declare the running node as the genesis node.
-        this.logger.log('Creating genesis validator node microblock');
+        this.logger.info('Creating genesis validator node microblock');
         const mb = Microblock.createGenesisValidatorNodeMicroblock();
         const genesisValidator = request.validators[0];
         mb.addSections([
@@ -519,18 +567,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             {
                 type: SectionType.VN_RPC_ENDPOINT,
                 rpcEndpoint: this.nodeConfig.getCometbftExposedRpcEndpoint(),
-            }
-        ])
+            },
+        ]);
         await mb.seal(issuerPrivateKey);
 
-
-        const {
-            microblockData: carmentisNodeMicroblock,
-        } = mb.serialize();
-
+        const { microblockData: carmentisNodeMicroblock } = mb.serialize();
 
         // we now proceed to the runoff
-        const transactions = [
+        const transactions: Uint8Array[] = [
             issuerAccountCreationSerializedMicroblock,
             governanceOrganizationData,
             protocolInitialUpdate,
@@ -542,14 +586,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             issuerAccountHash,
             issuerPrivateKey,
             issuerPublicKey,
-            issuerAccountCreationMicroblock
+            issuerAccountCreationMicroblock,
         );
         const runoffsTransactions = await runoffTransactionsBuilder.createRunoffTransactions();
         transactions.push(...runoffsTransactions);
 
         await this.publishGenesisTransactions(transactions, 1);
 
-        const { appHash } = await this.state.getApplicationHash();
+        const { appHash } = await this.getGlobalState().getApplicationHash();
         return appHash;
     }
 
@@ -564,7 +608,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
         let txIndex = 0;
         // we create working state to check the transaction
-        const workingState = this.state;
+        const workingState = this.getGlobalState();
         for (const tx of transactions) {
             txIndex += 1;
             logger.debug(`Handling transaction ${txIndex} on ${transactions.length}`);
@@ -575,7 +619,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 logger.debug(
                     `Transaction parsed successfully: microblock ${parsedMicroblock.getHash().encode()} (type ${parsedMicroblock.getType()})`,
                 );
-
 
                 const checkResult = await this.checkMicroblockLocalStateConsistency(
                     workingState,
@@ -590,8 +633,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         workingState,
                         updatedVirtualBlockchain,
                         parsedMicroblock,
-                        { blockHeight: publishedBlockHeight, blockTimestamp, blockMisbehaviors: [] },
-                        tx
+                        {
+                            blockHeight: publishedBlockHeight,
+                            blockTimestamp,
+                            blockMisbehaviors: [],
+                        },
+                        tx,
                     );
                 } else {
                     logger.warn(`Microblock ${parsedMicroblock.getHash().encode()} rejected`);
@@ -599,13 +646,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             } catch (e) {
                 logger.error(`An error occurred during handling of genesis microblock: ${e}`);
                 if (e instanceof Error) {
-                    logger.debug(e.stack);
+                    logger.debug(e.stack ?? 'No stack provided');
                 }
             }
         }
 
         // finalize the working state
-        this.logger.log(`Finalizing publication of ${transactions.length} transactions at height ${publishedBlockHeight}`);
+        this.logger.info(
+            `Finalizing publication of ${transactions.length} transactions at height ${publishedBlockHeight}`,
+        );
         await globalStateUpdater.finalizeBlockApproval(workingState, {
             hash: Utils.getNullHash(),
             height: publishedBlockHeight,
@@ -613,14 +662,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             next_validators_hash: Utils.getNullHash(),
             proposer_address: Utils.getNullHash(),
             syncing_to_height: publishedBlockHeight,
-            txs: transactions
+            txs: transactions,
         });
 
         // commit the state
-        this.logger.log(`Committing state at height ${publishedBlockHeight}`);
-        await this.state.commit();
+        this.logger.info(`Committing state at height ${publishedBlockHeight}`);
+        const state = this.getGlobalState();
+        await state.commit();
 
-        const { appHash } = await this.state.getApplicationHash();
+        const { appHash } = await state.getApplicationHash();
         return appHash;
     }
     /**
@@ -628,8 +678,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      */
     async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
         const perfMeasure = this.perf.start('CheckTx');
-        this.logger.log(`[ CheckTx ]  --------------------------------------------------------`);
-        this.logger.log(`Size of transaction: ${request.tx.length} bytes`);
+        this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
+        this.logger.info(`Size of transaction: ${request.tx.length} bytes`);
 
         // we first attempt to parse the microblock
         try {
@@ -637,21 +687,21 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
 
             // we create working state to check the transaction
-            const workingState = new GlobalState(this.db, this.storage);
+            const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
             const checkResult = await this.checkMicroblockLocalStateConsistency(
                 workingState,
                 parsedMicroblock,
             );
             if (checkResult.checked) {
                 const vb = checkResult.vb;
-                this.logger.log(`Type: ${CHAIN.VB_NAME[vb.getType()]}`);
+                this.logger.info(`Type: ${CHAIN.VB_NAME[vb.getType()]}`);
                 for (const section of parsedMicroblock.getAllSections()) {
                     const serializedSection = BlockchainUtils.encodeSection(section);
                     const sectionLabel = SectionLabel.getSectionLabelFromSection(section);
                     //const sectionLabel = SECTIONS.DEF[vb.getType()][section.type].label;
                     const sectionLengthInBytes = serializedSection.length;
                     const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
-                    this.logger.log(message);
+                    this.logger.info(message);
                 }
             }
 
@@ -687,9 +737,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      * Extract the relevant Comet parameters from a Comet request
      * This supports PrepareProposalRequest, ProcessProposalRequest and FinalizeBlockRequest
      */
-    extractCometParameters(request: PrepareProposalRequest|ProcessProposalRequest|FinalizeBlockRequest): GlobalStateUpdateCometParameters {
+    extractCometParameters(
+        request: PrepareProposalRequest | ProcessProposalRequest | FinalizeBlockRequest,
+    ): GlobalStateUpdateCometParameters {
+        const defaultTimestamp = 0;
+        const timeInRequest = request.time?.seconds;
+        if (timeInRequest === undefined) {
+            this.logger.warn(`No block timestamp provided in request: using timestamp ${defaultTimestamp}`);
+        }
         const blockHeight = Number(request.height);
-        const blockTimestamp = Number(request.time.seconds);
+        const blockTimestamp = Number(request.time?.seconds ?? defaultTimestamp);
         const blockMisbehaviors: Misbehavior[] = request.misbehavior;
 
         return { blockHeight, blockTimestamp, blockMisbehaviors };
@@ -712,13 +769,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     async PrepareProposal(request: PrepareProposalRequest) {
         const cometParameters = this.extractCometParameters(request);
 
-        this.logger.log(
+        this.logger.info(
             `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(`Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`);
+        this.logger.info(
+            `Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`,
+        );
 
-        const proposedTxs = [];
-        const workingState = new GlobalState(this.db, this.storage);
+        const proposedTxs: Uint8Array[] = [];
+        const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
         //const cache = this.getCacheInstance(request.txs);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 
@@ -740,7 +799,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         updatedVirtualBlockchain,
                         parsedMicroblock,
                         cometParameters,
-                        tx
+                        tx,
                     );
                     proposedTxs.push(tx);
                 } else {
@@ -751,7 +810,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         }
 
-        this.logger.log(
+        this.logger.info(
             `included ${proposedTxs.length} transaction(s) out of ${request.txs.length}`,
         );
 
@@ -773,12 +832,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const perfMeasure = this.perf.start('ProcessProposal');
         const cometParameters = this.extractCometParameters(request);
 
-        this.logger.log(
+        this.logger.info(
             `[ ProcessProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(`Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`);
+        this.logger.info(
+            `Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`,
+        );
 
-        const workingState = new GlobalState(this.db, this.storage);
+        const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
@@ -799,7 +860,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         updatedVirtualBlockchain,
                         parsedMicroblock,
                         cometParameters,
-                        tx
+                        tx,
                     );
                 } else {
                     // TODO: reject case
@@ -810,7 +871,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
 
         /*
-        this.logger.log(
+        this.logger.info(
             `processProposal / total block fees: ${processBlockResult.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`,
         );
 
@@ -835,13 +896,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const perfMeasure = this.perf.start('FinalizeBlock');
         const cometParameters = this.extractCometParameters(request);
 
-        this.logger.log(
+        this.logger.info(
             `[ FinalizeBlock - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
-        this.logger.log(`Handling ${request.txs.length} transactions at ts=$cometParameters.{blockTimestamp}`);
+        this.logger.info(
+            `Handling ${request.txs.length} transactions at ts=$cometParameters.{blockTimestamp}`,
+        );
 
-        const workingState = this.state;
-        const txResults = [];
+        const workingState = this.getGlobalState();
+        const txResults: ExecTxResult[] = [];
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
@@ -862,7 +925,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         updatedVirtualBlockchain,
                         parsedMicroblock,
                         cometParameters,
-                        tx
+                        tx,
                     );
 
                     perfMeasure.event('fees');
@@ -880,10 +943,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         }),
                     );
                 } else {
-                    // TODO: SHOULD NOT HAPPEN HERE
+                    this.logger.fatal(
+                        `Microblock ${parsedMicroblock.getHash().encode()} has been rejected during FinalizeBlock`,
+                    );
                 }
             } catch (e) {
-                // TODO: SHOULD NOT HAPPEN HERE
+                this.logger.fatal(`A transaction has been rejected during FinalizeBlock`);
             }
         }
         await globalStateUpdater.finalizeBlockApproval(workingState, request);
@@ -908,28 +973,31 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async Commit(request: CommitRequest) {
-        this.logger.log(`[ Commit ] --------------------------------------------------------`);
-        if (!this.state.hasSomethingToCommit()) {
+        this.logger.info(`[ Commit ] --------------------------------------------------------`);
+        const state = this.getGlobalState();
+        const db = this.getLevelDb();
+        const snapshot = this.getSnapshot();
+        if (!state.hasSomethingToCommit()) {
             this.logger.warn(`nothing to commit`);
-            return;
+            return CommitResponse.create({});
         }
 
-        await this.state.commit();
-        this.logger.log(`Commit done`);
+        await state.commit();
+        this.logger.info(`Commit done`);
 
         // Create snapshots under conditions that we are not already importing snapshots and it is
         // the right period to generate snapshots.
         let retainedHeight = 0;
         const isNotImportingSnapshot = !this.isCatchingUp;
         const snapshotBlockPeriod = this.nodeConfig.getSnapshotBlockPeriod();
-        const chainInfoObject = await this.db.getChainInformationObject();
+        const chainInfoObject = await db.getChainInformation();
         const isTimeToGenerateSnapshot = chainInfoObject.height % snapshotBlockPeriod == 0;
         if (isNotImportingSnapshot && isTimeToGenerateSnapshot) {
-            this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
+            this.logger.info(`Creating snapshot at height ${chainInfoObject.height}`);
             const maxSnapshots = this.nodeConfig.getMaxSnapshots();
-            await this.snapshot.clear(maxSnapshots - 1);
-            await this.snapshot.create();
-            this.logger.log(`Done creating snapshot`);
+            await snapshot.clear(maxSnapshots - 1);
+            await snapshot.create();
+            this.logger.info(`Done creating snapshot`);
 
             // We preserve a certain amount of blocks that are not put in a snapshot.
             const blockHistoryBeforeSnapshot = this.nodeConfig.getBlockHistoryBeforeSnapshot();
@@ -944,11 +1012,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async ListSnapshots(request: ListSnapshotsRequest) {
-        this.logger.log(`EVENT: listSnapshots`);
+        this.logger.info(`EVENT: listSnapshots`);
 
-        const list = await this.snapshot.getList();
+        const list = await this.getSnapshot().getList();
 
-        this.logger.log(`snapshot.getList()`, list.length);
+        this.logger.info(`snapshot.getList(): ${list.length}`);
         list.forEach((object) =>
             console.log({
                 height: object.height,
@@ -975,9 +1043,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async LoadSnapshotChunk(request: LoadSnapshotChunkRequest) {
-        this.logger.log(`EVENT: loadSnapshotChunk height=${request.height}`);
+        this.logger.info(`EVENT: loadSnapshotChunk height=${request.height}`);
 
-        const chunk = await this.snapshot.getChunk(this.storage, request.height, request.chunk);
+        const chunk = await this.getSnapshot().getChunk(
+            this.getStorage(),
+            request.height,
+            request.chunk,
+        );
 
         return LoadSnapshotChunkResponse.create({
             chunk,
@@ -985,7 +1057,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async OfferSnapshot(request: OfferSnapshotRequest) {
-        this.logger.log(`EVENT: offerSnapshot`);
+        this.logger.info(`EVENT: offerSnapshot`);
 
         this.importedSnapshot = request.snapshot;
 
@@ -995,10 +1067,23 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async ApplySnapshotChunk(request: ApplySnapshotChunkRequest) {
-        this.logger.log(`EVENT: applySnapshotChunk index=${request.index}`);
+        this.logger.info(`EVENT: applySnapshotChunk index=${request.index}`);
+
+        // reject if the provided snapshot is not defined
+        if (this.importedSnapshot === undefined) {
+            this.logger.error(`Cannot apply snapshot chunk: imported snapshot undefined`);
+            return ApplySnapshotChunkResponse.create({
+                result: ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT,
+            });
+        }
 
         const isLast = request.index == this.importedSnapshot.chunks - 1;
-        await this.snapshot.loadReceivedChunk(this.storage, request.index, request.chunk, isLast);
+        await this.getSnapshot().loadReceivedChunk(
+            this.getStorage(),
+            request.index,
+            request.chunk,
+            isLast,
+        );
         const result = ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 
         return ApplySnapshotChunkResponse.create({
@@ -1009,18 +1094,18 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async clearDatabase() {
-        this.logger.log(`Clearing database`);
-        await this.db.clear();
+        this.logger.info(`Clearing database`);
+        await this.getLevelDb().clear();
     }
 
     private async clearStorage() {
-        this.logger.log(`Clearing storage`);
-        await this.storage.clear();
+        this.logger.info(`Clearing storage`);
+        await this.getStorage().clear();
     }
 
     private async clearSnapshots() {
-        this.logger.log(`Clearing snapshots`);
-        await this.snapshot.clear(0);
+        this.logger.info(`Clearing snapshots`);
+        await this.getSnapshot().clear(0);
     }
 
     Echo(request: EchoRequest): Promise<EchoResponse> {
@@ -1030,7 +1115,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     Flush(request: FlushRequest): Promise<FlushResponse> {
-        return Promise.resolve(undefined);
+        return Promise.resolve({});
     }
 
     /**
@@ -1070,7 +1155,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             this.logger.error(`Microblock rejected: ${errorMessage}`);
-            this.logger.debug(`Error details:`, error);
+            if (error instanceof Error) {
+                this.logger.debug(`Error details: ${error}`);
+                this.logger.debug(error.stack || 'No stack trace available');
+            }
             return {
                 checked: false,
                 error: errorMessage,

@@ -10,16 +10,20 @@ interface Sample {
 
 class PerformanceMeasure {
     parent: Performance;
-    title: string;
-    startTs: number;
-    lastTs: number;
+    private title: string;
+    private startTs: number;
+    private lastTs: number;
 
     constructor(parent: Performance, title: string) {
         this.parent = parent;
 
+        // TODO: study why a return here
+        /*
         if(!this.parent.enabled) {
             return;
         }
+
+         */
 
         this.title = title;
         this.startTs = performance.now();
@@ -65,7 +69,7 @@ class PerformanceMeasure {
         );
     }
 
-    format(time) {
+    format(time: number) {
         return time.toFixed(2);
     }
 
@@ -79,7 +83,7 @@ export class Performance {
     enabled: boolean;
     samples: Map<string, Sample>;
 
-    constructor(logger: Logger, enabled = true) {
+    constructor(logger: unknown, enabled = true) {
         this.enabled = enabled;
         this.samples = new Map;
     }
@@ -88,15 +92,24 @@ export class Performance {
         return new PerformanceMeasure(this, title);
     }
 
-    addSample(key, time) {
+    addSample(key: string, time: number) {
         if(!this.samples.has(key)) {
             this.samples.set(key, { total: 0, values: [] });
         }
 
         const object = this.samples.get(key);
+        if (object === undefined) throw new Error(
+            `Performance.addSample(): object for key '${key}' not found`
+        )
 
         if(object.values.length == MAX_HISTORY) {
-            object.total -= object.values.shift();
+            const el = object.values.shift();
+            if (el) {
+                object.total -= el;
+            } else {
+                // TODO: missing case
+            }
+
         }
 
         // TODO(scalability): Remove the list of values, the total is sufficient to compute the avg
