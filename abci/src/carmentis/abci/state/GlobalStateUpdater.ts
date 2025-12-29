@@ -39,6 +39,7 @@ import { LevelDb } from '../database/LevelDb';
 import { ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
 import { BlockIDFlag } from '../../../proto-ts/cometbft/types/v1/validator';
 import { BalanceAvailability } from '../accounts/BalanceAvailability';
+import { LevelDbTable } from '../database/LevelDbTable';
 
 const KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',
@@ -69,25 +70,24 @@ export class GlobalStateUpdater {
         const database = globalState.getCachedDatabase();
         /*
         const previousBlockInformation = await database.getObject(
-            NODE_SCHEMAS.DB_BLOCK_INFORMATION,
+            LevelDbTable.BLOCK_INFORMATION,
             this.heightToTableKey(cometParameters.blockHeight - 1)
         ) as BlockInformation;
          */
         const previousBlockInformation = await database.getBlockInformation(cometParameters.blockHeight - 1);
-        if (!previousBlockInformation) {
-            throw new Error(`Previous block information not found for block height ${cometParameters.blockHeight - 1}`);
-        }
-        const previousBlockDayTs = Utils.addDaysToTimestamp(previousBlockInformation.timestamp, 0);
+        const previousBlockDayTs = previousBlockInformation ?
+            Utils.addDaysToTimestamp(previousBlockInformation.timestamp, 0) :
+            0;
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
 
-        if(currentBlockDayTs != previousBlockDayTs) {
+        if (currentBlockDayTs != previousBlockDayTs) {
             // update vesting locks
-            const accountsWithVestingLocksIdentifiers = await database.getKeys(NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS);
+            const accountsWithVestingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS);
 
             for(const id of accountsWithVestingLocksIdentifiers) {
                 const accountState = await database.getAccountStateByAccountId(id);
                 if (accountState) {
-                    //const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id) as AccountState;
+                    //const accountState = await database.getObject(LevelDbTable.ACCOUNT_STATE, id) as AccountState;
                     const balanceAvailability = new BalanceAvailability(
                         accountState.balance,
                         accountState.locks,
@@ -96,7 +96,7 @@ export class GlobalStateUpdater {
                     if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
                         accountState.locks = balanceAvailability.getLocks();
                         await database.putAccountState(id, accountState);
-                        //await database.putObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, id, accountState);
+                        //await database.putObject(LevelDbTable.ACCOUNT_STATE, id, accountState);
                     }
                 } else {
                     // TODO: handle undefined account state
@@ -106,7 +106,7 @@ export class GlobalStateUpdater {
 
             // update escrow locks
             const accountManager = globalState.getAccountManager();
-            const escrowIdentifiers = await database.getKeys(NODE_SCHEMAS.DB_ESCROWS);
+            const escrowIdentifiers = await database.getKeys(LevelDbTable.ESCROWS);
 
             for(const id of escrowIdentifiers) {
                 // TODO: it would be more efficient to have a method that directly returns all objects of a table
@@ -114,13 +114,13 @@ export class GlobalStateUpdater {
                 if (escrow == null) {
                     throw new Error(`Escrow ${id.toString()} not found`);
                 }
-                //const escrow = await database.getObject(NODE_SCHEMAS.DB_ESCROWS, id) as Escrow;
+                //const escrow = await database.getObject(LevelDbTable.ESCROWS, id) as Escrow;
                 const accountState = await database.getAccountStateByAccountId(escrow.payeeAccount);
                 if (accountState === undefined) throw new Error(
                     `Escrow ${id.toString()} refers to an unknown account ${escrow.payeeAccount.toString()}`
                 )
 
-                //const accountState = await database.getObject(NODE_SCHEMAS.DB_ACCOUNT_STATE, escrow.payeeAccount) as AccountState;
+                //const accountState = await database.getObject(LevelDbTable.ACCOUNT_STATE, escrow.payeeAccount) as AccountState;
                 const balanceAvailability = new BalanceAvailability(
                     accountState.balance,
                     accountState.locks,
@@ -438,7 +438,7 @@ export class GlobalStateUpdater {
                 microblockCount,
             }
         )
-        //await db.putObject(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(height), );
+        //await db.putObject(LevelDbTable.BLOCK_INFORMATION, this.heightToTableKey(height), );
     }
 
     private async storeBlockContentInBuffer(
@@ -449,7 +449,7 @@ export class GlobalStateUpdater {
         const db = state.getCachedDatabase();
         await db.putBlockContent(height, { microblocks });
         /*
-        await db.putObject(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(height), {
+        await db.putObject(LevelDbTable.BLOCK_CONTENT, this.heightToTableKey(height), {
             microblocks,
         });
 
@@ -487,7 +487,7 @@ export class GlobalStateUpdater {
                 // TODO: clean
                 const address = Utils.bufferToUint8Array(vote.validator.address);
                 const validatorNodeHash = await stateDb.getRaw(
-                    NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
+                    LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
                     address,
                 );
 
@@ -730,7 +730,7 @@ export class GlobalStateUpdater {
 
         // create the new link: Comet address -> identifier
         const database = globalState.getCachedDatabase();
-        await database.putRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, cometAddress, vb.getId());
+        await database.putRaw(LevelDbTable.VALIDATOR_NODE_BY_ADDRESS, cometAddress, vb.getId());
 
         if (0 < lastKnownVotingPower) {
             this.addValidatorSetUpdate(

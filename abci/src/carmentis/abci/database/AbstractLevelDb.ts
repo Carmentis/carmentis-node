@@ -22,9 +22,9 @@ import { LevelDb } from './LevelDb';
 import { ChainInformationObject } from '../types/ChainInformationObject';
 import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
 import { MicroblockStorage } from '../types/valibot/storage/MicroblockStorage';
+import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
 
 export abstract class AbstractLevelDb implements DbInterface {
-    abstract getTableCount(): number;
     abstract getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined>;
     abstract putRaw(tableId: number, key: Uint8Array, data: Uint8Array): Promise<boolean>;
     abstract getKeys(tableId: number): Promise<Uint8Array[]>;
@@ -40,8 +40,8 @@ export abstract class AbstractLevelDb implements DbInterface {
     async getChainInformation(): Promise<ChainInformation> {
         this.abstractLogger.debug('Getting chain information');
         const serializedChainInfo = await this.getRaw(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
+            LevelDbTable.CHAIN_INFORMATION,
+            ChainInformationIndex.CHAIN_INFORMATION_KEY,
         );
         if (serializedChainInfo) {
             return NodeEncoder.decodeChainInformation(serializedChainInfo);
@@ -60,7 +60,7 @@ export abstract class AbstractLevelDb implements DbInterface {
         publicKeyBytesHash: Uint8Array,
     ): Promise<Uint8Array | undefined> {
         const serialzedAccountId = this.getRaw(
-            NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY,
+            LevelDbTable.ACCOUNT_BY_PUBLIC_KEY,
             publicKeyBytesHash,
         );
         if (serialzedAccountId === undefined) return undefined;
@@ -69,7 +69,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     putAccountState(id: Uint8Array, accountState: AccountState): Promise<boolean> {
         return this.putRaw(
-            NODE_SCHEMAS.DB_ACCOUNT_STATE,
+            LevelDbTable.ACCOUNT_STATE,
             id,
             BlockchainUtils.encodeAccountState(accountState),
         );
@@ -77,7 +77,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     putAccountHistoryEntry(historyHash: Uint8Array, entry: AccountHistoryEntry): Promise<boolean> {
         return this.putRaw(
-            NODE_SCHEMAS.DB_ACCOUNT_HISTORY,
+            LevelDbTable.ACCOUNT_HISTORY,
             historyHash,
             NodeEncoder.encodeAccountHistoryEntry(entry),
         );
@@ -89,7 +89,7 @@ export abstract class AbstractLevelDb implements DbInterface {
         );
         const hash = microblock.getHashAsBytes();
         const serializedInfo = BlockchainUtils.encodeMicroblockInformation(info);
-        await this.putRaw(NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION, hash, serializedInfo);
+        await this.putRaw(LevelDbTable.MICROBLOCK_VB_INFORMATION, hash, serializedInfo);
     }
 
     async getMicroblockInformation(
@@ -99,7 +99,7 @@ export abstract class AbstractLevelDb implements DbInterface {
             `Getting information for microblock ${Utils.binaryToHexa(microblockHash)}`,
         );
         const serializedMicroblockInformation = await this.getRaw(
-            NODE_SCHEMAS.DB_MICROBLOCK_VB_INFORMATION,
+            LevelDbTable.MICROBLOCK_VB_INFORMATION,
             microblockHash,
         );
         if (serializedMicroblockInformation === undefined) {
@@ -109,12 +109,12 @@ export abstract class AbstractLevelDb implements DbInterface {
     }
 
     async containsAccountWithVestingLocks(accountId: Uint8Array): Promise<boolean> {
-        const response = await this.getRaw(NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS, accountId);
+        const response = await this.getRaw(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, accountId);
         return response !== undefined;
     }
 
     async getEscrow(escrowIdentifier: Uint8Array): Promise<Escrows | undefined> {
-        const serializedEscrows = await this.getRaw(NODE_SCHEMAS.DB_ESCROWS, escrowIdentifier);
+        const serializedEscrows = await this.getRaw(LevelDbTable.ESCROWS, escrowIdentifier);
         return serializedEscrows === undefined
             ? undefined
             : NodeEncoder.decodeEscrows(serializedEscrows);
@@ -122,7 +122,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     async putBlockInformation(blockHeight: number, info: BlockInformation) {
         return await this.putRaw(
-            NODE_SCHEMAS.DB_BLOCK_INFORMATION,
+            LevelDbTable.BLOCK_INFORMATION,
             LevelDb.convertHeightToTableKey(blockHeight),
             NodeEncoder.encodeBlockInformation(info),
         );
@@ -130,7 +130,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     async putBlockContent(height: number, blockContent: BlockContent) {
         return await this.putRaw(
-            NODE_SCHEMAS.DB_BLOCK_CONTENT,
+            LevelDbTable.BLOCK_CONTENT,
             LevelDb.convertHeightToTableKey(height),
             NodeEncoder.encodeBlockContent(blockContent),
         );
@@ -139,14 +139,14 @@ export abstract class AbstractLevelDb implements DbInterface {
     async getDataFileFromDataFileKey(
         dbFileKey: Uint8Array<ArrayBuffer>,
     ): Promise<DataFile | undefined> {
-        const serializedDataFile = await this.getRaw(NODE_SCHEMAS.DB_DATA_FILE, dbFileKey);
+        const serializedDataFile = await this.getRaw(LevelDbTable.DATA_FILE, dbFileKey);
         if (serializedDataFile === undefined) return undefined;
         return NodeEncoder.decodeDataFile(serializedDataFile);
     }
 
     async putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFile) {
         return await this.putRaw(
-            NODE_SCHEMAS.DB_DATA_FILE,
+            LevelDbTable.DATA_FILE,
             dataFileKey,
             NodeEncoder.encodeDataFile(dataFileObject),
         );
@@ -154,7 +154,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     async putMicroblockStorage(microblockHeaderHash: Uint8Array, microblockStorage: MicroblockStorage) {
         return await this.putRaw(
-            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
+            LevelDbTable.MICROBLOCK_STORAGE,
             microblockHeaderHash,
             NodeEncoder.encodeMicroblockStorage(microblockStorage),
         );
@@ -164,7 +164,7 @@ export abstract class AbstractLevelDb implements DbInterface {
         microblockHeaderHash: Uint8Array,
     ): Promise<MicroblockStorage | undefined> {
         const serializedMicroblockStorage = await this.getRaw(
-            NODE_SCHEMAS.DB_MICROBLOCK_STORAGE,
+            LevelDbTable.MICROBLOCK_STORAGE,
             microblockHeaderHash,
         );
         if (serializedMicroblockStorage === undefined) return undefined;
@@ -177,15 +177,15 @@ export abstract class AbstractLevelDb implements DbInterface {
         );
         const serializedChainInfo = NodeEncoder.encodeChainInformation(chainInfoObject);
         return await this.putRaw(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
+            LevelDbTable.CHAIN_INFORMATION,
+            ChainInformationIndex.CHAIN_INFORMATION_KEY,
             serializedChainInfo,
         );
     }
 
     async putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean> {
         return await this.putRaw(
-            NODE_SCHEMAS.DB_ACCOUNTS_WITH_VESTING_LOCKS,
+            LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS,
             accountHash,
             NodeEncoder.encodeAccountsWithVestingLocks({}),
         );
@@ -193,7 +193,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     async putEscrow(escrowIdentifier: Uint8Array, escrowData: Escrows): Promise<boolean> {
         return await this.putRaw(
-            NODE_SCHEMAS.DB_ESCROWS,
+            LevelDbTable.ESCROWS,
             escrowIdentifier,
             NodeEncoder.encodeEscrows(escrowData),
         );
@@ -202,7 +202,7 @@ export abstract class AbstractLevelDb implements DbInterface {
     async getValidatorNodeByAddress(
         nodeAddress: Uint8Array,
     ): Promise<ValidatorNodeByAddress | undefined> {
-        const response = await this.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, nodeAddress);
+        const response = await this.getRaw(LevelDbTable.VALIDATOR_NODE_BY_ADDRESS, nodeAddress);
         if (response === undefined) return undefined;
         return NodeEncoder.decodeValidatorNodeByAddress(response);
     }
@@ -212,7 +212,7 @@ export abstract class AbstractLevelDb implements DbInterface {
     ): Promise<boolean> {
         // TODO: null hash? Really?
         return await this.putRaw(
-            NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
+            LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
             nodeAddress,
             NodeEncoder.encodeValidatorNodeByAddress({
                 validatorNodeHash: Utils.getNullHash(),
@@ -225,7 +225,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     async getBlockInformation(height: number): Promise<BlockInformation | undefined> {
         const serializedBlockInformation = await this.getRaw(
-            NODE_SCHEMAS.DB_BLOCK_INFORMATION,
+            LevelDbTable.BLOCK_INFORMATION,
             LevelDb.convertHeightToTableKey(height),
         );
         if (serializedBlockInformation === undefined) return undefined;
@@ -234,7 +234,7 @@ export abstract class AbstractLevelDb implements DbInterface {
 
     async getBlockContent(height: number): Promise<BlockContent | undefined> {
         const serializedBlockContent = await this.getRaw(
-            NODE_SCHEMAS.DB_BLOCK_CONTENT,
+            LevelDbTable.BLOCK_CONTENT,
             LevelDb.convertHeightToTableKey(height),
         );
         if (serializedBlockContent === undefined) return undefined;
@@ -242,14 +242,14 @@ export abstract class AbstractLevelDb implements DbInterface {
     }
 
     async getAccountStateByAccountId(accountId: Uint8Array): Promise<AccountState | undefined> {
-        const serializedAccountState = await this.getRaw(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountId);
+        const serializedAccountState = await this.getRaw(LevelDbTable.ACCOUNT_STATE, accountId);
         if (serializedAccountState === undefined) return undefined;
         return BlockchainUtils.decodeAccountState(serializedAccountState);
     }
 
     async getAccountHistoryEntryByHistoryHash(historyHash: Uint8Array) {
         const serializedAccountHistoryEntry = await this.getRaw(
-            NODE_SCHEMAS.DB_ACCOUNT_HISTORY,
+            LevelDbTable.ACCOUNT_HISTORY,
             historyHash,
         );
         if (serializedAccountHistoryEntry === undefined) return undefined;

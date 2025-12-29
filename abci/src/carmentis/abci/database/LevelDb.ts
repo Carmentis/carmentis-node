@@ -8,29 +8,30 @@ import { AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformation } from '../types/valibot/db/db';
 import { NodeEncoder } from '../NodeEncoder';
 import { AbstractLevelDb } from './AbstractLevelDb';
+import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
 
 export class LevelDb extends AbstractLevelDb {
     private db: Level<Uint8Array, Uint8Array>;
     private path: string;
     //private sub: AbstractSublevel<Level<Uint8Array, Uint8Array>,Uint8Array,Uint8Array,Uint8Array>[] = [];
-    private sub: AbstractSublevel<
-        Level<Uint8Array, Uint8Array>,
-        string | Uint8Array<ArrayBufferLike> | Buffer,
-        Uint8Array,
-        Uint8Array
-    >[] = [];
-
-    private tableSchemas: Schema[];
+    private sub: Map<
+        number,
+        AbstractSublevel<
+            Level<Uint8Array, Uint8Array>,
+            string | Uint8Array<ArrayBufferLike> | Buffer,
+            Uint8Array,
+            Uint8Array
+        >
+    > = new Map();
     private logger = getLogger(['node', 'db', LevelDb.name]);
     private static encoding  = {
         keyEncoding: 'view',
         valueEncoding: 'view',
     };
 
-    constructor(path: string, tableSchemas: Schema[] = NODE_SCHEMAS.DB) {
+    constructor(path: string) {
         super()
         this.path = path;
-        this.tableSchemas = tableSchemas;
         this.db = new Level(this.path, LevelDb.encoding);
     }
 
@@ -45,15 +46,15 @@ export class LevelDb extends AbstractLevelDb {
     public static getTableIdFromVirtualBlockchainType(type: number) {
         switch (type) {
             case CHAIN.VB_ACCOUNT:
-                return NODE_SCHEMAS.DB_ACCOUNTS_INDEX;
+                return LevelDbTable.ACCOUNTS_INDEX;
             case CHAIN.VB_VALIDATOR_NODE:
-                return NODE_SCHEMAS.DB_VALIDATOR_NODES_INDEX;
+                return LevelDbTable.VALIDATOR_NODES_INDEX;
             case CHAIN.VB_ORGANIZATION:
-                return NODE_SCHEMAS.DB_ORGANIZATIONS_INDEX;
+                return LevelDbTable.ORGANIZATIONS_INDEX;
             case CHAIN.VB_APPLICATION:
-                return NODE_SCHEMAS.DB_APPLICATIONS_INDEX;
+                return LevelDbTable.APPLICATIONS_INDEX;
             case CHAIN.VB_PROTOCOL:
-                return NODE_SCHEMAS.DB_PROTOCOL_INDEX;
+                return LevelDbTable.PROTOCOL_INDEX;
             default:
                 return -1;
         }
@@ -61,16 +62,12 @@ export class LevelDb extends AbstractLevelDb {
 
     initialize() {
         this.logger.info(`Initializing LevelDB at ${this.path}`);
-
-        const nTables = this.getTableCount();
-        this.sub = [];
-        for (let n = 0; n < nTables; n++) {
-            this.sub[n] = this.db.sublevel(Utils.numberToHexa(n, 2), LevelDb.encoding);
+        for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
+            this.sub.set(
+                tableId,
+                this.db.sublevel(Utils.numberToHexa(tableId, 2), LevelDb.encoding)
+            );
         }
-    }
-
-    getTableCount() {
-        return Object.keys(this.tableSchemas).length;
     }
 
     async open() {
@@ -98,11 +95,19 @@ export class LevelDb extends AbstractLevelDb {
             tableId,
         }));
         try {
-            const b = await this.sub[tableId].get(key);
-            if (b !== undefined) {
-                this.logger.debug(`Returning ${b.length} bytes`);
-                return new Uint8Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+            const subTable = this.sub.get(tableId);
+            if (subTable) {
+                const b = await subTable.get(key);
+                if (b !== undefined) {
+                    this.logger.debug(`Returning ${b.length} bytes`);
+                    return new Uint8Array(
+                        b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
+                    );
+                }
+            } else {
+                // TODO: handle this case
             }
+
         } catch (e) {
             this.logger.error('{e}', { e });
         }
@@ -123,8 +128,14 @@ export class LevelDb extends AbstractLevelDb {
             }),
         );
         try {
-            await this.sub[tableId].put(key, data);
-            return true;
+            const subTable = this.sub.get(tableId);
+            if (subTable) {
+                await subTable.put(key, data);
+                return true;
+            } else {
+                // TODO: handle this case
+                return false;
+            }
         } catch (e) {
             this.logger.error(`{e}`, { e });
             return false;
@@ -133,9 +144,13 @@ export class LevelDb extends AbstractLevelDb {
 
 
     async getKeys(tableId: number): Promise<Uint8Array[]> {
-        const table = this.sub[tableId];
-        const keys: Uint8Array[] = [];
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to access an undefined table ${tableId}: aborting`)
+            return []
+        }
 
+        const keys: Uint8Array[] = [];
         for await (const [key] of table.iterator()) {
             keys.push(key);
         }
@@ -153,10 +168,16 @@ export class LevelDb extends AbstractLevelDb {
         tableId: number,
         query?: LevelQueryIteratorOptions,
     ): Promise<LevelQueryResponseType> {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to query an undefined table ${tableId}: aborting`);
+            throw new Error("Attempted to query an undefined table");
+        }
+
         if (query) {
-            return this.sub[tableId].iterator(query);
+            return table.iterator(query);
         } else {
-            return this.sub[tableId].iterator();
+            return table.iterator();
         }
     }
 
@@ -166,8 +187,14 @@ export class LevelDb extends AbstractLevelDb {
     }
 
     async del(tableId: number, key: Uint8Array) {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to delete an entry an undefined table ${tableId}: aborting`);
+            return false;
+        }
+
         try {
-            await this.sub[tableId].del(key);
+            await table.del(key);
             return true;
         } catch (e) {
             console.error(e);
@@ -181,7 +208,12 @@ export class LevelDb extends AbstractLevelDb {
 
         const obj = {
             del: function (tableId: number, list: any) {
-                const options = tableId == -1 ? {} : { sublevel: sub[tableId] };
+                const table = sub.get(tableId);
+                if (table === undefined) {
+                    throw new Error('Attempted to access an undefined table');
+                }
+
+                const options = tableId == -1 ? {} : { sublevel: table };
 
                 for (const key of list) {
                     batchObject.del(key, options);
@@ -189,7 +221,12 @@ export class LevelDb extends AbstractLevelDb {
                 return obj;
             },
             put: function (tableId: number, list: any) {
-                const options = tableId == -1 ? {} : { sublevel: sub[tableId] };
+                const table = sub.get(tableId);
+                if (table === undefined) {
+                    throw new Error('Attempted to access an undefined table');
+                }
+
+                const options = tableId == -1 ? {} : { sublevel: table };
 
                 for (const [key, value] of list) {
                     batchObject.put(key, value, options);
@@ -218,8 +255,8 @@ export class LevelDb extends AbstractLevelDb {
             objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0), // TODO: use version-based constants
         };
         await this.putRaw(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
+            LevelDbTable.CHAIN_INFORMATION,
+            ChainInformationIndex.CHAIN_INFORMATION_KEY,
             NodeEncoder.encodeChainInformation(chainInfo),
         );
     }

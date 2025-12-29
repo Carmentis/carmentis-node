@@ -29,6 +29,7 @@ import * as v from 'valibot';
 import { ChainInformationSchema } from './types/valibot/db/db';
 import {decode} from 'cbor-x';
 import { NodeEncoder } from './NodeEncoder';
+import { LevelDbTable } from './database/LevelDbTable';
 
 export class SnapshotsManager {
     db: LevelDb;
@@ -289,16 +290,13 @@ export class SnapshotsManager {
      */
     private async createDbFile() {
         this.logger.info("Creating DB file")
-        const chainInfoTableId = Utils.numberToHexa(NODE_SCHEMAS.DB_CHAIN_INFORMATION, 2);
+        const chainInfoTableId = Utils.numberToHexa(LevelDbTable.CHAIN_INFORMATION, 2);
         const chainInfoTableChar0 = chainInfoTableId.charCodeAt(0);
         const chainInfoTableChar1 = chainInfoTableId.charCodeAt(1);
 
-        const dataFileTableId = Utils.numberToHexa(NODE_SCHEMAS.DB_DATA_FILE, 2);
+        const dataFileTableId = Utils.numberToHexa(LevelDbTable.DATA_FILE, 2);
         const dataFileTableChar0 = dataFileTableId.charCodeAt(0);
         const dataFileTableChar1 = dataFileTableId.charCodeAt(1);
-        const dataFileUnserializer = new SchemaUnserializer(
-            NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_DATA_FILE],
-        );
 
         const temporaryPath = path.join(this.path, DB_DUMP_IN_PROGRESS_FILENAME);
         this.logger.debug(`Writing in temporary file ${temporaryPath}`);
@@ -325,7 +323,7 @@ export class SnapshotsManager {
                 height = chainInfo.height;
                 /*
                 const chainInfoUnserializer = new SchemaUnserializer<ChainInformationObject>(
-                    NODE_SCHEMAS.DB[NODE_SCHEMAS.DB_CHAIN_INFORMATION],
+                    NODE_SCHEMAS.DB[LevelDbTable.CHAIN_INFORMATION],
                 );
                 const chainInfoObject = chainInfoUnserializer.unserialize(value);
 

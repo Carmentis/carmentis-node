@@ -4,59 +4,62 @@ import { NODE_SCHEMAS } from '../constants/constants';
 import { CHAIN, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { getLogger } from '@logtape/logtape';
 import { AbstractLevelDb } from './AbstractLevelDb';
+import { LevelDbTable } from './LevelDbTable';
+import { Level } from 'level';
+import { NodeEncoder } from '../NodeEncoder';
 
 export class CachedLevelDb extends AbstractLevelDb {
     private db: LevelDb;
-    private readonly updateCache: Map<string, Uint8Array>[];
-    private readonly deletionCache: Set<string>[];
+    private readonly cachedUpdatedByTableId: Map<number, Map<string, Uint8Array>>;
+    private readonly cachedDeletedEntriesByTableId: Map<number, Set<string>>;
     private logger = getLogger(['node', 'db', CachedLevelDb.name]);
 
     constructor(db: LevelDb) {
         super();
         this.db = db;
-        this.updateCache = [];
-        this.deletionCache = [];
+        this.cachedUpdatedByTableId = new Map();
+        this.cachedDeletedEntriesByTableId = new Map();
 
-        const nTable = this.db.getTableCount();
-
-        for (let tableId = 0; tableId < nTable; tableId++) {
-            this.updateCache[tableId] = new Map();
-            this.deletionCache[tableId] = new Set();
-        }
-    }
-
-    getTableCount() {
-        return this.db.getTableCount();
+        // init the structure of the cache
+        this.resetCache()
     }
 
     resetCache() {
-        const nTable = this.db.getTableCount();
-
-        for (let tableId = 0; tableId < nTable; tableId++) {
-            this.updateCache[tableId].clear();
-            this.deletionCache[tableId].clear();
+        for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
+            this.logger.debug(`Initializing table ${tableName} (id ${tableId})`);
+            this.cachedUpdatedByTableId.set(tableId, new Map());
+            this.cachedDeletedEntriesByTableId.set(tableId, new Set());
         }
     }
 
     async commit() {
         this.logger.debug('Committing');
         const batch = this.db.getBatch();
-        const nTable = this.db.getTableCount();
 
-        for (let tableId = 0; tableId < nTable; tableId++) {
+        for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
             const putList: [Uint8Array, Uint8Array][] = [];
-            for (const [keyStr, value] of this.updateCache[tableId]) {
-                const decodedKey = CachedLevelDb.decodeKey(keyStr);
-                putList.push([decodedKey, value]);
+            const tableUpdates = this.cachedUpdatedByTableId.get(tableId);
+            if (tableUpdates) {
+                for (const [keyStr, value] of tableUpdates) {
+                    const decodedKey = CachedLevelDb.decodeKey(keyStr);
+                    putList.push([decodedKey, value]);
+                }
+                batch.put(tableId, putList);
+            } else {
+                // TODO: handle this case
             }
-            batch.put(tableId, putList);
 
             const delList: Uint8Array[] = [];
-            for (const keyStr of this.deletionCache[tableId]) {
-                const decodedKey = CachedLevelDb.decodeKey(keyStr);
-                delList.push(decodedKey);
+            const tableDeletions = this.cachedDeletedEntriesByTableId.get(tableId);
+            if (tableDeletions) {
+                for (const keyStr of tableDeletions) {
+                    const decodedKey = CachedLevelDb.decodeKey(keyStr);
+                    delList.push(decodedKey);
+                }
+                batch.del(tableId, delList);
+            } else {
+                // TODO: handle this case
             }
-            batch.del(tableId, delList);
         }
 
         await batch.write();
@@ -64,11 +67,21 @@ export class CachedLevelDb extends AbstractLevelDb {
     }
 
     async getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined> {
-        const keyStr = CachedLevelDb.encodeKey(key);
-
-        if (this.updateCache[tableId].has(keyStr)) {
-            return this.updateCache[tableId].get(keyStr);
+        // we first ensure that the table exists
+        const tableUpdates = this.cachedUpdatedByTableId.get(tableId);
+        if (tableUpdates === undefined) {
+            this.logger.warn(`Attempting to access an undefined table ${tableId}: returning undefined`)
+            return undefined;
         }
+
+        // we search in the cached table
+        const keyStr = CachedLevelDb.encodeKey(key);
+        const entry = tableUpdates.get(keyStr);
+        if (entry) {
+            return entry
+        }
+
+        // search on db
         return await this.db.getRaw(tableId, key);
     }
 
@@ -76,16 +89,32 @@ export class CachedLevelDb extends AbstractLevelDb {
         this.logger.debug(
             `Storing raw data with key ${Utils.binaryToHexa(key)} on table ${tableId} in buffer: ${data.length} bytes`,
         );
-        const keyStr = CachedLevelDb.encodeKey(key);
 
-        this.deletionCache[tableId].delete(keyStr);
-        this.updateCache[tableId].set(keyStr, data);
+        // load the updates and deletions
+        const cachedInsertions = this.cachedUpdatedByTableId.get(tableId);
+        const cachedDeletions = this.cachedDeletedEntriesByTableId.get(tableId);
+        if (cachedDeletions === undefined || cachedInsertions === undefined) {
+            this.logger.warn("Attempting to store a new entry on an undefined table: aborting")
+            return false;
+        }
+
+        // add in the insertions and remove from deletions
+        const keyStr = CachedLevelDb.encodeKey(key);
+        cachedDeletions.delete(keyStr);
+        cachedInsertions.set(keyStr, data);
         return true;
     }
 
     async getKeys(tableId: number): Promise<Uint8Array[]> {
+        // load the table
+        const insertions = this.cachedUpdatedByTableId.get(tableId)
+        if (insertions === undefined) {
+            this.logger.debug(`Attempting to load all keys of an undefined table ${tableId}: aborting`)
+            return []
+        }
+
         // we recover the keys from the cache
-        const cachedEncodedKeys = Array.from(this.updateCache[tableId].keys());
+        const cachedEncodedKeys = Array.from(insertions.keys());
         const cachedKeys = cachedEncodedKeys.map((key) => CachedLevelDb.decodeKey(key));
 
         // we recover the keys from the committed data
@@ -101,11 +130,19 @@ export class CachedLevelDb extends AbstractLevelDb {
     async getFullTable(tableId: number): Promise<Uint8Array[][]> {
         const committedData = await this.db.getFullTable(tableId);
         if (committedData === null) {
-            this.logger.warn("No committed data found for table " + tableId + " in cache")
-            throw new Error('No cached')
+            this.logger.warn('No committed data found for table ' + tableId + ' in cache');
+            throw new Error('No cached');
         }
 
-        const cachedData = [...this.updateCache[tableId].entries()].map(([key, value]) => {
+        const insertions = this.cachedUpdatedByTableId.get(tableId);
+        if (insertions === undefined) {
+            this.logger.debug(
+                `Attempting to load all keys of an undefined table ${tableId}: aborting`,
+            );
+            return [];
+        }
+
+        const cachedData = [...insertions.entries()].map(([key, value]) => {
             return [CachedLevelDb.decodeKey(key), value];
         });
 
@@ -113,10 +150,17 @@ export class CachedLevelDb extends AbstractLevelDb {
     }
 
     async del(tableId: number, key: Uint8Array) {
-        const keyStr = CachedLevelDb.encodeKey(key);
+        // load the updates and deletions
+        const cachedInsertions = this.cachedUpdatedByTableId.get(tableId);
+        const cachedDeletions = this.cachedDeletedEntriesByTableId.get(tableId);
+        if (cachedDeletions === undefined || cachedInsertions === undefined) {
+            this.logger.warn('Attempting to delete an entry on an undefined table: aborting');
+            return false;
+        }
 
-        this.updateCache[tableId].delete(keyStr);
-        this.deletionCache[tableId].add(keyStr);
+        const keyStr = CachedLevelDb.encodeKey(key);
+        cachedInsertions.delete(keyStr);
+        cachedDeletions.add(keyStr);
         return true;
     }
 
@@ -129,7 +173,15 @@ export class CachedLevelDb extends AbstractLevelDb {
     }
 
     async getFullDataFileTable() {
-        return await this.getFullTable(NODE_SCHEMAS.DB_DATA_FILE);
+        this.logger.debug("Accessing all entries of data file table")
+        const encodedDataFileEntries = await this.getFullTable(LevelDbTable.DATA_FILE);
+        const dataFileEntries = encodedDataFileEntries.map(
+            ([dataFileKey, encodedDataFile]) => {
+                const dataFile = NodeEncoder.decodeDataFile(encodedDataFile);
+                return {dataFileKey, dataFile}
+            }
+        )
+        return dataFileEntries
     }
 
     async getProtocolVirtualBlockchainIdentifier() {
@@ -159,7 +211,7 @@ export class CachedLevelDb extends AbstractLevelDb {
     }
 
     async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array) {
-        return this.getRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
+        return this.getRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
     }
 
     async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array) {
@@ -167,6 +219,6 @@ export class CachedLevelDb extends AbstractLevelDb {
             identifier: Utils.binaryToHexa(identifier),
             dataLength: serializedState.length,
         }));
-        await this.putRaw(NODE_SCHEMAS.DB_VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
+        await this.putRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
     }
 }

@@ -27,6 +27,7 @@ import { BalanceAvailability } from './BalanceAvailability';
 import { AccountHistory } from '../types/valibot/account/AccountHistory';
 import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
 import { NodeEncoder } from '../NodeEncoder';
+import { LevelDbTable } from '../database/LevelDbTable';
 
 /**
  * Error messages used by AccountManager
@@ -63,7 +64,7 @@ export class AccountManager {
 
     constructor(db: DbInterface, logger: Logger = new Logger()) {
         this.db = db;
-        this.accountRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_TOKEN_RADIX);
+        this.accountRadix = new RadixTree(this.db, LevelDbTable.TOKEN_RADIX);
         this.logger = logger;
         this.perf = new Performance(logger, true);
     }
@@ -249,7 +250,7 @@ export class AccountManager {
         }
 
         // remove the escrow from the DB
-        await this.db.del(NODE_SCHEMAS.DB_ESCROWS, escrowIdentifier);
+        await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
     }
 
     /**
@@ -383,12 +384,12 @@ export class AccountManager {
      */
     private async saveState(accountHash: Uint8Array, accountState: AccountState) {
         const record = BlockchainUtils.encodeAccountState(accountState);
-        //const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountState);
+        //const record = this.db.serialize(LevelDbTable.ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.accountRadix.set(accountHash, stateHash);
         this.logger.debug(`Storing account state for account ${Utils.binaryToHexa(accountHash)}`)
-        await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash, record);
+        await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
     }
 
     /**
@@ -447,10 +448,10 @@ export class AccountManager {
         };
 
         const record = NodeEncoder.encodeAccountHistoryEntry(entry);
-        //const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, entry);
+        //const record = this.db.serialize(LevelDbTable.ACCOUNT_HISTORY, entry);
         const hash = this.getHistoryEntryHash(accountHash, NodeCrypto.Hashes.sha256AsBinary(record));
         this.logger.debug(`Storing new entry in account history for account ${Utils.binaryToHexa(accountHash)}`)
-        await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_HISTORY, hash, record);
+        await this.db.putRaw(LevelDbTable.ACCOUNT_HISTORY, hash, record);
 
         return hash;
     }
@@ -480,7 +481,7 @@ export class AccountManager {
      */
     async isPublicKeyAvailable(publicKeyBytes: Uint8Array): Promise<boolean> {
         const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKeyBytes);
-        const accountHash = await this.db.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash);
+        const accountHash = await this.db.getRaw(LevelDbTable.ACCOUNT_BY_PUBLIC_KEY, keyHash);
         return accountHash === undefined;
     }
 
@@ -495,7 +496,7 @@ export class AccountManager {
     async saveAccountByPublicKey(accountHash: Uint8Array, publicKey: Uint8Array): Promise<void> {
         const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKey);
         this.logger.debug(`Storing association between account hash ${Utils.binaryToHexa(accountHash)} with hashed public key ${Utils.binaryToHexa(keyHash)}`)
-        await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash, accountHash);
+        await this.db.putRaw(LevelDbTable.ACCOUNT_BY_PUBLIC_KEY, keyHash, accountHash);
     }
 
     /**
@@ -506,7 +507,7 @@ export class AccountManager {
      * @throws {Error} If no account is found for the given key hash
      */
     async loadAccountIdByPublicKeyHash(keyHash: Uint8Array): Promise<Uint8Array> {
-        const accountHash = await this.db.getRaw(NODE_SCHEMAS.DB_ACCOUNT_BY_PUBLIC_KEY, keyHash);
+        const accountHash = await this.db.getRaw(LevelDbTable.ACCOUNT_BY_PUBLIC_KEY, keyHash);
 
         if (!accountHash) {
             throw new Error(ErrorMessages.UNKNOWN_ACCOUNT_KEY_HASH);
@@ -583,11 +584,11 @@ export class AccountManager {
         );
 
         const record = BlockchainUtils.encodeAccountState(accountState);
-        //const record = this.db.serialize(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountState);
+        //const record = this.db.serialize(LevelDbTable.ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.accountRadix.set(accountHash, stateHash);
-        await this.db.putRaw(NODE_SCHEMAS.DB_ACCOUNT_STATE, accountHash, record);
+        await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
     }
 
     private static async getAccountHashFromPublicSignatureKey(publicKey: PublicSignatureKey) {

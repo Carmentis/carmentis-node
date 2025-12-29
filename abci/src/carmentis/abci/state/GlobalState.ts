@@ -31,6 +31,7 @@ import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
 import { Performance } from '../Performance';
 import { GenesisRunoff } from '../GenesisRunoff';
+import { LevelDbTable } from '../database/LevelDbTable';
 
 export class GlobalState extends AbstractProvider {
     private readonly logger: Logger;
@@ -54,7 +55,7 @@ export class GlobalState extends AbstractProvider {
         this.logger = logger || new Logger(GlobalState.name);
         this.cachedDb = new CachedLevelDb(this.db);
         this.cachedStorage = new CachedStorage(this.storage, this.cachedDb);
-        this.vbRadix = new RadixTree(this.cachedDb, NODE_SCHEMAS.DB_VB_RADIX);
+        this.vbRadix = new RadixTree(this.cachedDb, LevelDbTable.VB_RADIX);
         this.cachedAccountManager = new AccountManager(this.cachedDb, this.logger);
         this.perf = new Performance(this.logger);
     }

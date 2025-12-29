@@ -27,8 +27,6 @@ export type LevelQueryResponseType = AbstractIterator<
 >;
 
 export interface DbInterface {
-    getTableCount(): number;
-
     // raw binary access (will be removed soon)
     getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined>;
     putRaw(tableId: number, key: Uint8Array, data: Uint8Array): Promise<boolean>;

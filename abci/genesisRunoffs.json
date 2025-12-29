@@ -13,7 +13,7 @@
         {
             "name": "test",
             "cliffDurationInDays": 1,
-            "vestingDurationInDays": 0
+            "vestingDurationInDays": 1
         }
     ],
     "accounts": [

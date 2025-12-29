@@ -1,5 +1,6 @@
-import { CHAIN, DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
+import { DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
 
+/*
 export const DB_CHAIN_INFORMATION = 0x00;
 export const DB_DATA_FILE = 0x01;
 export const DB_VB_RADIX = 0x02;
@@ -24,6 +25,8 @@ export const DB_ORGANIZATIONS_INDEX = 0x12;
 export const DB_APPLICATIONS_INDEX = 0x12;
 
 export const DB: SCHEMAS.Schema[] = [];
+
+ */
 
 // chain information
 // key: "CHAIN_INFORMATION" (unique)
