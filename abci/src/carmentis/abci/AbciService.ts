@@ -4,6 +4,7 @@ import {
     ApplySnapshotChunkResult,
     CheckTxRequest,
     CheckTxResponse,
+    CheckTxType,
     CommitRequest,
     CommitResponse,
     EchoRequest,
@@ -36,7 +37,7 @@ import {
     QueryResponse,
     Snapshot as SnapshotProto,
     VerifyVoteExtensionRequest,
-    VerifyVoteExtensionResponse,
+    VerifyVoteExtensionResponse
 } from '../../proto-ts/cometbft/abci/v1/types';
 
 import { Injectable, OnModuleInit } from '@nestjs/common';
@@ -61,7 +62,7 @@ import {
     PrivateSignatureKey,
     SectionLabel,
     SectionType,
-    Utils,
+    Utils
 } from '@cmts-dev/carmentis-sdk/server';
 import { LevelDb } from './database/LevelDb';
 import { SnapshotsManager } from './SnapshotsManager';
@@ -76,6 +77,7 @@ import { GenesisRunoff } from './GenesisRunoff';
 import { getLogger } from '@logtape/logtape';
 import { GlobalStateUpdateCometParameters } from './types/GlobalStateUpdateCometParameters';
 import { GenesisRunoffTransactionsBuilder } from './GenesisRunoffTransactionsBuilder';
+import { CheckTxResponseCode } from './CheckTxResponseCode';
 
 const APP_VERSION = 1;
 
@@ -689,10 +691,26 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
         this.logger.info(`Size of transaction: ${request.tx.length} bytes`);
 
+        // for performance, we reject already-checked microblock
+        if (request.type === CheckTxType.CHECK_TX_TYPE_RECHECK) {
+            this.logger.info("Microblock already checked but rechecked again, possibly to proposal building error: aborting")
+            return {
+                code: CheckTxResponseCode.KO,
+                log: '',
+                data: new Uint8Array(),
+                gas_wanted: 0,
+                gas_used: 0,
+                info: 'Microblock already checked and checkTx executed twice: aborting',
+                events: [],
+                codespace: 'app',
+            };
+        }
+
         // we first attempt to parse the microblock
         try {
             const serializedMicroblock = request.tx;
             const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+            this.logger.info(`Checking microblock ${parsedMicroblock.getHash().encode()}`);
 
             // we create working state to check the transaction
             const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
@@ -711,31 +729,50 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
                     this.logger.info(message);
                 }
+
+                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} accepted`);
+                return {
+                    code: CheckTxResponseCode.OK,
+                    log: '',
+                    data: new Uint8Array(),
+                    gas_wanted: 0,
+                    gas_used: 0,
+                    info: '',
+                    events: [],
+                    codespace: 'app',
+                };
+            } else {
+                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected: not checked: ${checkResult.error}`)
+                return {
+                    code: CheckTxResponseCode.KO,
+                    log: '',
+                    data: new Uint8Array(),
+                    gas_wanted: 0,
+                    gas_used: 0,
+                    info: checkResult.error,
+                    events: [],
+                    codespace: 'app',
+                };
+            }
+        } catch (e) {
+            if (e instanceof Error) {
+                this.logger.info(
+                    `Microblock rejected due to an unexpected error: ${e.message} at ${e.stack}`,
+                );
+            } else {
+                this.logger.warn('Microblock rejected due to an error');
             }
 
-            // TODO: should we update the global state here to take in account modifications of the block here?
-
-            return Promise.resolve({
-                code: 1,
+            return {
+                code: CheckTxResponseCode.KO,
                 log: '',
-                data: new Uint8Array(request.tx),
-                gas_wanted: 0,
-                gas_used: 0,
-                info: checkResult.checked === true ? '' : checkResult.error,
-                events: [],
-                codespace: 'app',
-            });
-        } catch (e) {
-            return Promise.resolve({
-                code: 0,
-                log: '',
-                data: new Uint8Array(request.tx),
+                data: new Uint8Array(),
                 gas_wanted: 0,
                 gas_used: 0,
                 info: e instanceof Error ? e.message : typeof e === 'string' ? e : 'CheckTx error',
                 events: [],
                 codespace: 'app',
-            });
+            };
         } finally {
             perfMeasure.end();
         }
@@ -781,7 +818,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
-            `Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`,
+            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
         );
 
         const proposedTxs: Uint8Array[] = [];
@@ -811,10 +848,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     );
                     proposedTxs.push(tx);
                 } else {
-                    // TODO: reject case
+                    // we rejected, the microblock goes back to the mempool
+                    this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`)
                 }
             } catch (e) {
                 // TODO: reject case
+                if (e instanceof Error) {
+                    this.logger.error(
+                        `Microblock rejected due to the following error: ${e.message}`,
+                    );
+                    this.logger.debug(
+                        `Details of the error: ${e.stack}`,
+                    );
+                }
             }
         }
 

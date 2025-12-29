@@ -595,4 +595,9 @@ export class AccountManager {
         const hash: CryptographicHash = new Sha256CryptographicHash();
         return hash.hash(await publicKey.getPublicKeyAsBytes())
     }
+
+    async isAccountDefinedByAccountId(accountId: Uint8Array<ArrayBufferLike>) {
+        const accountInformation = await this.loadAccountInformation(accountId);
+        return accountInformation.exists
+    }
 }

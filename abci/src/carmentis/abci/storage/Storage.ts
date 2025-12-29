@@ -122,11 +122,11 @@ export class Storage implements IStorage {
     /**
      * Reads a full microblock, microblock header or microblock body from its hash.
      */
-    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode) {
+    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode): Promise<Uint8Array | undefined> {
         const storageInfo = await this.db.getMicroblockStorage(hash);
-
         if (!storageInfo) {
-            return new Uint8Array();
+            this.logger.info(`Microblock ${Utils.binaryToHexa(hash)} not found in storage: returning undefined`)
+            return undefined
         }
 
         const filePath = this.getFilePath(storageInfo.fileIdentifier);
@@ -141,12 +141,11 @@ export class Storage implements IStorage {
                 partType,
             );
             await handle.close();
+            return dataBuffer
         } catch (error) {
             this.logger.error("{error}", {error});
-            dataBuffer = new Uint8Array();
+            return undefined;
         }
-
-        return dataBuffer;
     }
 
     /**
@@ -195,6 +194,7 @@ export class Storage implements IStorage {
         }
 
         try {
+            this.logger.debug(`Opening file ${filePath} for writing`)
             const handle = await open(filePath, 'a+');
             const stats = await handle.stat();
             const fileSize = stats.size;
@@ -210,6 +210,7 @@ export class Storage implements IStorage {
             }
             await handle.sync();
             await handle.close();
+            this.logger.debug(`Writing on ${filePath} done`)
         } catch (error) {
             this.logger.error("{e}", {e: error})
         }

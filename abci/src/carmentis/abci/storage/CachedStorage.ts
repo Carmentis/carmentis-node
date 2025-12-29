@@ -57,25 +57,41 @@ export class CachedStorage implements IStorage {
     private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode): Promise<Uint8Array | undefined> {
         // we first search in the cache
         const stringHash = Utils.binaryToHexa(hash);
+        let returnedSerializedMicroblock: Uint8Array;
         const cachedSerializedMicroblock = this.cachedSerializedMicroblockByHash.get(stringHash);
         if (cachedSerializedMicroblock) {
             this.logger.debug(`Microblock ${stringHash} found in cache`);
-            if (partType === MicroblockReadingMode.READ_FULL) {
-                return cachedSerializedMicroblock
-            } else {
-                const cachedMicroblock = Microblock.loadFromSerializedMicroblock(cachedSerializedMicroblock);
-                const {headerData: cachedSerializedMicroblockHeader, bodyData: cachedSerializedMicroblockBody} =
-                    cachedMicroblock.serialize();
-                if (partType === MicroblockReadingMode.READ_HEADER) {
-                    return cachedSerializedMicroblockHeader;
-                } else {
-                    return cachedSerializedMicroblockBody;
-                }
-            }
+            returnedSerializedMicroblock = cachedSerializedMicroblock;
         } else {
             this.logger.debug(`Microblock ${stringHash} not found in cache: searching on disk`)
+            const serializedMicroblockOnDisk = await this.storage.readFullMicroblock(hash);
+            if (serializedMicroblockOnDisk !== undefined) {
+                this.logger.debug(`Microblock ${stringHash} found on disk`);
+                returnedSerializedMicroblock = serializedMicroblockOnDisk;
+            } else {
+                this.logger.debug(`Microblock ${stringHash} not found on disk: returning undefined`);
+                return undefined;
+            }
         }
 
+        if (partType === MicroblockReadingMode.READ_FULL) {
+            return returnedSerializedMicroblock;
+        } else {
+            const microblock = Microblock.loadFromSerializedMicroblock(
+                returnedSerializedMicroblock,
+            );
+            const {
+                headerData: cachedSerializedMicroblockHeader,
+                bodyData: cachedSerializedMicroblockBody,
+            } = microblock.serialize();
+            if (partType === MicroblockReadingMode.READ_HEADER) {
+                return cachedSerializedMicroblockHeader;
+            } else {
+                return cachedSerializedMicroblockBody;
+            }
+        }
+
+        /*
         // not found in cache, so we search on the disk storage
         const storageInfo = await this.db.getMicroblockStorage(hash);
         if (!storageInfo) {
@@ -101,6 +117,8 @@ export class CachedStorage implements IStorage {
         }
 
         return dataBuffer;
+
+         */
     }
 
     /**
@@ -211,10 +229,6 @@ export class CachedStorage implements IStorage {
 
     getFilePath(fileIdentifier: FileIdentifier) {
         return this.storage.getFilePath(fileIdentifier);
-    }
-
-    containsFile(fileIdentifier: FileIdentifier) {
-        return this.contentToBeWritten.has(fileIdentifier);
     }
 
     getPendingTransactionsByFileIdentifier(fileIdentifier: FileIdentifier) {

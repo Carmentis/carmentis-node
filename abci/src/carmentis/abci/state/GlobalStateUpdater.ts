@@ -280,11 +280,9 @@ export class GlobalStateUpdater {
                 this.logger.warn(
                     `Skipping microblock ${microblock.getHash().encode()} because it declares a new protocol VB state but there is already one defined.`,
                 );
-                return
+                return;
             }
         }
-
-        const accountManager = globalState.getAccountManager();
 
         // we reject the microblock if the microblock does not define the fees payer account
         // or if the fees payer account does not have enough tokens to publish the microblock
@@ -293,8 +291,19 @@ export class GlobalStateUpdater {
                 `Microblock ${microblock.getHash().encode()} does not specify fees payer account`,
             );
         }
-        // extract the fees payer account from the microblock and ensures it has enough tokens to pay
+
+        // we reject the microblock if one of the following cases fails:
         const feesPayerAccountId = microblock.getFeesPayerAccount();
+        const accountManager = globalState.getAccountManager();
+
+        // case 1: The fees payer account is defined in the microblock but does not exist (fast case)
+        const feesPayerAccountExists = await accountManager.isAccountDefinedByAccountId(feesPayerAccountId);
+        if (!feesPayerAccountExists) {
+            throw new Error('Specified fees payer account does not exist');
+        }
+
+
+        // case 2: The fees payer account does not have enough tokens to pay (fast case)
         const feesPayerAccountBalance =
             await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
         const protocolParameters = await globalState.getProtocolVariables();
@@ -314,6 +323,13 @@ export class GlobalStateUpdater {
             throw new Error(
                 `Insufficient funds to publish microblock: expected at least ${feesToPay.toString()}, got ${feesPayerAccountBalance.toString()} on account`,
             );
+        }
+
+        // Case 3: The fees payer account does not have signed the microblock (possibly slower case)
+        const feesPayerAccountPublicKey = await globalState.getAccountPublicKeyByAccountId(feesPayerAccountId);
+        const hasFeesPayerAccountSignedMicroblock = await microblock.verify(feesPayerAccountPublicKey);
+        if (!hasFeesPayerAccountSignedMicroblock) {
+            throw new Error('Specified fees payer account did not sign the microblock');
         }
 
         if (virtualBlockchain instanceof AccountVb) {

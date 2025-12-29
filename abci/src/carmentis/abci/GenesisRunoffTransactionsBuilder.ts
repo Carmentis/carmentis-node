@@ -35,7 +35,7 @@ export class GenesisRunoffTransactionsBuilder {
             );
 
 
-            // load the source account and assert it is defined (othewise, there is an issue in the order of transactions)
+            // load the source account and assert it is defined (otherwise, there is an issue in the order of transactions)
             const sourceAccountName = transfer.source;
             const sourceAccountHash = this.accountHashByAccountName.get(sourceAccountName);
             if (sourceAccountHash === undefined) {
@@ -53,7 +53,7 @@ export class GenesisRunoffTransactionsBuilder {
             const destinationAccountName = transfer.destination;
             let destinationAccountHash = this.accountHashByAccountName.get(destinationAccountName);
             if (destinationAccountHash === undefined) {
-                // in this case the destination account do not exist, so we create a transaction to create the
+                // in this case the destination account does not exist, so we create a transaction to create the
                 // destination account with a zero balance
                 const destinationAccountPublicKey = await this.getPublicKeyForAccountByName(destinationAccountName);
                 const {createdAccountId, accountCreationTransaction, accountCreationMicroblock} =
@@ -102,72 +102,6 @@ export class GenesisRunoffTransactionsBuilder {
                 const { microblockData } = mb.serialize();
                 await this.storeMicroblock(sourceAccountHash, mb, microblockData);
             }
-
-            /*
-            const destinationAccountExistingMicroblocks =
-                this.createsMicroblocksByVbId.get(destinationAccountHash) || [];
-            if (destinationAccountHash === undefined) {
-                // create the destination account
-                const destinationAccountPublicKey =
-                    destinationAccountName === 'issuer'
-                        ? this.issuerPublicKey
-                        : await this.genesisRunoffs.getPublicKeyForAccountByName(
-                            destinationAccountName,
-                        );
-
-                const mb = Microblock.createGenesisAccountMicroblock();
-                mb.addAccountPublicKeySection({
-                    publicKey: await destinationAccountPublicKey.getPublicKeyAsBytes(),
-                    schemeId: destinationAccountPublicKey.getSignatureSchemeId(),
-                });
-                mb.addAccountCreationSection({
-                    sellerAccount: sourceAccountHash,
-                    amount: 0,
-                });
-                mb.addAccountVestingTransferSection({
-                    account: ,
-                    cliffDurationDays: 0,
-                    privateReference: "",
-                    publicReference: "",
-                    vestingDurationDays: 0,
-                    amount: CMTSToken.createCMTS(transfer.amount).getAmountAsAtomic()
-                })
-                const signature = await mb.sign(sourceAccountPrivateKey);
-                mb.addAccountSignatureSection({
-                    signature,
-                    schemeId: sourceAccountPrivateKey.getSignatureSchemeId(),
-                });
-                const { microblockData, microblockHash: createdDestinationAccountHash } =
-                    mb.serialize();
-                this.builtTransactions.push(microblockData);
-                this.accountHashByAccountName.set(destinationAccountName, createdDestinationAccountHash);
-                this.createsMicroblocksByVbId.set(createdDestinationAccountHash, [
-                    ...destinationAccountExistingMicroblocks,
-                    mb,
-                ]);
-                this.logger.debug(`Transfer of ${transferredTokens.toString()} from ${Utils.binaryToHexa(sourceAccountHash)} (${transfer.source}) to ${Utils.binaryToHexa(createdDestinationAccountHash)} (${transfer.destination})`)
-            } else {
-                this.logger.debug("Extending existing virtual blockchain during account tranfer")
-                // just transfer the account, no need to use the destination account, only the destination account hash and the source account private key
-                const mb = Microblock.createGenesisAccountMicroblock();
-                const previousMicroblocks = sourceAccountExistingMicroblocks;
-                mb.addAccountTransferSection({
-                    account: destinationAccountHash,
-                    privateReference: '',
-                    publicReference: '',
-                    amount: CMTSToken.createCMTS(transfer.amount).getAmountAsAtomic(),
-                });
-                mb.setAsSuccessorOf(previousMicroblocks[previousMicroblocks.length - 1]);
-                await mb.seal(sourceAccountPrivateKey);
-                const { microblockData } = mb.serialize();
-                this.builtTransactions.push(microblockData);
-                this.createsMicroblocksByVbId.set(sourceAccountHash, [
-                    ...sourceAccountExistingMicroblocks,
-                    mb,
-                ]);
-                }
-
-             */
         }
 
         return this.builtTransactions;
@@ -180,15 +114,30 @@ export class GenesisRunoffTransactionsBuilder {
     private getFirstAndLastMicroblockOfVirtualBlockchain(vbId: Uint8Array) {
         const existingMicroblocks = this.createsMicroblocksByVbId.get(vbId) || [];
         if (existingMicroblocks.length === 0) throw new Error(`No microblocks found for virtual blockchain ${Utils.binaryToHexa(vbId)}`);
+        const firstMicroblock = existingMicroblocks[0];
+        const lastMicroblock = existingMicroblocks[existingMicroblocks.length - 1];
+        this.logger.debug(`Vb ${Utils.binaryToHexa(vbId)} (height ${existingMicroblocks.length}): First Mb ${firstMicroblock.getHash().encode()} -> Last Mb ${lastMicroblock.getHash().encode()}`)
         return {
-            firstMicroblock: existingMicroblocks[0],
-            lastMicroblock: existingMicroblocks[existingMicroblocks.length - 1]
+            firstMicroblock,
+            lastMicroblock
         };
     }
 
     private async storeMicroblock(vbId: Uint8Array, microblock: Microblock, serializedMicroblock: Uint8Array) {
         this.builtTransactions.push(serializedMicroblock);
-        this.createsMicroblocksByVbId.set(vbId, [...(this.createsMicroblocksByVbId.get(vbId) || []), microblock]);
+        // we check that the microblock is coherent with the built ones
+        const mbs = this.createsMicroblocksByVbId.get(vbId)
+        if (mbs === undefined) {
+            this.createsMicroblocksByVbId.set(vbId, [microblock]);
+        } else {
+            const lastMicroblock = mbs[mbs.length - 1];
+            if (microblock.getHeight() !== mbs.length + 1) throw new Error(`Microblock has an invalid height: expected ${mbs.length + 1}, got ${microblock.getHeight()}`)
+            const lastMicroblockHash = lastMicroblock.getHash().toBytes();
+            const microblockPreviousHash = microblock.getPreviousHash().toBytes();
+            if (!Utils.binaryIsEqual(lastMicroblockHash, microblockPreviousHash)) throw new Error('Mismatch between the previous hash and the expected hash')
+            this.createsMicroblocksByVbId.set(vbId, [...mbs, microblock]);
+        }
+
     }
 
     private async storeAccountByName(accountName: string, accountId: Uint8Array) {

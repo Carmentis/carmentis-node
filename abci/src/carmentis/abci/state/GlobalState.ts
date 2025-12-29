@@ -88,7 +88,7 @@ export class GlobalState extends AbstractProvider {
         const microblockHashes = [ latestMicroblockHash ]
         for (let currentMicroblockHeight = currentMicroblockHeader.height; currentMicroblockHeight > 1; currentMicroblockHeight--) {
             const previousMicrolockHash = currentMicroblockHeader.previousHash;
-            microblockHashes.push(previousMicrolockHash);
+            microblockHashes.unshift(previousMicrolockHash);
 
             // obtain the previous microblock header
             const previousMicroblockHeader= await this.getMicroblockHeader(Hash.from(previousMicrolockHash));
@@ -342,5 +342,10 @@ export class GlobalState extends AbstractProvider {
             );
             return false;
         }
+    }
+
+    async getAccountPublicKeyByAccountId(feesPayerAccountId: Uint8Array) {
+        const vb = await this.loadAccountVirtualBlockchain(Hash.from(feesPayerAccountId));
+        return await vb.getPublicKey();
     }
 }
