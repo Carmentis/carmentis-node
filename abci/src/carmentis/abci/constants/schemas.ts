@@ -30,8 +30,7 @@ export const DB: SCHEMAS.Schema[] = [];
 // this always contains a single record
 export const DB_CHAIN_INFORMATION_KEY = new Uint8Array(Buffer.from('CHAIN_INFORMATION'));
 
-
-
+/*
 DB[DB_CHAIN_INFORMATION] = {
     label: 'ChainInformation',
     definition: [
@@ -192,6 +191,7 @@ const ACCOUNT_LOCK_STAKING_PARAMETERS = {
         { name: 'objectIdentifier', type: DATA.TYPE_BIN256 }
     ]
 };
+*/
 
 // ============================================================================================================================ //
 //  Account history references (chainReference field in DB_ACCOUNT_HISTORY)                                                     //

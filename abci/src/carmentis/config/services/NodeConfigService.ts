@@ -13,7 +13,6 @@ export class NodeConfigService implements OnModuleInit {
     private logger = new Logger(NodeConfigService.name);
 
     constructor() {
-
     }
 
     onModuleInit(): void {

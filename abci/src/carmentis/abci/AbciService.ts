@@ -85,6 +85,7 @@ const KEY_TYPE_MAPPING = {
 
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
+    private initialized: boolean;
     private logger = getLogger(['node', AbciService.name]);
     private perf: Performance;
 
@@ -106,6 +107,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         private readonly kms: KeyManagementService,
         private genesisSnapshotStorage: GenesisSnapshotStorageService,
     ) {
+        this.initialized = false;
         this.isCatchingUp = false;
         this.perf = new Performance(this.logger, true);
         this.genesisRunoffs = GenesisRunoff.noRunoff();
@@ -140,6 +142,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async onModuleInit() {
+        // this may be called twice by Nest, so we use this safeguard to prevent a double initialization
+        if(this.initialized) {
+            return;
+        }
+        this.initialized = true;
+
         // define the paths where are stored the database, the storage and the snapshots.
         const {
             rootStoragePath: abciStoragePath,

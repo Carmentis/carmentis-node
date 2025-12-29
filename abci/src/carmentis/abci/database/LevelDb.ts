@@ -62,8 +62,6 @@ export class LevelDb extends AbstractLevelDb {
     initialize() {
         this.logger.info(`Initializing LevelDB at ${this.path}`);
 
-
-
         const nTables = this.getTableCount();
         this.sub = [];
         for (let n = 0; n < nTables; n++) {
@@ -84,9 +82,9 @@ export class LevelDb extends AbstractLevelDb {
     }
 
     async clear() {
-        if (this.db.status !== 'open') {
-            await this.open()
-        }
+//      if (this.db.status !== 'open') {
+//          await this.open()
+//      }
         await this.db.clear();
     }
 
@@ -230,7 +228,7 @@ export class LevelDb extends AbstractLevelDb {
         const vbType = virtualBlockchain.getType();
         const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
         if (indexTableId != -1) {
-            await this.putRaw(indexTableId, virtualBlockchain.getId(), Utils.getNullHash());
+            await this.putRaw(indexTableId, virtualBlockchain.getId(), new Uint8Array(0));
         } else {
             // no need to index this type of virtual blockchain
             this.logger.debug(

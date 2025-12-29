@@ -1,4 +1,3 @@
-import { NODE_SCHEMAS } from './constants/constants';
 import {
     AbciRequest,
     AbciRequestType,
@@ -250,7 +249,6 @@ export class ABCIQueryHandler {
         } else {
             throw new Error(`Account with id ${Utils.binaryToHexa(requestAccountHash)} does not exists`);
         }
-
     }
 
     async getAccountHistory(request: GetAccountHistoryAbciRequest): Promise<AccountHistoryAbciResponse> {

@@ -112,7 +112,6 @@ async function bootstrap() {
         })
     }
 
-
     // define the port used by GRPC to communicate with CometBFT
     const defaultGrpcPort = await getPort({ port: 26658 });
     const grpcPort = nodeConfigService.getGrpcPortOrDefault(defaultGrpcPort);
@@ -141,9 +140,9 @@ async function bootstrap() {
             },
         },
     });
+
     await app.init();
     await app.listen();
 }
-
 
 bootstrap();

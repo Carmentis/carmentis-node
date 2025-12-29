@@ -1,6 +1,4 @@
 import * as v from 'valibot';
-import { number } from 'zod';
-
 
 export function uint8array() {
     return v.instance(Uint8Array<ArrayBuffer | ArrayBufferLike>)
@@ -75,8 +73,7 @@ export const AccountSectionReferenceSchema = v.object({
 });
 export type AccountSectionReference = v.InferOutput<typeof AccountSectionReferenceSchema>;
 
-
-// Block information
+// BlockInformation
 export const BlockInformationSchema = v.object({
     hash: uint8array(),
     timestamp: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -86,7 +83,7 @@ export const BlockInformationSchema = v.object({
 })
 export type BlockInformation = v.InferOutput<typeof BlockInformationSchema>;
 
-// Block information
+// BlockContent
 export const BlockContentSchema = v.object({
     microblocks: v.array(v.object({
         hash: uint8array(),
@@ -98,5 +95,3 @@ export const BlockContentSchema = v.object({
     })),
 });
 export type BlockContent = v.InferOutput<typeof BlockContentSchema>;
-
-
