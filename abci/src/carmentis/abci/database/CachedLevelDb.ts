@@ -12,10 +12,10 @@ export class CachedLevelDb extends AbstractLevelDb {
     private db: LevelDb;
     private readonly cachedUpdatedByTableId: Map<number, Map<string, Uint8Array>>;
     private readonly cachedDeletedEntriesByTableId: Map<number, Set<string>>;
-    private logger = getLogger(['node', 'db', CachedLevelDb.name]);
+    private static logger = getLogger(['node', 'db', CachedLevelDb.name]);
 
     constructor(db: LevelDb) {
-        super();
+        super(CachedLevelDb.logger);
         this.db = db;
         this.cachedUpdatedByTableId = new Map();
         this.cachedDeletedEntriesByTableId = new Map();
@@ -184,41 +184,5 @@ export class CachedLevelDb extends AbstractLevelDb {
         return dataFileEntries
     }
 
-    async getProtocolVirtualBlockchainIdentifier() {
-        const protocolTableId = LevelDb.getTableIdFromVirtualBlockchainType(CHAIN.VB_PROTOCOL);
-        const protocolVirtualBlockchainIdentifiers = await this.getKeys(protocolTableId);
-        const foundIdentifiersNumber = protocolVirtualBlockchainIdentifiers.length;
-        // we expect at least one identifier
-        if (foundIdentifiersNumber === 0) {
-            this.logger.error(
-                `No protocol virtual blockchain identifier found in table ${protocolTableId}`,
-            );
-            throw new Error(
-                `No protocol virtual blockchain identifier found in table ${protocolTableId}`,
-            );
-        }
 
-        // we expect no more than one identifier
-        if (foundIdentifiersNumber > 1) {
-            this.logger.error(
-                `More than one protocol virtual blockchain identifier found in table ${protocolTableId}: ${protocolVirtualBlockchainIdentifiers}`,
-            );
-            throw new Error(
-                `More than one protocol virtual blockchain identifier found in table ${protocolTableId}: ${protocolVirtualBlockchainIdentifiers}`,
-            );
-        }
-        return protocolVirtualBlockchainIdentifiers[0];
-    }
-
-    async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array) {
-        return this.getRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
-    }
-
-    async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array) {
-        this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
-            identifier: Utils.binaryToHexa(identifier),
-            dataLength: serializedState.length,
-        }));
-        await this.putRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
-    }
 }

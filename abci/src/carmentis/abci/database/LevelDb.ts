@@ -2,7 +2,7 @@ import { Level } from 'level';
 import { NODE_SCHEMAS } from '../constants/constants';
 import { CHAIN, Schema, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk/server';
 import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
-import { getLogger } from '@logtape/logtape';
+import { getLogger, Logger } from '@logtape/logtape';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformation } from '../types/valibot/db/db';
@@ -23,14 +23,14 @@ export class LevelDb extends AbstractLevelDb {
             Uint8Array
         >
     > = new Map();
-    private logger = getLogger(['node', 'db', LevelDb.name]);
+    private static logger = getLogger(['node', 'db', LevelDb.name])
     private static encoding  = {
         keyEncoding: 'view',
         valueEncoding: 'view',
     };
 
     constructor(path: string) {
-        super()
+        super(LevelDb.logger)
         this.path = path;
         this.db = new Level(this.path, LevelDb.encoding);
     }

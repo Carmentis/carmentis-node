@@ -779,9 +779,10 @@ export class GlobalStateUpdater {
         pubKeyType: string,
         pubKeyBytes: Uint8Array,
     ) {
+        // ensure the public key type is correct
         const translatedPubKeyType= KEY_TYPE_MAPPING[pubKeyType];
         if (!translatedPubKeyType) {
-            this.logger.error(`invalid key type '${pubKeyType}' for validator set update`);
+            this.logger.error(`Aborting validator set update: Invalid key type '${pubKeyType}' for validator set update`);
             return false;
         }
 
@@ -791,6 +792,7 @@ export class GlobalStateUpdater {
             pub_key_bytes: pubKeyBytes,
         };
 
+        this.logger.log(`Validator set update: Public key ${Utils.binaryToHexa(pubKeyBytes)} -> voting power at ${votingPower}`)
         this.validatorSetUpdates.push(validatorSetUpdateEntry);
         return true;
     }

@@ -17,12 +17,12 @@ import {
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { NodeEncoder } from '../NodeEncoder';
-import { getLogger } from '@logtape/logtape';
 import { LevelDb } from './LevelDb';
 import { ChainInformationObject } from '../types/ChainInformationObject';
 import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
 import { MicroblockStorage } from '../types/valibot/storage/MicroblockStorage';
 import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
+import { getLogger, Logger } from '@logtape/logtape';
 
 export abstract class AbstractLevelDb implements DbInterface {
     abstract getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined>;
@@ -35,10 +35,49 @@ export abstract class AbstractLevelDb implements DbInterface {
     abstract getFullTable(tableId: number): Promise<Uint8Array[][]>;
     abstract del(tableId: number, key: Uint8Array): Promise<boolean>;
 
-    private abstractLogger = getLogger(['node', 'db']);
+    constructor(protected logger: Logger) {
+    }
+
+    async getProtocolVirtualBlockchainIdentifier() {
+        const protocolTableId = LevelDb.getTableIdFromVirtualBlockchainType(CHAIN.VB_PROTOCOL);
+        const protocolVirtualBlockchainIdentifiers = await this.getKeys(protocolTableId);
+        const foundIdentifiersNumber = protocolVirtualBlockchainIdentifiers.length;
+        // we expect at least one identifier
+        if (foundIdentifiersNumber === 0) {
+            this.logger.error(
+                `No protocol virtual blockchain identifier found in table ${protocolTableId}`,
+            );
+            throw new Error(
+                `No protocol virtual blockchain identifier found in table ${protocolTableId}`,
+            );
+        }
+
+        // we expect no more than one identifier
+        if (foundIdentifiersNumber > 1) {
+            this.logger.error(
+                `More than one protocol virtual blockchain identifier found in table ${protocolTableId}: ${protocolVirtualBlockchainIdentifiers}`,
+            );
+            throw new Error(
+                `More than one protocol virtual blockchain identifier found in table ${protocolTableId}: ${protocolVirtualBlockchainIdentifiers}`,
+            );
+        }
+        return protocolVirtualBlockchainIdentifiers[0];
+    }
+
+    async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array) {
+        return this.getRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
+    }
+
+    async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array) {
+        this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
+            identifier: Utils.binaryToHexa(identifier),
+            dataLength: serializedState.length,
+        }));
+        await this.putRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
+    }
 
     async getChainInformation(): Promise<ChainInformation> {
-        this.abstractLogger.debug('Getting chain information');
+        this.logger.debug('Getting chain information');
         const serializedChainInfo = await this.getRaw(
             LevelDbTable.CHAIN_INFORMATION,
             ChainInformationIndex.CHAIN_INFORMATION_KEY,
@@ -84,7 +123,7 @@ export abstract class AbstractLevelDb implements DbInterface {
     }
 
     async setMicroblockInformation(microblock: Microblock, info: MicroblockInformation) {
-        this.abstractLogger.debug(
+        this.logger.debug(
             `Setting microblock information for microblock ${microblock.getHash().encode()}`,
         );
         const hash = microblock.getHashAsBytes();
@@ -95,7 +134,7 @@ export abstract class AbstractLevelDb implements DbInterface {
     async getMicroblockInformation(
         microblockHash: Uint8Array,
     ): Promise<MicroblockInformation | undefined> {
-        this.abstractLogger.debug(
+        this.logger.debug(
             `Getting information for microblock ${Utils.binaryToHexa(microblockHash)}`,
         );
         const serializedMicroblockInformation = await this.getRaw(
@@ -152,7 +191,10 @@ export abstract class AbstractLevelDb implements DbInterface {
         );
     }
 
-    async putMicroblockStorage(microblockHeaderHash: Uint8Array, microblockStorage: MicroblockStorage) {
+    async putMicroblockStorage(
+        microblockHeaderHash: Uint8Array,
+        microblockStorage: MicroblockStorage,
+    ) {
         return await this.putRaw(
             LevelDbTable.MICROBLOCK_STORAGE,
             microblockHeaderHash,
@@ -172,7 +214,7 @@ export abstract class AbstractLevelDb implements DbInterface {
     }
 
     async putChainInformation(chainInfoObject: ChainInformationObject) {
-        this.abstractLogger.debug(
+        this.logger.debug(
             `Setting chain information at height ${chainInfoObject.height}: ${chainInfoObject.microblockCount} microblocks, ${chainInfoObject.objectCounts} object created`,
         );
         const serializedChainInfo = NodeEncoder.encodeChainInformation(chainInfoObject);
@@ -207,9 +249,7 @@ export abstract class AbstractLevelDb implements DbInterface {
         return NodeEncoder.decodeValidatorNodeByAddress(response);
     }
 
-    async putValidatorNode(
-        nodeAddress: Uint8Array,
-    ): Promise<boolean> {
+    async putValidatorNode(nodeAddress: Uint8Array): Promise<boolean> {
         // TODO: null hash? Really?
         return await this.putRaw(
             LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
@@ -219,9 +259,6 @@ export abstract class AbstractLevelDb implements DbInterface {
             }),
         );
     }
-
-
-
 
     async getBlockInformation(height: number): Promise<BlockInformation | undefined> {
         const serializedBlockInformation = await this.getRaw(

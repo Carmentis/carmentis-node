@@ -74,6 +74,18 @@ export class CachedStorage implements IStorage {
             }
         }
 
+        // perform a sanity check to ensure the microblock is not corrupted or incomplete
+        const microblock = Microblock.loadFromSerializedMicroblock(
+            returnedSerializedMicroblock,
+        );
+        const expectedMicroblockHash = hash;
+        const computedHash = microblock.getHashAsBytes();
+        if (!Utils.binaryIsEqual(computedHash, expectedMicroblockHash)) {
+            this.logger.warn(`/!\\ Returned microblock contains a mismatch between computed and expected hash: expected ${Utils.binaryToHexa(expectedMicroblockHash)} but got ${Utils.binaryToHexa(computedHash)}`)
+        }
+
+        this.logger.debug(`Showing details on recovered microblock ${Utils.binaryToHexa(computedHash)}:`);
+        this.logger.debug(microblock.toString());
         if (partType === MicroblockReadingMode.READ_FULL) {
             return returnedSerializedMicroblock;
         } else {
@@ -164,6 +176,11 @@ export class CachedStorage implements IStorage {
     ): Promise<boolean> {
         const stringMicroblockHash = Utils.binaryToHexa(microblock.getHashAsBytes());
         this.logger.debug(`Storing microblock ${stringMicroblockHash} in cache`);
+        this.logger.debug(
+            `Showing details on stored microblock ${Utils.binaryToHexa(microblock.getHashAsBytes())}:`,
+        );
+        this.logger.debug(microblock.toString());
+        this.logger.debug(`Showing details on serialized microblock: ${Microblock.loadFromSerializedMicroblock(serializedMicroblock).toString()}`);
         const content = serializedMicroblock; //this.pendingTransactions[txId];
         const size = content.length;
         /*

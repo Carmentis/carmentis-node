@@ -39,11 +39,11 @@ import {
     VirtualBlockchainStateAbciResponse,
     VirtualBlockchainUpdateAbciResponse,
 } from '@cmts-dev/carmentis-sdk/server';
-import { Logger } from '@nestjs/common';
 import { LevelDb } from './database/LevelDb';
 import { AccountManager } from './accounts/AccountManager';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { GlobalState } from './state/GlobalState';
+import { Logger, getLogger } from '@logtape/logtape';
 
 export class ABCIQueryHandler {
     private logger: Logger;
@@ -55,7 +55,7 @@ export class ABCIQueryHandler {
         private readonly db: LevelDb,
         private readonly genesisSnapshotHandler: GenesisSnapshotStorageService,
     ) {
-        this.logger = new Logger(ABCIQueryHandler.name);
+        this.logger = getLogger(['node', 'abci', 'query']);
         this.accountManager = provider.getAccountManager();
     }
 
@@ -106,7 +106,7 @@ export class ABCIQueryHandler {
     }
 
     async getChainInformation(request: GetChainInformationAbciRequest): Promise<ChainInformationAbciResponse> {
-        this.logger.verbose(`getChainInformation`);
+        this.logger.info(`Request for chain information`);
         const chainInfo = await this.db.getChainInformation();
         return {
             responseType: AbciResponseType.CHAIN_INFORMATION,
@@ -116,7 +116,7 @@ export class ABCIQueryHandler {
 
     async getBlockInformation(request: GetBlockInformationAbciRequest): Promise<BlockInformationAbciResponse> {
         const requestedBlockHeight = request.height;
-        this.logger.verbose(`Request to get information for block ${requestedBlockHeight} `);
+        this.logger.info(`Request to get information for block ${requestedBlockHeight} `);
         const blockInformation = await this.db.getBlockInformation(requestedBlockHeight);
         if (blockInformation === undefined) throw new Error(`No information found for block ${requestedBlockHeight}`);
         return {
@@ -127,7 +127,7 @@ export class ABCIQueryHandler {
 
     async getBlockContent(request: GetBlockContentAbciRequest): Promise<BlockContentAbciResponse> {
         const requestedBlockHeight = request.height;
-        this.logger.verbose(`Request to get content for block ${requestedBlockHeight}`);
+        this.logger.info(`Request to get content for block ${requestedBlockHeight}`);
         const blockContent = await this.db.getBlockContent(requestedBlockHeight);
         if (blockContent === undefined) {
             throw new Error(`No block found at height ${requestedBlockHeight}`)
@@ -142,11 +142,17 @@ export class ABCIQueryHandler {
 
     async getVirtualBlockchainState(request: GetVirtualBlockchainStateAbciRequest): Promise<VirtualBlockchainStateAbciResponse> {
         const virtualBlockchainId: Uint8Array = request.virtualBlockchainId;
-        const cachedDb = this.provider.getCachedDatabase();
+        this.logger.info(`Request state for virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`)
+        const cachedDb = this.provider.getDatabase();
         const stateData = await cachedDb.getSerializedVirtualBlockchainState(virtualBlockchainId);
         if (!stateData) {
-            throw new Error(`Virtual blockchain with id ${Utils.binaryToHexa(virtualBlockchainId)} not found`);
+            const errMsg = `Cannot load virtual blockchain state: Virtual blockchain with id ${Utils.binaryToHexa(virtualBlockchainId)} not found`;
+            this.logger.warn(errMsg);
+            throw new Error(errMsg);
         }
+        this.logger.info(
+            `Virtual blockchain state request for id ${Utils.binaryToHexa(virtualBlockchainId)}: done`,
+        );
         return {
             responseType: AbciResponseType.VIRTUAL_BLOCKCHAIN_STATE,
             serializedVirtualBlockchainState: stateData,
@@ -156,14 +162,16 @@ export class ABCIQueryHandler {
     async getVirtualBlockchainUpdate(request: GetVirtualBlockchainUpdateAbciRequest): Promise<VirtualBlockchainUpdateAbciResponse> {
         const knownHeight = request.knownHeight;
         const virtualBlockchainId: Uint8Array = request.virtualBlockchainId;
-        const db = this.provider.getCachedDatabase();
+        this.logger.info(
+            `Request update for virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`,
+        );
         const vbStatus = await this.provider.getVirtualBlockchainStatus(
             virtualBlockchainId
         );
 
         // return empty response if virtual blockchain does not exists
-        const exists = vbStatus instanceof Uint8Array;
-        if (!exists) {
+        if (vbStatus === null) {
+            this.logger.warn(`Cannot load virtual blockchain update: Virtual blockchain with id ${Utils.binaryToHexa(virtualBlockchainId)} not found`);
             return {
                 responseType: AbciResponseType.VIRTUAL_BLOCKCHAIN_UPDATE,
                 exists: false,
@@ -179,17 +187,24 @@ export class ABCIQueryHandler {
         const changed = vbStatus.state.height !== knownHeight;
         const headers: Uint8Array[] = []
         for (let currentHeight = knownHeight + 1; currentHeight <= vbState.height; currentHeight++ ) {
-            const microblockHash = vbHashes[currentHeight];
+            this.logger.debug(`Requesting header for height ${currentHeight}/${vbHashes.length} of virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`)
+            const microblockHash = vbHashes[currentHeight - 1];
             const header = await this.provider.getMicroblockHeader(
                 Hash.from(microblockHash)
             );
             if (!header) throw new Error('Cannot recover all the headers of the virtual blockchain.')
+            this.logger.debug(
+                `Found header body hash: ${Utils.binaryToHexa(header.bodyHash)}`,
+            );
             headers.push(BlockchainUtils.encodeMicroblockHeader(header));
         }
 
+        this.logger.info(
+            `Virtual blockchain update request for id ${Utils.binaryToHexa(virtualBlockchainId)}: done`,
+        );
         return  {
             responseType: AbciResponseType.VIRTUAL_BLOCKCHAIN_UPDATE,
-            exists,
+            exists: true,
             changed,
             serializedVirtualBlockchainState: BlockchainUtils.encodeVirtualBlockchainState(vbState),
             serializedHeaders: headers,
@@ -199,9 +214,11 @@ export class ABCIQueryHandler {
 
     async getMicroblockInformation(request: GetMicroblockInformationAbciRequest): Promise<MicroblockInformationAbciResponse> {
         const microblockHash: Uint8Array = request.hash;
-        const cachedDb = this.provider.getCachedDatabase();
-        const microblockInfo = await cachedDb.getMicroblockInformation(microblockHash);
+        const db = this.provider.getDatabase();
+        const microblockInfo = await db.getMicroblockInformation(microblockHash);
         if (microblockInfo === undefined) throw new Error(`Microblock with hash ${Utils.binaryToHexa(microblockHash)} not found`);
+        this.logger.debug(`Returned microblock info for microblock hash ${Utils.binaryToHexa(microblockHash)}: ${JSON.stringify(microblockInfo)}`);
+        this.logger.debug(`Returned body hash: ${Utils.binaryToHexa(microblockInfo.header.bodyHash)}`)
         return {
             responseType: AbciResponseType.MICROBLOCK_INFORMATION,
             ...microblockInfo
@@ -210,7 +227,7 @@ export class ABCIQueryHandler {
 
     async awaitMicroblockAnchoring(request: AwaitMicroblockAnchoringAbciRequest): Promise<MicroblockAnchoringAbciResponse> {
         let remaingingAttempts = 120;
-        const db = this.provider.getCachedDatabase();
+        const db = this.provider.getDatabase();
 
         return new Promise(async (resolve, reject) => {
             const test = async () => {

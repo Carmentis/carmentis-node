@@ -208,13 +208,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             });
         }
 
-        const abciRequest = AbciQueryEncoder.decodeAbciRequest(serializedQuery);
-        this.logger.info(`Receiving request of type ${abciRequest.requestType}`);
         try {
+            // decoding the request
+            const abciRequest = AbciQueryEncoder.decodeAbciRequest(serializedQuery);
+            this.logger.info(`Receiving request of type ${abciRequest.requestType}`);
+
+            // handle the request, encode and sends back the response
             const response = await this.abciQueryHandler.handleAbciRequest(abciRequest);
             return AbciQueryEncoder.encodeAbciResponse(response);
         } catch (error) {
-            const errorMsg = error instanceof Error ? error.toString() : 'Unknown error';
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
             this.logger.error(
                 `ABCI query execution failed due to the following error: ${errorMsg}`,
             );
@@ -529,16 +532,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await governanceOrganizationMicroblock.seal(issuerPrivateKey);
         const { microblockData: governanceOrganizationData, microblockHash: governanceOrgId } =
             governanceOrganizationMicroblock.serialize();
-
-        // we create the (single) protocol virtual blockchain
-        this.logger.info('Creating protocol microblock');
-        const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
-        protocolMicroblock.addSection({
-            type: SectionType.PROTOCOL_CREATION,
-            organizationId: governanceOrgId,
-        });
-        await protocolMicroblock.seal(issuerPrivateKey);
-        const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
+        this.logger.debug(governanceOrganizationMicroblock.toString());
 
         // we now create the Carmentis SAS organization
         this.logger.info('Creating Carmentis SAS organization microblock');
@@ -559,6 +553,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await carmentisOrganizationMicroblock.seal(issuerPrivateKey);
         const { microblockData: carmentisOrganizationData, microblockHash: carmentisOrgId } =
             carmentisOrganizationMicroblock.serialize();
+        this.logger.debug(carmentisOrganizationMicroblock.toString());
+
+        // we create the (single) protocol virtual blockchain
+        this.logger.info('Creating protocol microblock');
+        const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
+        protocolMicroblock.addSection({
+            type: SectionType.PROTOCOL_CREATION,
+            organizationId: governanceOrgId,
+        });
+        await protocolMicroblock.seal(issuerPrivateKey);
+        const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
 
         // We now declare the running node as the genesis node.
         this.logger.info('Creating genesis validator node microblock');
@@ -572,7 +577,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             {
                 type: SectionType.VN_COMETBFT_PUBLIC_KEY_DECLARATION,
                 cometPublicKey: Utils.binaryToHexa(genesisValidator.pub_key_bytes),
-                cometPublicKeyType: genesisValidator.pub_key_type,
+                cometPublicKeyType: 'tendermint/PubKeyEd25519',
             },
             {
                 type: SectionType.VN_RPC_ENDPOINT,
@@ -580,8 +585,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             },
         ]);
         await mb.seal(issuerPrivateKey);
-
         const { microblockData: carmentisNodeMicroblock } = mb.serialize();
+
+        // we create the genesis validator node
+        const validatorNodeVotingPowerUpdateMb = Microblock.createGenesisValidatorNodeMicroblock();
+        validatorNodeVotingPowerUpdateMb.addSections([
+            {
+                type: SectionType.VN_VOTING_POWER_UPDATE,
+                votingPower: 20,
+            },
+        ]);
+        validatorNodeVotingPowerUpdateMb.setAsSuccessorOf(mb);
+        await validatorNodeVotingPowerUpdateMb.seal(issuerPrivateKey);
+        const { microblockData: serializedVnVotingPowerUpdateMb } =
+            validatorNodeVotingPowerUpdateMb.serialize();
 
         // we now proceed to the runoff
         const transactions: Uint8Array[] = [
@@ -590,6 +607,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             protocolInitialUpdate,
             carmentisOrganizationData,
             carmentisNodeMicroblock,
+            serializedVnVotingPowerUpdateMb,
         ];
         const runoffTransactionsBuilder = new GenesisRunoffTransactionsBuilder(
             this.genesisRunoffs,
@@ -626,9 +644,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 const serializedMicroblock = tx;
                 const parsedMicroblock =
                     Microblock.loadFromSerializedMicroblock(serializedMicroblock);
-                logger.debug(
+                logger.info(
                     `Transaction parsed successfully: microblock ${parsedMicroblock.getHash().encode()} (type ${parsedMicroblock.getType()})`,
                 );
+                logger.debug(parsedMicroblock.toString());
 
                 const checkResult = await this.checkMicroblockLocalStateConsistency(
                     workingState,
