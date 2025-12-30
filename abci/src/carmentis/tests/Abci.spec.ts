@@ -9,6 +9,8 @@ import { NodeConfigService } from '../config/services/NodeConfigService';
 import { GrpcAbciController } from '../abci/controllers/GrpcAbciController';
 import { NodeConfig } from '../config/types/NodeConfig';
 import { mkdtempSync } from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import {
     CometBFTNodeConfigService,
     Genesis,
@@ -25,7 +27,7 @@ import {
 import { CheckTxResponse, CheckTxType } from '../../proto-ts/cometbft/abci/v1/types';
 
 describe('Abci', () => {
-    const tmpDir = mkdtempSync('/tmp/node');
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'node'));
     const genesisNodeConfig: NodeConfig = {
         abci: {
             grpc: {
@@ -135,7 +137,7 @@ describe('Abci', () => {
         expect(response.app_hash).toBeDefined()
     });
 
-    it('Should verify a valid transcation', async () => {
+    it('Should verify a valid transaction', async () => {
         const mb = new Microblock(VirtualBlockchainType.ACCOUNT_VIRTUAL_BLOCKCHAIN);
         mb.addSections([
             {
