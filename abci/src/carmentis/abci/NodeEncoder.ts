@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { encode, decode } from 'cbor-x';
+import { Encoder } from 'cbor-x';
 import { MicroblockStorage, MicroblockStorageSchema } from './types/valibot/storage/MicroblockStorage';
 import { StoredSnapshot, StoredSnapshotSchema } from './types/valibot/snapshots/StoredSnapshot';
 import { StoredGenesisSnapshot, StoredGenesisSnapshotSchema } from './types/valibot/StoredGenesisSnapshot';
@@ -36,203 +36,214 @@ import {
     AccountHistoryEntry,
     AccountHistoryEntrySchema,
 } from './types/valibot/account/AccountHistoryEntry';
+import { CryptoEncoderFactory } from '@cmts-dev/carmentis-sdk/server';
 
 export class NodeEncoder {
+    private static encoder = CryptoEncoderFactory.getCryptoBinaryEncoder();
+    
+    private static encodeObject(data: object): Uint8Array {
+        return this.encoder.encode(data);
+    }
+
+    private static decodeBinary(data: Uint8Array): object {
+        return this.encoder.decode(data);
+    }
+    
     // MicroblockStorage
     static encodeMicroblockStorage(microblockStorage: MicroblockStorage): Uint8Array {
         const validated = v.parse(MicroblockStorageSchema, microblockStorage);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeMicroblockStorage(encodedMicroblockStorage: Uint8Array): MicroblockStorage {
-        const decoded = decode(encodedMicroblockStorage);
+        const decoded = this.decodeBinary(encodedMicroblockStorage);
         return v.parse(MicroblockStorageSchema, decoded);
     }
 
     // StoredSnapshot
     static encodeStoredSnapshot(storedSnapshot: StoredSnapshot): Uint8Array {
         const validated = v.parse(StoredSnapshotSchema, storedSnapshot);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeStoredSnapshot(encodedStoredSnapshot: Uint8Array): StoredSnapshot {
-        const decoded = decode(encodedStoredSnapshot);
+        const decoded = this.decodeBinary(encodedStoredSnapshot);
         return v.parse(StoredSnapshotSchema, decoded);
     }
 
     // StoredGenesisSnapshot
     static encodeStoredGenesisSnapshot(storedGenesisSnapshot: StoredGenesisSnapshot): Uint8Array {
         const validated = v.parse(StoredGenesisSnapshotSchema, storedGenesisSnapshot);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeStoredGenesisSnapshot(encodedStoredGenesisSnapshot: Uint8Array): StoredGenesisSnapshot {
-        const decoded = decode(encodedStoredGenesisSnapshot);
+        const decoded = this.decodeBinary(encodedStoredGenesisSnapshot);
         return v.parse(StoredGenesisSnapshotSchema, decoded);
     }
 
     // ChainInformation (DB_CHAIN_INFORMATION)
     static encodeChainInformation(chainInformation: ChainInformation): Uint8Array {
         const validated = v.parse(ChainInformationSchema, chainInformation);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeChainInformation(encodedChainInformation: Uint8Array): ChainInformation {
-        const decoded = decode(encodedChainInformation);
+        const decoded = this.decodeBinary(encodedChainInformation);
         return v.parse(ChainInformationSchema, decoded);
     }
 
     // DataFile (DB_DATA_FILE)
     static encodeDataFile(dataFile: DataFile): Uint8Array {
         const validated = v.parse(DataFileSchema, dataFile);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeDataFile(encodedDataFile: Uint8Array): DataFile {
-        const decoded = decode(encodedDataFile);
+        const decoded = this.decodeBinary(encodedDataFile);
         return v.parse(DataFileSchema, decoded);
     }
 
     // VbRadix (DB_INDEX_FILE)
     static encodeVbRadix(vbRadix: VbRadix): Uint8Array {
         const validated = v.parse(VbRadixSchema, vbRadix);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeVbRadix(encodedVbRadix: Uint8Array): VbRadix {
-        const decoded = decode(encodedVbRadix);
+        const decoded = this.decodeBinary(encodedVbRadix);
         return v.parse(VbRadixSchema, decoded);
     }
 
     // TokenRadix
     static encodeTokenRadix(tokenRadix: TokenRadix): Uint8Array {
         const validated = v.parse(TokenRadixSchema, tokenRadix);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeTokenRadix(encodedTokenRadix: Uint8Array): TokenRadix {
-        const decoded = decode(encodedTokenRadix);
+        const decoded = this.decodeBinary(encodedTokenRadix);
         return v.parse(TokenRadixSchema, decoded);
     }
 
     // AccountByPublicKey
     static encodeAccountByPublicKey(accountByPublicKey: AccountByPublicKey): Uint8Array {
         const validated = v.parse(AccountByPublicKeySchema, accountByPublicKey);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeAccountByPublicKey(encodedAccountByPublicKey: Uint8Array): AccountByPublicKey {
-        const decoded = decode(encodedAccountByPublicKey);
+        const decoded = this.decodeBinary(encodedAccountByPublicKey);
         return v.parse(AccountByPublicKeySchema, decoded);
     }
 
     // AccountsWithVestingLocks
     static encodeAccountsWithVestingLocks(accountsWithVestingLocks: AccountsWithVestingLocks): Uint8Array {
         const validated = v.parse(AccountsWithVestingLocksSchema, accountsWithVestingLocks);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeAccountsWithVestingLocks(encodedAccountsWithVestingLocks: Uint8Array): AccountsWithVestingLocks {
-        const decoded = decode(encodedAccountsWithVestingLocks);
+        const decoded = this.decodeBinary(encodedAccountsWithVestingLocks);
         return v.parse(AccountsWithVestingLocksSchema, decoded);
     }
 
     // Escrows
     static encodeEscrows(escrows: Escrows): Uint8Array {
         const validated = v.parse(EscrowsSchema, escrows);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeEscrows(encodedEscrows: Uint8Array): Escrows {
-        const decoded = decode(encodedEscrows);
+        const decoded = this.decodeBinary(encodedEscrows);
         return v.parse(EscrowsSchema, decoded);
     }
 
     // ValidatorNodeByAddress
     static encodeValidatorNodeByAddress(validatorNodeByAddress: ValidatorNodeByAddress): Uint8Array {
         const validated = v.parse(ValidatorNodeByAddressSchema, validatorNodeByAddress);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeValidatorNodeByAddress(encodedValidatorNodeByAddress: Uint8Array): ValidatorNodeByAddress {
-        const decoded = decode(encodedValidatorNodeByAddress);
+        const decoded = this.decodeBinary(encodedValidatorNodeByAddress);
         return v.parse(ValidatorNodeByAddressSchema, decoded);
     }
 
     // AccountBlockReference
     static encodeAccountBlockReference(accountBlockReference: AccountBlockReference): Uint8Array {
         const validated = v.parse(AccountBlockReferenceSchema, accountBlockReference);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeAccountBlockReference(encodedAccountBlockReference: Uint8Array): AccountBlockReference {
-        const decoded = decode(encodedAccountBlockReference);
+        const decoded = this.decodeBinary(encodedAccountBlockReference);
         return v.parse(AccountBlockReferenceSchema, decoded);
     }
 
     // AccountMbReference
     static encodeAccountMbReference(accountMbReference: AccountMbReference): Uint8Array {
         const validated = v.parse(AccountMbReferenceSchema, accountMbReference);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeAccountMbReference(encodedAccountMbReference: Uint8Array): AccountMbReference {
-        const decoded = decode(encodedAccountMbReference);
+        const decoded = this.decodeBinary(encodedAccountMbReference);
         return v.parse(AccountMbReferenceSchema, decoded);
     }
 
     // AccountSectionReference
     static encodeAccountSectionReference(accountSectionReference: AccountSectionReference): Uint8Array {
         const validated = v.parse(AccountSectionReferenceSchema, accountSectionReference);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeAccountSectionReference(encodedAccountSectionReference: Uint8Array): AccountSectionReference {
-        const decoded = decode(encodedAccountSectionReference);
+        const decoded = this.decodeBinary(encodedAccountSectionReference);
         return v.parse(AccountSectionReferenceSchema, decoded);
     }
 
     // BlockInformation
     static encodeBlockInformation(blockInformation: BlockInformation): Uint8Array {
         const validated = v.parse(BlockInformationSchema, blockInformation);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeBlockInformation(encodedBlockInformation: Uint8Array): BlockInformation {
-        const decoded = decode(encodedBlockInformation);
+        const decoded = this.decodeBinary(encodedBlockInformation);
         return v.parse(BlockInformationSchema, decoded);
     }
 
     // BlockContent
     static encodeBlockContent(blockContent: BlockContent): Uint8Array {
         const validated = v.parse(BlockContentSchema, blockContent);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeBlockContent(encodedBlockContent: Uint8Array): BlockContent {
-        const decoded = decode(encodedBlockContent);
+        const decoded = this.decodeBinary(encodedBlockContent);
         return v.parse(BlockContentSchema, decoded);
     }
 
     // AccountHistory
     static encodeAccountHistory(accountHistory: AccountHistory): Uint8Array {
         const validated = v.parse(AccountHistorySchema, accountHistory);
-        return encode(validated);
+        return this.encodeObject(validated);
     }
 
     static decodeAccountHistory(encodedAccountHistory: Uint8Array): AccountHistory {
-        const decoded = decode(encodedAccountHistory);
+        const decoded = this.decodeBinary(encodedAccountHistory);
         return v.parse(AccountHistorySchema, decoded);
     }
 
 
     static encodeAccountHistoryEntry(accountHistoryEntry: AccountHistoryEntry): Uint8Array {
-       return encode(v.parse(AccountHistoryEntrySchema, accountHistoryEntry));
+       return this.encodeObject(v.parse(AccountHistoryEntrySchema, accountHistoryEntry));
     }
 
 
     static decodeAccountHistoryEntry(serializedAccountHistoryEntry: Uint8Array): AccountHistoryEntry {
-        const decoded = decode(serializedAccountHistoryEntry);
+        const decoded = this.decodeBinary(serializedAccountHistoryEntry);
         return v.parse(AccountHistoryEntrySchema, decoded);
     }
 }

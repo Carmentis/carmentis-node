@@ -553,7 +553,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await carmentisOrganizationMicroblock.seal(issuerPrivateKey);
         const { microblockData: carmentisOrganizationData, microblockHash: carmentisOrgId } =
             carmentisOrganizationMicroblock.serialize();
-        this.logger.debug(carmentisOrganizationMicroblock.toString());
 
         // we create the (single) protocol virtual blockchain
         this.logger.info('Creating protocol microblock');
@@ -569,6 +568,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.info('Creating genesis validator node microblock');
         const mb = Microblock.createGenesisValidatorNodeMicroblock();
         const genesisValidator = request.validators[0];
+        const rpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
+        this.logger.info(Utils.binaryToHexa(genesisValidator.pub_key_bytes));
+        this.logger.info(`RPC endpoint: ${rpcEndpoint}`);
         mb.addSections([
             {
                 type: SectionType.VN_CREATION,
@@ -581,13 +583,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             },
             {
                 type: SectionType.VN_RPC_ENDPOINT,
-                rpcEndpoint: this.nodeConfig.getCometbftExposedRpcEndpoint(),
+                rpcEndpoint,
             },
         ]);
         await mb.seal(issuerPrivateKey);
         const { microblockData: carmentisNodeMicroblock } = mb.serialize();
+        this.logger.debug(mb.toString());
 
-        // we create the genesis validator node
         const validatorNodeVotingPowerUpdateMb = Microblock.createGenesisValidatorNodeMicroblock();
         validatorNodeVotingPowerUpdateMb.addSections([
             {
@@ -599,6 +601,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await validatorNodeVotingPowerUpdateMb.seal(issuerPrivateKey);
         const { microblockData: serializedVnVotingPowerUpdateMb } =
             validatorNodeVotingPowerUpdateMb.serialize();
+        this.logger.debug(validatorNodeVotingPowerUpdateMb.toString());
 
         // we now proceed to the runoff
         const transactions: Uint8Array[] = [
