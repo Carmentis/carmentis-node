@@ -68,12 +68,6 @@ export class GlobalStateUpdater {
         cometParameters: GlobalStateUpdateCometParameters
     ) {
         const database = globalState.getCachedDatabase();
-        /*
-        const previousBlockInformation = await database.getObject(
-            LevelDbTable.BLOCK_INFORMATION,
-            this.heightToTableKey(cometParameters.blockHeight - 1)
-        ) as BlockInformation;
-         */
         const previousBlockInformation = await database.getBlockInformation(cometParameters.blockHeight - 1);
         const previousBlockDayTs = previousBlockInformation ?
             Utils.addDaysToTimestamp(previousBlockInformation.timestamp, 0) :
@@ -99,6 +93,7 @@ export class GlobalStateUpdater {
                         //await database.putObject(LevelDbTable.ACCOUNT_STATE, id, accountState);
                     }
                 } else {
+                    this.logger.warn(`Account state for account ${id.toString()} not found`);
                     // TODO: handle undefined account state
                 }
 
@@ -331,6 +326,9 @@ export class GlobalStateUpdater {
         if (!hasFeesPayerAccountSignedMicroblock) {
             throw new Error('Specified fees payer account did not sign the microblock');
         }
+
+        // Case 4: The fees payer account is not the owner of the virtual blockchain
+        // TODO: handle the case where the payer account is not the owner of the virtual blockchain
 
         if (virtualBlockchain instanceof AccountVb) {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
@@ -756,6 +754,7 @@ export class GlobalStateUpdater {
             );
         } else {
             // TODO: remove or ensure not in validator set?
+            this.logger.warn(`Validator node ${Utils.binaryToHexa(vb.getId())} has zero voting power, not adding to validator set`);
         }
     }
 
