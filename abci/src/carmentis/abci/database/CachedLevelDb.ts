@@ -87,7 +87,11 @@ export class CachedLevelDb extends AbstractLevelDb {
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
         this.logger.debug(
-            `Storing raw data with key ${Utils.binaryToHexa(key)} on table ${tableId} in buffer: ${data.length} bytes`,
+            `Storing raw data with key {key} on table {tableName} in buffer: {length} bytes`, () => ({
+                key: Utils.binaryToHexa(key),
+                tableName: CachedLevelDb.getTableName(tableId),
+                length: data.length
+            })
         );
 
         // load the updates and deletions

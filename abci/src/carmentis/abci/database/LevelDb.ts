@@ -90,10 +90,12 @@ export class LevelDb extends AbstractLevelDb {
     }
 
     async getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined> {
-        this.logger.debug(`Accessing binary with key {key} on table {tableId}`, () => ({
-            key: Utils.binaryToHexa(key),
-            tableId,
-        }));
+        this.logger.debug(
+            `Accessing binary with key {key} on table {tableName}`, () => ({
+                key: Utils.binaryToHexa(key),
+                tableName: LevelDb.getTableName(tableId),
+            })
+        );
         try {
             const subTable = this.sub.get(tableId);
             if (subTable) {
@@ -112,7 +114,9 @@ export class LevelDb extends AbstractLevelDb {
             this.logger.error('{e}', { e });
         }
         this.logger.warn(
-            `Raw entry ${Utils.binaryToHexa(key)} not found on table ${tableId}: returning undefined`,
+            `Raw entry ${Utils.binaryToHexa(key)} not found on table {tableName}: returning undefined`, () => ({
+                tableName: LevelDb.getTableName(tableId)
+            })
         );
         return undefined;
     }
@@ -120,10 +124,10 @@ export class LevelDb extends AbstractLevelDb {
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
         this.logger.debug(
-            `Setting binary with key {key} on table {tableId}: {dataLength} bytes`,
+            `Setting binary with key {key} on table {tableName}: {dataLength} bytes`,
             () => ({
                 key: Utils.binaryToHexa(key),
-                tableId,
+                tableName: LevelDb.getTableName(tableId),
                 dataLength: data.length,
             }),
         );
@@ -146,7 +150,11 @@ export class LevelDb extends AbstractLevelDb {
     async getKeys(tableId: number): Promise<Uint8Array[]> {
         const table = this.sub.get(tableId);
         if (table === undefined) {
-            this.logger.debug(`Attempting to access an undefined table ${tableId}: aborting`)
+            this.logger.debug(
+                `Attempting to access an undefined table {tableName}: aborting`, () => ({
+                    tableName: LevelDb.getTableName(tableId)
+                })
+            )
             return []
         }
 

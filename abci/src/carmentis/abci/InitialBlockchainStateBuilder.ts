@@ -10,11 +10,11 @@ import {
     Provider,
     PublicSignatureKey, SectionType,
 } from '@cmts-dev/carmentis-sdk/server';
-import { Logger } from '@nestjs/common';
+import { getLogger, Logger } from '@logtape/logtape';
 import { GlobalState } from './state/GlobalState';
 
 export class InitialBlockchainStateBuilder {
-    private logger = new Logger(InitialBlockchainStateBuilder.name);
+    private logger = getLogger([ 'node', 'state', InitialBlockchainStateBuilder.name ]);
 
     constructor(
         private readonly state: GlobalState,
@@ -66,7 +66,7 @@ export class InitialBlockchainStateBuilder {
 
     public async createIssuerAccountCreationTransaction() {
         const sigEncoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
-        this.logger.verbose(`Creating genesis account creation transaction`);
+        this.logger.info(`Creating genesis account creation transaction`);
         this.logger.debug(
             `issuer public key: ${await sigEncoder.encodePublicKey(this.issuerPublicKey)}`,
         );
@@ -87,7 +87,7 @@ export class InitialBlockchainStateBuilder {
 
     public async createCarmentisOrganisationCreationTransaction() {
         /*
-        this.logger.verbose('Creating organisation creation transaction');
+        this.logger.info('Creating organisation creation transaction');
 
         const mb = Microblock.createGenesisOrganizationMicroblock();
         mb.addOrganizationPublicKeySection({

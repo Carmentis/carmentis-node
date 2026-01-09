@@ -206,6 +206,7 @@ export class Storage implements IStorage {
             }
 
             for (const tx of transactions) {
+                this.logger.debug(`Writing ${tx.length} bytes to ${filePath}`);
                 await handle.write(tx);
             }
             await handle.sync();

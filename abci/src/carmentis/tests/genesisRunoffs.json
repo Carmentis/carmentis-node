@@ -48,35 +48,35 @@
         {
             "source": "issuer",
             "destination": "team-advisors",
-            "amount": 60
+            "amount": 600
         },
         {
             "source": "issuer",
             "destination": "another-account",
-            "amount": 40
+            "amount": 400
         },
         {
             "source": "another-account",
             "destination": "invest-1",
-            "amount": 20
+            "amount": 200
         },
         {
             "source": "team-advisors",
             "destination": "invest-1",
             "vesting": "seed",
-            "amount": 1
+            "amount": 10
         },
         {
             "source": "team-advisors",
             "destination": "invest-2",
             "vesting": "invest",
-            "amount":  2
+            "amount":  20
         },
         {
             "source": "team-advisors",
             "destination": "invest-3",
             "vesting": "test",
-            "amount":  3
+            "amount":  30
         }
     ]
 }

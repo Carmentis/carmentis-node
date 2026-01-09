@@ -1,7 +1,6 @@
 import { open } from 'node:fs/promises';
 import path from 'path';
-import { Logger } from '@nestjs/common';
-import { getLogger } from '@logtape/logtape';
+import { getLogger, Logger } from '@logtape/logtape';
 
 export class SnapshotDataCopyManager {
     private logger = getLogger(["node", "snapshot", SnapshotDataCopyManager.name])

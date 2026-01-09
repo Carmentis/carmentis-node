@@ -31,7 +31,7 @@ export class GenesisRunoffTransactionsBuilder {
             // log the transfer for debugging purposes
             const transferredTokens = CMTSToken.createCMTS(transfer.amount);
             this.logger.info(
-                `transfer ${transferredTokens.toString()} from ${transfer.source} to ${transfer.destination}`,
+                `transfer ${transferredTokens.toString()} from ${transfer.source} to ${transfer.destination}, vesting: ${transfer.vesting === undefined ? 'no' : 'yes'}`,
             );
 
 
