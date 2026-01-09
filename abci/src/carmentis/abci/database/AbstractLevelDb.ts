@@ -38,6 +38,11 @@ export abstract class AbstractLevelDb implements DbInterface {
     constructor(protected logger: Logger) {
     }
 
+    public static getTableName(tableId: number) {
+        const entry = Object.entries(LevelDbTable).find(([ name, id ]) => id == tableId);
+        return entry ? entry[0] : '(UNKNOWN TABLE)';
+    }
+
     async getProtocolVirtualBlockchainIdentifier() {
         const protocolTableId = LevelDb.getTableIdFromVirtualBlockchainType(CHAIN.VB_PROTOCOL);
         const protocolVirtualBlockchainIdentifiers = await this.getKeys(protocolTableId);

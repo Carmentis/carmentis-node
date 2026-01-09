@@ -27,7 +27,7 @@ import {
 } from '@cmts-dev/carmentis-sdk/server';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { NODE_SCHEMAS } from '../constants/constants';
-import { Logger } from '@nestjs/common';
+import { getLogger, Logger } from '@logtape/logtape';
 import { AccountManager, Transfer } from '../accounts/AccountManager';
 import { GlobalState } from './GlobalState';
 import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
@@ -61,7 +61,7 @@ export class GlobalStateUpdater {
     private blockSectionCount = 0;
     private processedMicroblock: ProcessedMicroblock[] = []; // TODO(explain): why not used
 
-    private logger = new Logger(GlobalStateUpdater.name);
+    private logger = getLogger(['node', 'state', GlobalStateUpdater.name]);
 
     async updateGlobalStateOnBlock(
         globalState: GlobalState,
@@ -75,13 +75,15 @@ export class GlobalStateUpdater {
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
 
         if (currentBlockDayTs != previousBlockDayTs) {
+            this.logger.info('First block of the day: applying daily updates');
             // update vesting locks
             const accountsWithVestingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS);
 
             for(const id of accountsWithVestingLocksIdentifiers) {
+                this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(id)}`);
+
                 const accountState = await database.getAccountStateByAccountId(id);
                 if (accountState) {
-                    //const accountState = await database.getObject(LevelDbTable.ACCOUNT_STATE, id) as AccountState;
                     const balanceAvailability = new BalanceAvailability(
                         accountState.balance,
                         accountState.locks,
@@ -90,13 +92,16 @@ export class GlobalStateUpdater {
                     if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
                         accountState.locks = balanceAvailability.getLocks();
                         await database.putAccountState(id, accountState);
-                        //await database.putObject(LevelDbTable.ACCOUNT_STATE, id, accountState);
+
+                        if(!balanceAvailability.hasVestingLocks()) {
+                            this.logger.info(`No more vesting locks on account ${Utils.binaryToHexa(id)}: removing entry from ACCOUNTS_WITH_VESTING_LOCKS`);
+                            await database.del(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, id);
+                        }
                     }
                 } else {
                     this.logger.warn(`Account state for account ${id.toString()} not found`);
                     // TODO: handle undefined account state
                 }
-
             }
 
             // update escrow locks
@@ -109,13 +114,12 @@ export class GlobalStateUpdater {
                 if (escrow == null) {
                     throw new Error(`Escrow ${id.toString()} not found`);
                 }
-                //const escrow = await database.getObject(LevelDbTable.ESCROWS, id) as Escrow;
+
                 const accountState = await database.getAccountStateByAccountId(escrow.payeeAccount);
                 if (accountState === undefined) throw new Error(
                     `Escrow ${id.toString()} refers to an unknown account ${escrow.payeeAccount.toString()}`
                 )
 
-                //const accountState = await database.getObject(LevelDbTable.ACCOUNT_STATE, escrow.payeeAccount) as AccountState;
                 const balanceAvailability = new BalanceAvailability(
                     accountState.balance,
                     accountState.locks,
@@ -129,6 +133,7 @@ export class GlobalStateUpdater {
                     );
                     if (isEscrowLockExpired) {
                         // the escrow has expired: the funds are sent back from payee to payer
+                        this.logger.info(`Escrow has expired`);
                         const tokenTransfer: Transfer = {
                             type: ECO.BK_SENT_EXPIRED_ESCROW,
                             payerAccount: escrow.payeeAccount,
@@ -265,7 +270,7 @@ export class GlobalStateUpdater {
         cometParameters: GlobalStateUpdateCometParameters,
         transaction: Uint8Array,
     ) {
-        this.logger.log(`Updating global state with microblock: ${microblock.getHash().encode()}`);
+        this.logger.info(`Updating global state with microblock: ${microblock.getHash().encode()}`);
 
         // we ignore the microblock if it declares a new protocol VB state and there is already one defined
         const isDeclaringNewProtocolVb = microblock.hasSection(SectionType.PROTOCOL_CREATION);
@@ -296,7 +301,6 @@ export class GlobalStateUpdater {
         if (!feesPayerAccountExists) {
             throw new Error('Specified fees payer account does not exist');
         }
-
 
         // case 2: The fees payer account does not have enough tokens to pay (fast case)
         const feesPayerAccountBalance =
@@ -341,7 +345,7 @@ export class GlobalStateUpdater {
         // we are now sure that the fees payer account has enough tokens, so we proceed to the transfer of tokens
         // to the fees payer account.
         const feesPayeeAccount = Economics.getSpecialAccountTypeIdentifier(ECO.ACCOUNT_BLOCK_FEES);
-        this.logger.verbose(
+        this.logger.debug(
             `Send fees from ${Utils.binaryToHexa(feesPayerAccountId)} to ${Utils.binaryToHexa(feesPayeeAccount)}`,
         );
         const sentAt = cometParameters.blockTimestamp;
@@ -411,7 +415,7 @@ export class GlobalStateUpdater {
         );
 
         this.validatorSetUpdates.forEach((entry) => {
-            this.logger.log(
+            this.logger.info(
                 `validatorSet update: pub_key=[${entry.pub_key_type}]${Base64.encodeBinary(entry.pub_key_bytes)}, power=${entry.power}`,
             );
         });
@@ -475,7 +479,7 @@ export class GlobalStateUpdater {
     }
 
     private async dispatchFeesAmongValidators(state: GlobalState, request: FinalizeBlockRequest) {
-        this.logger.log(`payValidators`);
+        this.logger.info(`payValidators`);
         const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
             ECO.ACCOUNT_BLOCK_FEES,
         );
@@ -568,7 +572,6 @@ export class GlobalStateUpdater {
     ): Promise<void> {
         const accountManager = globalState.getAccountManager();
 
-
         for (const [sectionIndex, section] of microblock.getAllSections().entries()) {
             const sectionType = section.type;
 
@@ -582,7 +585,7 @@ export class GlobalStateUpdater {
 
                 const { sellerAccount, amount } = section;
                 const createdAccountId = accountVb.getId();
-                this.logger.debug(`Creating account ${Utils.binaryToHexa(createdAccountId)} with ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(sellerAccount)}`)
+                this.logger.debug(`Creating account ${Utils.binaryToHexa(createdAccountId)} with ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(sellerAccount)}`);
                 await accountManager.tokenTransfer(
                     {
                         type: ECO.BK_SALE,
@@ -603,12 +606,11 @@ export class GlobalStateUpdater {
                 );
             }
 
-
             // check token standard transfers
             if (sectionType === SectionType.ACCOUNT_TRANSFER) {
                 const { account, amount } = section;
                 const accountIdSendingTokens = accountVb.getId();
-                this.logger.debug(`Transfering ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(accountIdSendingTokens)} to account ${Utils.binaryToHexa(account)}`)
+                this.logger.debug(`Transferring ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(accountIdSendingTokens)} to account ${Utils.binaryToHexa(account)}`)
                 await accountManager.tokenTransfer(
                     {
                         type: ECO.BK_SENT_PAYMENT,
@@ -624,7 +626,6 @@ export class GlobalStateUpdater {
                 );
             }
 
-
             // check staking
             if (sectionType === SectionType.ACCOUNT_STAKE) {
                 const { amount, objectType, objectIdentifier } = section;
@@ -636,6 +637,16 @@ export class GlobalStateUpdater {
                 );
             }
 
+            // check unstaking
+            if (sectionType === SectionType.ACCOUNT_UNSTAKE) {
+                const { amount, objectType, objectIdentifier } = section;
+                await accountManager.declareUnstake(
+                    accountVb.getId(),
+                    amount,
+                    objectType,
+                    objectIdentifier
+                );
+            }
 
             // check token escrow transfers
             if (sectionType === SectionType.ACCOUNT_ESCROW_TRANSFER) {
@@ -662,7 +673,6 @@ export class GlobalStateUpdater {
                 );
             }
 
-
             // check token escrow settlements
             if (sectionType === SectionType.ACCOUNT_ESCROW_SETTLEMENT) {
                 const { escrowIdentifier, confirmed } = section;
@@ -672,7 +682,6 @@ export class GlobalStateUpdater {
                 };
                 await accountManager.escrowSettlement(accountVb.getId(), escrowIdentifier, confirmed, microblock.getTimestamp(), chainReference);
             }
-
 
             // check token vesting transfers
             if (sectionType === SectionType.ACCOUNT_VESTING_TRANSFER) {
@@ -697,9 +706,7 @@ export class GlobalStateUpdater {
                     microblock.getTimestamp(),
                 );
             }
-
         }
-
     }
 
     private async handleValidatorNodeUpdate(
@@ -725,9 +732,6 @@ export class GlobalStateUpdater {
         }
     }
 
-    /**
-     Validator node callbacks
-     */
     private async validatorNodePublicKeyDeclarationCallback(
         globalState: GlobalState,
         vb: ValidatorNodeVb,
@@ -735,10 +739,9 @@ export class GlobalStateUpdater {
     ) {
         const { cometPublicKeyType, cometPublicKey } = section;
         const cometPublicKeyBytes = Base64.decodeBinary(cometPublicKey);
-        const cometAddress =
-            CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
+        const cometAddress = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
 
-        // we search for the last voting power known to the
+        // we search for the last known voting power from the internal VB state
         const localState = vb.getInternalState();
         const lastKnownVotingPower = localState.getLastKnownVotingPower();
 
@@ -746,16 +749,44 @@ export class GlobalStateUpdater {
         const database = globalState.getCachedDatabase();
         await database.putRaw(LevelDbTable.VALIDATOR_NODE_BY_ADDRESS, cometAddress, vb.getId());
 
-        if (0 < lastKnownVotingPower) {
-            this.addValidatorSetUpdate(
-                lastKnownVotingPower,
-                cometPublicKeyType,
-                cometPublicKeyBytes,
-            );
-        } else {
-            // TODO: remove or ensure not in validator set?
-            this.logger.warn(`Validator node ${Utils.binaryToHexa(vb.getId())} has zero voting power, not adding to validator set`);
+        await this.processValidatorSetUpdate(
+            globalState,
+            vb,
+            lastKnownVotingPower,
+            cometPublicKeyType,
+            cometPublicKeyBytes,
+        );
+    }
+
+    private async processValidatorSetUpdate(
+        globalState: GlobalState,
+        validatorNode: ValidatorNodeVb,
+        votingPower: number,
+        publicKeyType: string,
+        publicKeyBytes: Uint8Array,
+    ) {
+        let finalVotingPower: number;
+
+        if (votingPower > 0) {
+            const stakingAmount = await this.getValidatorNodeStakingAmount(globalState, validatorNode);
+            if (stakingAmount == 0) {
+                this.logger.warn(`Validator node ${Utils.binaryToHexa(validatorNode.getId())} has no staking`);
+            }
+            finalVotingPower = Math.round(stakingAmount * votingPower / 100);
         }
+        else {
+            finalVotingPower = 0;
+        }
+
+        if(finalVotingPower == 0) {
+            this.logger.warn(`Validator node ${Utils.binaryToHexa(validatorNode.getId())} has no voting power`);
+        }
+
+        this.addValidatorSetUpdate(
+            finalVotingPower,
+            publicKeyType,
+            publicKeyBytes,
+        );
     }
 
     private async validatorNodeVotingPowerUpdateCallback(
@@ -764,13 +795,35 @@ export class GlobalStateUpdater {
         section: ValidatorNodeVotingPowerUpdateSection,
     ) {
         const publicKeyDeclaration = await vb.getCometbftPublicKeyDeclaration();
+        const cometPublicKeyType = publicKeyDeclaration.cometbftPublicKeyType;
         const cometPublicKeyBytes = Base64.decodeBinary(publicKeyDeclaration.cometbftPublicKey);
         const lastKnownVotingPower = vb.getInternalState().getLastKnownVotingPower();
-        this.addValidatorSetUpdate(
+
+        await this.processValidatorSetUpdate(
+            globalState,
+            vb,
             lastKnownVotingPower,
-            publicKeyDeclaration.cometbftPublicKeyType,
+            cometPublicKeyType,
             cometPublicKeyBytes,
         );
+    }
+
+    private async getValidatorNodeStakingAmount(globalState: GlobalState, validatorNode: ValidatorNodeVb) {
+        // we look for the account ID of the organization owning this node and load the account state
+        const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+        const accountManager = globalState.getAccountManager();
+        const accountInfo: AccountInformation = await accountManager.loadAccountInformation(accountId.toBytes());
+        const accountState = accountInfo.state;
+
+        // we test whether there is a staking for the validator node
+        const balanceAvailability = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+        const nodeIdentifier = validatorNode.getIdentifier();
+        const stakingAmount = balanceAvailability.getNodeStakingLockAmount(nodeIdentifier.toBytes());
+        this.logger.error(`Staking amount for validator node ${nodeIdentifier.encode()} with linked account ${accountId.encode()}: ${stakingAmount}`);
+        return stakingAmount;
     }
 
     private addValidatorSetUpdate(
@@ -779,7 +832,7 @@ export class GlobalStateUpdater {
         pubKeyBytes: Uint8Array,
     ) {
         // ensure the public key type is correct
-        const translatedPubKeyType= KEY_TYPE_MAPPING[pubKeyType];
+        const translatedPubKeyType = KEY_TYPE_MAPPING[pubKeyType];
         if (!translatedPubKeyType) {
             this.logger.error(`Aborting validator set update: Invalid key type '${pubKeyType}' for validator set update`);
             return false;
@@ -791,7 +844,7 @@ export class GlobalStateUpdater {
             pub_key_bytes: pubKeyBytes,
         };
 
-        this.logger.log(`Validator set update: Public key ${Utils.binaryToHexa(pubKeyBytes)} -> voting power at ${votingPower}`)
+        this.logger.info(`Validator set update: Public key ${Utils.binaryToHexa(pubKeyBytes)} -> voting power at ${votingPower}`)
         this.validatorSetUpdates.push(validatorSetUpdateEntry);
         return true;
     }

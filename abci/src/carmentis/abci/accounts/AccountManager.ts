@@ -19,7 +19,7 @@ import {
     BlockchainUtils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Escrow } from '../types/Escrow';
-import { Logger } from '@nestjs/common';
+import { getLogger, Logger } from '@logtape/logtape';
 import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
 import { RadixTree } from '../RadixTree';
@@ -62,7 +62,7 @@ export class AccountManager {
     private readonly perf: Performance;
     private readonly logger: Logger;
 
-    constructor(db: DbInterface, logger: Logger = new Logger()) {
+    constructor(db: DbInterface, logger: Logger = getLogger([ 'node', 'accounts', AccountManager.name ])) {
         this.db = db;
         this.accountRadix = new RadixTree(this.db, LevelDbTable.TOKEN_RADIX);
         this.logger = logger;
@@ -193,7 +193,7 @@ export class AccountManager {
             );
         }
 
-        this.logger.log(
+        this.logger.info(
             `${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
         );
 
@@ -271,6 +271,19 @@ export class AccountManager {
     }
 
     /**
+     * Declares that the user wants to unstake some tokens.
+     */
+    async declareUnstake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array) {
+        const accountInformation = await this.loadAccountInformation(accountHash);
+        const accountState = accountInformation.state;
+        const balanceAvailability = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+        // ...
+    }
+
+    /**
      * Loads the information about the account associated with the provided account hash.
      * @param accountHash - The hash of the account to load
      * @returns Account information including existence status, type, and state
@@ -327,6 +340,8 @@ export class AccountManager {
 
         switch(type) {
             case ECO.BK_RECEIVED_VESTING: {
+                this.logger.debug(`Received vested tokens on account ${Utils.binaryToHexa(accountHash)}`);
+
                 if(vestingParameters === null) {
                     throw new Error('Vesting parameters are missing');
                 }
@@ -335,6 +350,8 @@ export class AccountManager {
                 break;
             }
             case ECO.BK_RECEIVED_ESCROW: {
+                this.logger.debug(`Received escrowed tokens on account ${Utils.binaryToHexa(accountHash)}`);
+
                 // reject if escrow parameters are missing
                 if (escrowParameters === null) {
                     throw new Error('Escrow parameters are missing');
@@ -485,8 +502,6 @@ export class AccountManager {
         return accountHash === undefined;
     }
 
-
-
     /**
      * Associates an account hash with a public key.
      *
@@ -535,7 +550,7 @@ export class AccountManager {
 
     async createIssuerAccount(publicKey: PublicSignatureKey, issuerAccountHash: Uint8Array, initialTokenAmountAsAtomic = INITIAL_OFFER) {
         //const issuerAccoountHash =   AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
-        this.logger.log(`Issuer account creation: association with account hash ${Utils.binaryToHexa(issuerAccountHash)}`)
+        this.logger.info(`Issuer account creation: association with account hash ${Utils.binaryToHexa(issuerAccountHash)}`)
         await this.saveAccountByPublicKey(
             issuerAccountHash,
             await publicKey.getPublicKeyAsBytes(),
@@ -584,7 +599,6 @@ export class AccountManager {
         );
 
         const record = BlockchainUtils.encodeAccountState(accountState);
-        //const record = this.db.serialize(LevelDbTable.ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.accountRadix.set(accountHash, stateHash);

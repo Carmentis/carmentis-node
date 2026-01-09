@@ -36,6 +36,7 @@ import {
     VerifyVoteExtensionResponse,
     VerifyVoteExtensionStatus,
 } from '../../../proto-ts/cometbft/abci/v1/types';
+import { Utils } from '@cmts-dev/carmentis-sdk/server';
 import { AbciService } from '../AbciService';
 
 @Controller()
@@ -80,9 +81,9 @@ export class GrpcAbciController {
     }
 
     @GrpcMethod('ABCIService', 'CheckTx')
-    async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
+    async CheckTx(request: CheckTxRequest, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<CheckTxResponse> {
         this.logger.debug('Called CheckTx');
-        return await this.abciService.CheckTx(request);
+        return await this.abciService.CheckTx(request, referenceTimestamp);
     }
 
     @GrpcMethod('ABCIService', 'ApplySnapshotChunk')

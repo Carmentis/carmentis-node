@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { getLogger } from '@logtape/logtape';
 
 const MAX_HISTORY = 50;

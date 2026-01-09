@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { getLogger, Logger } from '@logtape/logtape';
 import { LevelDb } from '../database/LevelDb';
 import { CachedLevelDb } from '../database/CachedLevelDb';
 import { Storage } from '../storage/Storage';
@@ -52,7 +52,7 @@ export class GlobalState extends AbstractProvider {
         logger?: Logger,
     ) {
         super();
-        this.logger = logger || new Logger(GlobalState.name);
+        this.logger = logger || getLogger([ 'node', 'state', GlobalState.name ]);
         this.cachedDb = new CachedLevelDb(this.db);
         this.cachedStorage = new CachedStorage(this.storage, this.cachedDb);
         this.vbRadix = new RadixTree(this.cachedDb, LevelDbTable.VB_RADIX);

@@ -11,7 +11,6 @@ import { SnapshotChunksFile } from './SnapshotChunksFile';
 import { NODE_SCHEMAS } from './constants/constants';
 
 import { SCHEMAS, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
-import { Logger } from '@nestjs/common';
 import { getLogger } from '@logtape/logtape';
 import { ChainInformationObject } from './types/ChainInformationObject';
 import { StoredSnapshot, StoredSnapshotSchema } from './types/valibot/snapshots/StoredSnapshot';
