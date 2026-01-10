@@ -2,8 +2,8 @@
     "vesting": [
         {
             "name": "seed",
-            "cliffDurationInDays": 12,
-            "vestingDurationInDays": 10
+            "cliffDurationInDays": 6,
+            "vestingDurationInDays": 5
         },
         {
             "name": "invest",

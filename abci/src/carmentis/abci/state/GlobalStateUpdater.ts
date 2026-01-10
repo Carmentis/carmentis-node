@@ -722,8 +722,8 @@ export class GlobalStateUpdater {
                     virtualBlockchain,
                     section,
                 );
-            } else if (sectionType === SectionType.VN_VOTING_POWER_UPDATE) {
-                await this.validatorNodeVotingPowerUpdateCallback(
+            } else if (sectionType === SectionType.VN_APPROVAL) {
+                await this.validatorNodeApprovalCallback(
                     globalState,
                     virtualBlockchain,
                     section,
@@ -743,7 +743,7 @@ export class GlobalStateUpdater {
 
         // we search for the last known voting power from the internal VB state
         const localState = vb.getInternalState();
-        const lastKnownVotingPower = localState.getLastKnownVotingPower();
+        const approvalStatus = localState.getLastKnownApprovalStatus();
 
         // create the new link: Comet address -> identifier
         const database = globalState.getCachedDatabase();
@@ -752,7 +752,7 @@ export class GlobalStateUpdater {
         await this.processValidatorSetUpdate(
             globalState,
             vb,
-            lastKnownVotingPower,
+            approvalStatus,
             cometPublicKeyType,
             cometPublicKeyBytes,
         );
@@ -761,35 +761,40 @@ export class GlobalStateUpdater {
     private async processValidatorSetUpdate(
         globalState: GlobalState,
         validatorNode: ValidatorNodeVb,
-        votingPower: number,
+        approvalStatus: boolean,
         publicKeyType: string,
         publicKeyBytes: Uint8Array,
     ) {
-        let finalVotingPower: number;
+        this.logger.debug(`Processing validator set update for node ${Utils.binaryToHexa(validatorNode.getId())}`);
 
-        if (votingPower > 0) {
+        let votingPower: number;
+
+        if (approvalStatus) {
             const stakingAmount = await this.getValidatorNodeStakingAmount(globalState, validatorNode);
             if (stakingAmount == 0) {
-                this.logger.warn(`Validator node ${Utils.binaryToHexa(validatorNode.getId())} has no staking`);
+                this.logger.warn(`No staking for validator node ${Utils.binaryToHexa(validatorNode.getId())}`);
             }
-            finalVotingPower = Math.round(stakingAmount * votingPower / 100);
+            else {
+                this.logger.debug(`Staking of ${stakingAmount} for validator node ${Utils.binaryToHexa(validatorNode.getId())}`);
+            }
+            votingPower = stakingAmount;
         }
         else {
-            finalVotingPower = 0;
+            votingPower = 0;
         }
 
-        if(finalVotingPower == 0) {
+        if(votingPower == 0) {
             this.logger.warn(`Validator node ${Utils.binaryToHexa(validatorNode.getId())} has no voting power`);
         }
 
         this.addValidatorSetUpdate(
-            finalVotingPower,
+            votingPower,
             publicKeyType,
             publicKeyBytes,
         );
     }
 
-    private async validatorNodeVotingPowerUpdateCallback(
+    private async validatorNodeApprovalCallback(
         globalState: GlobalState,
         vb: ValidatorNodeVb,
         section: ValidatorNodeVotingPowerUpdateSection,
@@ -797,12 +802,12 @@ export class GlobalStateUpdater {
         const publicKeyDeclaration = await vb.getCometbftPublicKeyDeclaration();
         const cometPublicKeyType = publicKeyDeclaration.cometbftPublicKeyType;
         const cometPublicKeyBytes = Base64.decodeBinary(publicKeyDeclaration.cometbftPublicKey);
-        const lastKnownVotingPower = vb.getInternalState().getLastKnownVotingPower();
+        const approvalStatus = vb.getInternalState().getLastKnownApprovalStatus();
 
         await this.processValidatorSetUpdate(
             globalState,
             vb,
-            lastKnownVotingPower,
+            approvalStatus,
             cometPublicKeyType,
             cometPublicKeyBytes,
         );
@@ -822,7 +827,7 @@ export class GlobalStateUpdater {
         );
         const nodeIdentifier = validatorNode.getIdentifier();
         const stakingAmount = balanceAvailability.getNodeStakingLockAmount(nodeIdentifier.toBytes());
-        this.logger.error(`Staking amount for validator node ${nodeIdentifier.encode()} with linked account ${accountId.encode()}: ${stakingAmount}`);
+        this.logger.debug(`Staking amount for validator node ${nodeIdentifier.encode()} with linked account ${accountId.encode()}: ${stakingAmount}`);
         return stakingAmount;
     }
 

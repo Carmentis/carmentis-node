@@ -175,10 +175,9 @@ describe('Abci', () => {
         const sellerPk = await sellerSk.getPublicKey();
         const sellerAccountId = await scriptManager.getAccountByPublicKey(sellerPk);
 
-        const invest2Account = scriptManager.getAccountFromRunOffs('invest-2');
-        const encodedInvest2Pk = invest2Account.publicKey;
-        const invest2Pk = await sigEncoder.decodePublicKey(encodedInvest2Pk);
-        const invest2AccountId = await scriptManager.getAccountByPublicKey(invest2Pk);
+        const invest1AccountId = await scriptManager.getAccountIdByName('invest-1')
+        let invest1AccountState;
+        const invest2AccountId = await scriptManager.getAccountIdByName('invest-2')
         let invest2AccountState;
 
         invest2AccountState = await scriptManager.getAccountState(invest2AccountId);
@@ -229,8 +228,13 @@ describe('Abci', () => {
         for(let n = 0; n <= 11; n++) {
             await scriptManager.processCometConsensus(n * 24);
 
+            invest1AccountState = await scriptManager.getAccountState(invest1AccountId);
+            console.log(`invest1AccountState after ${n} days`, Utils.binaryToHexa(invest1AccountId), invest1AccountState);
+            expect(invest1AccountState.locks[0]?.lockedAmountInAtomics || 0).toEqual(Math.max(0, 1_000_000 - Math.max(0, n - 6) * (1_000_000 / 5)));
+
             invest2AccountState = await scriptManager.getAccountState(invest2AccountId);
             console.log(`invest2AccountState after ${n} days`, Utils.binaryToHexa(invest2AccountId), invest2AccountState);
+            expect(invest2AccountState.locks[0]?.lockedAmountInAtomics || 0).toEqual(Math.max(0, 2_000_000 - n * (2_000_000 / 10)));
         }
     }, 45000);
 });
@@ -327,6 +331,15 @@ class TestScriptManager {
         const commitResponse = await this.abci.Commit({});
         this.txs = [];
         this.height++;
+    }
+
+    async getAccountIdByName(name: string) {
+        const account = this.getAccountFromRunOffs(name);
+        const encodedPk = account.publicKey;
+        const sigEncoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
+        const pk = await sigEncoder.decodePublicKey(encodedPk);
+        const accountId = await this.getAccountByPublicKey(pk);
+        return accountId;
     }
 
     async getAccountByPublicKey(pk: PublicSignatureKey) {

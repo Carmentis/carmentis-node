@@ -13,13 +13,11 @@ export class GenesisRunoffTransactionsBuilder {
         private readonly issuerAccountHash: Uint8Array,
         private readonly issuerPrivateKey: PrivateSignatureKey,
         private readonly issuerPublicKey: PublicSignatureKey,
-        issuerAccountCreationMicroblock: Microblock,
+        issuerAccountMicroblocks: Microblock[],
     ) {
         this.accountHashByAccountName = new Map([['issuer', this.issuerAccountHash]]);
         this.createsMicroblocksByVbId = new Map<Uint8Array, Microblock[]>();
-        this.createsMicroblocksByVbId.set(this.issuerAccountHash, [
-            issuerAccountCreationMicroblock,
-        ]);
+        this.createsMicroblocksByVbId.set(this.issuerAccountHash, issuerAccountMicroblocks);
     }
 
     async createRunoffTransactions() {
