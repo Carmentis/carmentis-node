@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/Carmentis/carmentis-node/compare/v1.0.2...v1.0.3) (2026-01-11)
+
+
+### Bug Fixes
+
+* update comment for fees payer account case in GlobalStateUpdater ([18b0b5b](https://github.com/Carmentis/carmentis-node/commit/18b0b5ba427430cc0a7350694a509fb0c7516f7d))
+
 ## [1.0.2](https://github.com/Carmentis/carmentis-node/compare/v1.0.1...v1.0.2) (2026-01-11)
 
 
