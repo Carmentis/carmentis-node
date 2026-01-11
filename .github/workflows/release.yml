@@ -39,6 +39,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
 
+      - name: Debug outputs
+        run: |
+          echo "published=${{ steps.semantic.outputs.new_release_published }}"
+          echo "version=${{ steps.semantic.outputs.new_release_version }}"
+          echo "tag=${{ steps.semantic.outputs.new_release_git_tag }}"
+
+
   docker:
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
