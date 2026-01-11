@@ -35,9 +35,10 @@ jobs:
 
       - name: Run semantic-release
         id: semantic
+        uses: cycjimmy/semantic-release-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+
 
       - name: Debug outputs
         run: |
@@ -64,7 +65,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.TOKEN_TO_CREATE_PACKAGE }}
 
       - name: Extract metadata
         id: meta
