@@ -17,13 +17,13 @@ import {
     AccountInformation,
     AccountState,
     BlockchainUtils,
+    BalanceAvailability,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Escrow } from '../types/Escrow';
 import { Logger } from '@nestjs/common';
 import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
 import { RadixTree } from '../RadixTree';
-import { BalanceAvailability } from './BalanceAvailability';
 import { AccountHistory } from '../types/valibot/account/AccountHistory';
 import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
 import { NodeEncoder } from '../NodeEncoder';
@@ -70,10 +70,14 @@ export class AccountManager {
     }
 
     getAccountRootHash() {
-        return this.accountRadix.getRootHash()
+        return this.accountRadix.getRootHash();
     }
 
-    async transferToken(fromAccountId: Uint8Array, toAccountId: Uint8Array, amountInAtomics: number) {
+    async transferToken(
+        fromAccountId: Uint8Array,
+        toAccountId: Uint8Array,
+        amountInAtomics: number,
+    ) {
         const tokenTransfer: Transfer = {
             type: ECO.BK_SALE,
             payerAccount: fromAccountId,
@@ -85,11 +89,7 @@ export class AccountManager {
             sectionIndex: 1,
         };
         const timestamp = Date.now();
-        await this.tokenTransfer(
-            tokenTransfer,
-            chainReference,
-            timestamp
-        );
+        await this.tokenTransfer(tokenTransfer, chainReference, timestamp);
     }
 
     /**
@@ -103,10 +103,20 @@ export class AccountManager {
      * @throws {Error} If payer has insufficient funds
      * @throws {Error} If accounts don't exist when required
      */
-    async tokenTransfer(transfer: Transfer, chainReference: unknown, timestamp: number): Promise<void> {
-        this.logger.debug(`Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amount} at ${timestamp}`)
-        this.logger.debug(`Transfer from: ${transfer.payerAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payerAccount) : 'Unknown'}`)
-        this.logger.debug(`Transfer to: ${transfer.payeeAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payeeAccount) : 'Unknown'}`)
+    async tokenTransfer(
+        transfer: Transfer,
+        chainReference: unknown,
+        timestamp: number,
+    ): Promise<void> {
+        this.logger.debug(
+            `Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amount} at ${timestamp}`,
+        );
+        this.logger.debug(
+            `Transfer from: ${transfer.payerAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payerAccount) : 'Unknown'}`,
+        );
+        this.logger.debug(
+            `Transfer to: ${transfer.payeeAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payeeAccount) : 'Unknown'}`,
+        );
 
         const perfMeasure = this.perf.start('tokenTransfer');
 
@@ -125,7 +135,12 @@ export class AccountManager {
             const payerInfo = await this.loadAccountInformation(transfer.payerAccount);
 
             if (!Economics.isAllowedTransfer(payerInfo.type, transfer.type)) {
-                throw new Error(ErrorMessages.ACCOUNT_TYPE_NOT_ALLOWED(ECO.ACCOUNT_NAMES[payerInfo.type], ECO.BK_NAMES[transfer.type]));
+                throw new Error(
+                    ErrorMessages.ACCOUNT_TYPE_NOT_ALLOWED(
+                        ECO.ACCOUNT_NAMES[payerInfo.type],
+                        ECO.BK_NAMES[transfer.type],
+                    ),
+                );
             }
 
             payerBalance = payerInfo.state.balance;
@@ -137,8 +152,8 @@ export class AccountManager {
                         ECO.TOKEN_NAME,
                         shortPayerAccountString,
                         shortPayeeAccountString,
-                        payerBalance / ECO.TOKEN
-                    )
+                        payerBalance / ECO.TOKEN,
+                    ),
                 );
             }
         }
@@ -149,7 +164,12 @@ export class AccountManager {
             const payeeInfo = await this.loadAccountInformation(transfer.payeeAccount);
 
             if (!Economics.isAllowedTransfer(payeeInfo.type, transfer.type ^ ECO.BK_PLUS)) {
-                throw new Error(ErrorMessages.ACCOUNT_TYPE_NOT_ALLOWED(ECO.ACCOUNT_NAMES[payeeInfo.type], ECO.BK_NAMES[transfer.type ^ ECO.BK_PLUS]));
+                throw new Error(
+                    ErrorMessages.ACCOUNT_TYPE_NOT_ALLOWED(
+                        ECO.ACCOUNT_NAMES[payeeInfo.type],
+                        ECO.BK_NAMES[transfer.type ^ ECO.BK_PLUS],
+                    ),
+                );
             }
 
             if (accountCreation) {
@@ -203,27 +223,34 @@ export class AccountManager {
     /**
      * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
      */
-    async escrowSettlement(account: Uint8Array, escrowIdentifier: Uint8Array, confirmed: boolean, timestamp: number, chainReference: unknown) {
+    async escrowSettlement(
+        account: Uint8Array,
+        escrowIdentifier: Uint8Array,
+        confirmed: boolean,
+        timestamp: number,
+        chainReference: unknown,
+    ) {
         const escrow = await this.db.getEscrow(escrowIdentifier);
 
         // make sure that this escrow exists
-        if(escrow === undefined) {
+        if (escrow === undefined) {
             throw new Error(`rejected escrow settlement: unknown or out-of-date escrow identifier`);
         }
         // make sure that the caller is the agent
-        if(!Utils.binaryIsEqual(account, escrow.agentAccount)) {
+        if (!Utils.binaryIsEqual(account, escrow.agentAccount)) {
             throw new Error(`rejected escrow settlement: caller is not the agent`);
         }
 
         // retrieve the lock from the payee account, get the amount, then remove the lock
         const accountInformation = await this.loadAccountInformation(escrow.payeeAccount);
         const payeeAccountState = accountInformation.state;
-        const lockIndex = payeeAccountState.locks.findIndex((lock) =>
-            lock.type == LockType.Escrow &&
-            Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier)
+        const lockIndex = payeeAccountState.locks.findIndex(
+            (lock) =>
+                lock.type == LockType.Escrow &&
+                Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier),
         );
 
-        if(lockIndex === -1) {
+        if (lockIndex === -1) {
             throw new Error(`PANIC - unable to find the lock of the escrow to be settled`);
         }
 
@@ -234,19 +261,15 @@ export class AccountManager {
         await this.saveState(escrow.payeeAccount, payeeAccountState);
 
         // if the escrow is canceled, send the funds back to the payer
-        if(!confirmed) {
+        if (!confirmed) {
             const tokenTransfer: Transfer = {
                 type: ECO.BK_SENT_ESCROW_REFUND,
                 payerAccount: escrow.payeeAccount,
                 payeeAccount: escrow.payerAccount,
-                amount
+                amount,
             };
 
-            await this.tokenTransfer(
-                tokenTransfer,
-                chainReference,
-                timestamp
-            );
+            await this.tokenTransfer(tokenTransfer, chainReference, timestamp);
         }
 
         // remove the escrow from the DB
@@ -256,7 +279,12 @@ export class AccountManager {
     /**
      * Locks up a portion of the balance for staking on a given object.
      */
-    async stake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array) {
+    async stake(
+        accountHash: Uint8Array,
+        amount: number,
+        objectType: number,
+        objectIdentifier: Uint8Array,
+    ) {
         const accountInformation = await this.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
         const balanceAvailability = new BalanceAvailability(
@@ -303,7 +331,6 @@ export class AccountManager {
                 },
             };
         }
-
     }
 
     private async update(
@@ -325,9 +352,9 @@ export class AccountManager {
             accountState.locks,
         );
 
-        switch(type) {
+        switch (type) {
             case ECO.BK_RECEIVED_VESTING: {
-                if(vestingParameters === null) {
+                if (vestingParameters === null) {
                     throw new Error('Vesting parameters are missing');
                 }
                 balanceAvailability.addVestedTokens(signedAmount, vestingParameters);
@@ -342,18 +369,17 @@ export class AccountManager {
 
                 // the payer account must exist because it has sent funds to the escrow account
                 if (linkedAccountHash === null) {
-                    throw new Error('Received undefined linked account hash for escrow transfer: SHOULD NOT HAPPEN');
+                    throw new Error(
+                        'Received undefined linked account hash for escrow transfer: SHOULD NOT HAPPEN',
+                    );
                 }
 
                 balanceAvailability.addEscrowedTokens(signedAmount, escrowParameters);
-                await this.db.putEscrow(
-                    escrowParameters.escrowIdentifier,
-                    {
-                        payerAccount: linkedAccountHash,
-                        payeeAccount: accountHash,
-                        agentAccount: escrowParameters.transferAuthorizerAccountId
-                    }
-                );
+                await this.db.putEscrow(escrowParameters.escrowIdentifier, {
+                    payerAccount: linkedAccountHash,
+                    payeeAccount: accountHash,
+                    agentAccount: escrowParameters.transferAuthorizerAccountId,
+                });
                 break;
             }
             default: {
@@ -388,7 +414,7 @@ export class AccountManager {
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
         await this.accountRadix.set(accountHash, stateHash);
-        this.logger.debug(`Storing account state for account ${Utils.binaryToHexa(accountHash)}`)
+        this.logger.debug(`Storing account state for account ${Utils.binaryToHexa(accountHash)}`);
         await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
     }
 
@@ -400,7 +426,11 @@ export class AccountManager {
      * @param maxRecords - Maximum number of history records to retrieve
      * @returns The account history with a list of entries
      */
-    async loadHistory(accountHash: Uint8Array, lastHistoryHash: Uint8Array, maxRecords: number): Promise<AccountHistory> {
+    async loadHistory(
+        accountHash: Uint8Array,
+        lastHistoryHash: Uint8Array,
+        maxRecords: number,
+    ): Promise<AccountHistory> {
         let historyHash = lastHistoryHash;
         const list: AccountHistoryEntry[] = [];
 
@@ -414,7 +444,10 @@ export class AccountManager {
         return { list };
     }
 
-    private async loadHistoryEntry(accountHash: Uint8Array, historyHash: Uint8Array): Promise<AccountHistoryEntry> {
+    private async loadHistoryEntry(
+        accountHash: Uint8Array,
+        historyHash: Uint8Array,
+    ): Promise<AccountHistoryEntry> {
         const accountHistoryEntry = await this.db.getAccountHistoryEntryByHistoryHash(historyHash);
         if (accountHistoryEntry) {
             return accountHistoryEntry;
@@ -449,8 +482,13 @@ export class AccountManager {
 
         const record = NodeEncoder.encodeAccountHistoryEntry(entry);
         //const record = this.db.serialize(LevelDbTable.ACCOUNT_HISTORY, entry);
-        const hash = this.getHistoryEntryHash(accountHash, NodeCrypto.Hashes.sha256AsBinary(record));
-        this.logger.debug(`Storing new entry in account history for account ${Utils.binaryToHexa(accountHash)}`)
+        const hash = this.getHistoryEntryHash(
+            accountHash,
+            NodeCrypto.Hashes.sha256AsBinary(record),
+        );
+        this.logger.debug(
+            `Storing new entry in account history for account ${Utils.binaryToHexa(accountHash)}`,
+        );
         await this.db.putRaw(LevelDbTable.ACCOUNT_HISTORY, hash, record);
 
         return hash;
@@ -485,8 +523,6 @@ export class AccountManager {
         return accountHash === undefined;
     }
 
-
-
     /**
      * Associates an account hash with a public key.
      *
@@ -495,7 +531,9 @@ export class AccountManager {
      */
     async saveAccountByPublicKey(accountHash: Uint8Array, publicKey: Uint8Array): Promise<void> {
         const keyHash = NodeCrypto.Hashes.sha256AsBinary(publicKey);
-        this.logger.debug(`Storing association between account hash ${Utils.binaryToHexa(accountHash)} with hashed public key ${Utils.binaryToHexa(keyHash)}`)
+        this.logger.debug(
+            `Storing association between account hash ${Utils.binaryToHexa(accountHash)} with hashed public key ${Utils.binaryToHexa(keyHash)}`,
+        );
         await this.db.putRaw(LevelDbTable.ACCOUNT_BY_PUBLIC_KEY, keyHash, accountHash);
     }
 
@@ -521,6 +559,15 @@ export class AccountManager {
         return CMTSToken.createAtomic(accountInformation.state.balance);
     }
 
+    async getAccountBalanceAvailabilityByAccountId(accountId: Uint8Array): Promise<BalanceAvailability> {
+        const accountInformation = await this.loadAccountInformation(accountId);
+        const accountState = accountInformation.state;
+        return new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+    }
+
     private getShortAccountString(account: Uint8Array | null): string {
         return account === null
             ? 'NULL'
@@ -533,33 +580,33 @@ export class AccountManager {
         );
     }
 
-    async createIssuerAccount(publicKey: PublicSignatureKey, issuerAccountHash: Uint8Array, initialTokenAmountAsAtomic = INITIAL_OFFER) {
+    async createIssuerAccount(
+        publicKey: PublicSignatureKey,
+        issuerAccountHash: Uint8Array,
+        initialTokenAmountAsAtomic = INITIAL_OFFER,
+    ) {
         //const issuerAccoountHash =   AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
-        this.logger.log(`Issuer account creation: association with account hash ${Utils.binaryToHexa(issuerAccountHash)}`)
-        await this.saveAccountByPublicKey(
-            issuerAccountHash,
-            await publicKey.getPublicKeyAsBytes(),
+        this.logger.log(
+            `Issuer account creation: association with account hash ${Utils.binaryToHexa(issuerAccountHash)}`,
         );
+        await this.saveAccountByPublicKey(issuerAccountHash, await publicKey.getPublicKeyAsBytes());
         await this.setBalanceForAccount(
             ECO.BK_RECEIVED_ISSUANCE,
             issuerAccountHash,
             initialTokenAmountAsAtomic,
-            Utils.getTimestampInSeconds()
-        )
+            Utils.getTimestampInSeconds(),
+        );
     }
 
     async createAccountWithNoTokens(publicKey: PublicSignatureKey) {
         const accountHash = await AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
-        await this.saveAccountByPublicKey(
-            accountHash,
-            await publicKey.getPublicKeyAsBytes(),
-        );
+        await this.saveAccountByPublicKey(accountHash, await publicKey.getPublicKeyAsBytes());
         await this.setBalanceForAccount(
             ECO.BK_RECEIVED_PAYMENT,
             accountHash,
             0,
-            Utils.getTimestampInSeconds()
-        )
+            Utils.getTimestampInSeconds(),
+        );
     }
 
     private async setBalanceForAccount(
@@ -593,11 +640,11 @@ export class AccountManager {
 
     private static async getAccountHashFromPublicSignatureKey(publicKey: PublicSignatureKey) {
         const hash: CryptographicHash = new Sha256CryptographicHash();
-        return hash.hash(await publicKey.getPublicKeyAsBytes())
+        return hash.hash(await publicKey.getPublicKeyAsBytes());
     }
 
     async isAccountDefinedByAccountId(accountId: Uint8Array<ArrayBufferLike>) {
         const accountInformation = await this.loadAccountInformation(accountId);
-        return accountInformation.exists
+        return accountInformation.exists;
     }
 }
