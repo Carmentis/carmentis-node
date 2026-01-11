@@ -24,6 +24,7 @@ import {
     ValidatorNodeVb,
     ValidatorNodeVotingPowerUpdateSection,
     VirtualBlockchain,
+    BalanceAvailability,
 } from '@cmts-dev/carmentis-sdk/server';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { NODE_SCHEMAS } from '../constants/constants';
@@ -38,7 +39,6 @@ import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { LevelDb } from '../database/LevelDb';
 import { ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
 import { BlockIDFlag } from '../../../proto-ts/cometbft/types/v1/validator';
-import { BalanceAvailability } from '../accounts/BalanceAvailability';
 import { LevelDbTable } from '../database/LevelDbTable';
 
 const KEY_TYPE_MAPPING: Record<string, string> = {
