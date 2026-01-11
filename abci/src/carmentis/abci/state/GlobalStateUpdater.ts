@@ -331,8 +331,8 @@ export class GlobalStateUpdater {
             throw new Error('Specified fees payer account did not sign the microblock');
         }
 
-        // Case 4: The fees payer account is not the owner of the virtual blockchain
-        // TODO: handle the case where the payer account is not the owner of the virtual blockchain
+        // Case 4: The fees payer account is allowed to write on the virtual blockchain
+        // TODO: handle the case where the payer account is not allowed to write on the virtual blockchain
 
         if (virtualBlockchain instanceof AccountVb) {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
