@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/Carmentis/carmentis-node/compare/v1.0.1...v1.0.2) (2026-01-11)
+
+
+### Bug Fixes
+
+* otel config ([3974c9c](https://github.com/Carmentis/carmentis-node/commit/3974c9c81b0269b9a3aa190e5bd01513db57ad3f))
+
 ## [1.0.1](https://github.com/Carmentis/carmentis-node/compare/v1.0.0...v1.0.1) (2026-01-11)
 
 
