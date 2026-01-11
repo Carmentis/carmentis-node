@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/Carmentis/carmentis-node/compare/v1.0.3...v1.0.4) (2026-01-11)
+
+
+### Bug Fixes
+
+* add `[@ts-expect-error](https://github.com/ts-expect-error)` comment to handle schema typing issue in utils.ts ([372a503](https://github.com/Carmentis/carmentis-node/commit/372a50317ec18918b5109c76cc40f13175fb7284))
+
 ## [1.0.3](https://github.com/Carmentis/carmentis-node/compare/v1.0.2...v1.0.3) (2026-01-11)
 
 
