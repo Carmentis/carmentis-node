@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/Carmentis/carmentis-node/compare/v1.0.0...v1.0.1) (2026-01-11)
+
+
+### Bug Fixes
+
+* debug ci ([c16d5ac](https://github.com/Carmentis/carmentis-node/commit/c16d5ac1b3f2ef529b08b74a1dbf1f8128f36005))
+
 # 1.0.0 (2026-01-11)
 
 
