@@ -123,9 +123,9 @@ export function schemaToJson(schema: ZodObject | ZodOptional | ZodPrefault | Zod
 			const properties = Object.entries(shape);
 			const result = {}
 			for (const [a, b] of properties) {
-				result[a] = schemaToJson(b)
+				// @ts-expect-error error
+                result[a] = schemaToJson(b)
 			}
-			// @ts-ignore
 			return {
 				type: "object",
 				properties: result,
