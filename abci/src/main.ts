@@ -93,13 +93,14 @@ async function bootstrap() {
         });
     } else {
         logger.log("No logs configuration found, using default log config")
+        const defaultOtelUrl = 'http://localhost:4318/v1/logs';
         await configure<string, string>({
             sinks: {
                 console: createNestSink(),
                 otel: getOpenTelemetrySink({
                     serviceName: 'carmentis-node',
                     otlpExporterConfig: {
-                        url: 'http://localhost:4318/v1/logs',
+                        url: defaultOtelUrl,
                     },
                     objectRenderer: 'json',
                 })
