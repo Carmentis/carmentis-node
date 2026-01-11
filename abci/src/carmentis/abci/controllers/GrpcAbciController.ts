@@ -29,6 +29,7 @@ import {
     PrepareProposalResponse,
     ProcessProposalRequest,
     ProcessProposalResponse,
+    ProcessProposalStatus,
     QueryRequest,
     QueryResponse,
     VerifyVoteExtensionRequest,
@@ -123,8 +124,8 @@ export class GrpcAbciController {
     }
 
     @GrpcMethod('ABCIService', 'Flush')
-    Flush(request: FlushRequest): Promise<FlushResponse> {
-        return Promise.resolve(undefined);
+    async Flush(request: FlushRequest): Promise<FlushResponse> {
+        return FlushResponse.create();
     }
 
     @GrpcMethod('ABCIService', 'Query')

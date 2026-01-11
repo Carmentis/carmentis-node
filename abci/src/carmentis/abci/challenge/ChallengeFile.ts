@@ -1,19 +1,21 @@
 import { FileHandle, open } from 'node:fs/promises';
+import { getLogger } from '@logtape/logtape';
 
 /**
   This class allows reading a file that may have updates (i.e. pending transactions) that have not yet been flushed to disk.
   It is used during a storage challenge.
 */
 export class ChallengeFile {
-    filePath: string;
-    handle: FileHandle;
-    pendingData: Uint8Array;
-    size: number;
+    private logger = getLogger(['node', 'challenge', ChallengeFile.name])
+    private filePath: string;
+    private handle?: FileHandle;
+    private pendingData: Uint8Array;
+    private size: number;
 
     constructor(filePath: string, pendingTxs: Uint8Array[]) {
         this.filePath = filePath;
-
-        let pendingDataSize = pendingTxs.reduce((sz, arr) => sz + arr.length, 0);
+        this.size = 0;
+        const pendingDataSize = pendingTxs.reduce((sz, arr) => sz + arr.length, 0);
         this.pendingData = new Uint8Array(pendingDataSize);
         let ptr = 0;
 
@@ -28,9 +30,11 @@ export class ChallengeFile {
             this.handle = await open(this.filePath, 'r');
             const stats = await this.handle.stat();
             this.size = stats.size;
+            this.logger.debug(`File ${this.filePath} opened successfully, size=${this.size}`);
         }
         catch(err) {
-            this.handle = null;
+            this.logger.warn(`Failed to open file ${this.filePath}`);
+            this.handle = undefined;
             this.size = 0;
         }
     }
@@ -40,6 +44,12 @@ export class ChallengeFile {
         const sizeToReadFromDisk = Math.max(0, Math.min(fileOffset + size, this.size) - fileOffset);
 
         if(sizeToReadFromDisk) {
+            // reject if the handle is not open
+            if (!this.handle) {
+                this.logger.warn(`Attempt to read at file ${this.filePath} but handle is not defined: aborting`)
+                throw new Error(`Cannot read at ${this.filePath}: handle not open`)
+            }
+
             const rd = await this.handle.read(buffer, bufferOffset, sizeToReadFromDisk, fileOffset);
             bytesRead += rd.bytesRead;
             bufferOffset += sizeToReadFromDisk;
@@ -59,8 +69,13 @@ export class ChallengeFile {
     }
 
     async close() {
-        if(this.handle !== null) {
+        if (this.handle) {
             await this.handle.close();
+            this.handle = undefined;
+            this.logger.debug(`File ${this.filePath} closed`);
+        }
+        else {
+            this.logger.warn(`Attempt to close not-opened file ${this.filePath}`);
         }
     }
 }

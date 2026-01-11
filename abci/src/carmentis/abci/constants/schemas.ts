@@ -1,5 +1,6 @@
-import { CHAIN, DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
+import { DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
 
+/*
 export const DB_CHAIN_INFORMATION = 0x00;
 export const DB_DATA_FILE = 0x01;
 export const DB_VB_RADIX = 0x02;
@@ -12,29 +13,37 @@ export const DB_VIRTUAL_BLOCKCHAIN_STATE = 0x08;
 export const DB_ACCOUNT_STATE = 0x09;
 export const DB_ACCOUNT_HISTORY = 0x0a;
 export const DB_ACCOUNT_BY_PUBLIC_KEY = 0x0b;
-export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0c;
-export const DB_ACCOUNTS = 0x0d;
-export const DB_VALIDATOR_NODES = 0x0e;
-export const DB_ORGANIZATIONS = 0x0f;
-export const DB_APPLICATIONS = 0x10;
+export const DB_ACCOUNTS_WITH_VESTING_LOCKS = 0x0c;
+export const DB_ESCROWS = 0x0d;
+export const DB_VALIDATOR_NODE_BY_ADDRESS = 0x0e;
+
+// tables used as indexes
+export const DB_PROTOCOL_INDEX = 0x0f;
+export const DB_ACCOUNTS_INDEX = 0x10;
+export const DB_VALIDATOR_NODES_INDEX = 0x11;
+export const DB_ORGANIZATIONS_INDEX = 0x12;
+export const DB_APPLICATIONS_INDEX = 0x12;
 
 export const DB: SCHEMAS.Schema[] = [];
+
+ */
 
 // chain information
 // key: "CHAIN_INFORMATION" (unique)
 // this always contains a single record
 export const DB_CHAIN_INFORMATION_KEY = new Uint8Array(Buffer.from('CHAIN_INFORMATION'));
 
+/*
 DB[DB_CHAIN_INFORMATION] = {
     label: 'ChainInformation',
     definition: [
         { name: 'height', type: DATA.TYPE_UINT48 },
         { name: 'lastBlockTimestamp', type: DATA.TYPE_UINT48 },
+//        { name: 'protocolVirtualBlockchainIdentifier', type: DATA.TYPE_BIN256 },
         { name: 'microblockCount', type: DATA.TYPE_UINT48 },
         {
             name: 'objectCounts',
             type: DATA.TYPE_ARRAY_OF | DATA.TYPE_UINT48,
-            size: CHAIN.N_VIRTUAL_BLOCKCHAINS,
         },
     ],
 };
@@ -106,30 +115,86 @@ DB[DB_ACCOUNT_BY_PUBLIC_KEY] = {
     definition: [{ name: 'accountHash', type: DATA.TYPE_BIN256 }],
 };
 
+// index of accounts with vesting locks
+// key: account hash
+DB[DB_ACCOUNTS_WITH_VESTING_LOCKS] = {
+    label: 'AccountsWithVestingLocks',
+    definition: [],
+};
+
+// escrows
+// key: escrow identifier
+DB[DB_ESCROWS] = {
+    label: 'Escrows',
+    definition: [
+        { name: 'payerAccount', type: DATA.TYPE_BIN256 },
+        { name: 'payeeAccount', type: DATA.TYPE_BIN256 },
+        { name: 'agentAccount', type: DATA.TYPE_BIN256 }
+    ],
+};
+
 // Comet address -> validator node VB identifier
 // key: Comet address
 DB[DB_VALIDATOR_NODE_BY_ADDRESS] = {
     label: 'ValidatorNodeByAddress',
-    definition: [{ name: 'validatorNodeHash', type: DATA.TYPE_BIN256 }],
+    definition: [
+        { name: 'validatorNodeHash', type: DATA.TYPE_BIN256 }
+    ],
 };
 
 // tables used as indexes
-DB[DB_ACCOUNTS] = {
+DB[DB_PROTOCOL_INDEX] = {
+    label: 'Protocol',
+    definition: [],
+};
+DB[DB_ACCOUNTS_INDEX] = {
     label: 'Accounts',
     definition: [],
 };
-DB[DB_VALIDATOR_NODES] = {
+DB[DB_VALIDATOR_NODES_INDEX] = {
     label: 'ValidatorNodes',
     definition: [],
 };
-DB[DB_ORGANIZATIONS] = {
+DB[DB_ORGANIZATIONS_INDEX] = {
     label: 'Organizations',
     definition: [],
 };
-DB[DB_APPLICATIONS] = {
+DB[DB_APPLICATIONS_INDEX] = {
     label: 'Applications',
     definition: [],
 };
+
+// ============================================================================================================================ //
+//  Account lock parameters (parameters field in DB_ACCOUNT_LOCKS)                                                              //
+// ============================================================================================================================ //
+const ACCOUNT_LOCK_ESCROW_PARAMETERS = {
+    label: 'AccountLockEscrowParameters',
+    definition: [
+        { name: 'startTime', type: DATA.TYPE_UINT48 },
+        { name: 'escrowIdentifier', type: DATA.TYPE_BINARY },
+        { name: 'agentAccount', type: DATA.TYPE_BIN256 },
+        { name: 'durationDays', type: DATA.TYPE_UINT16 }
+    ]
+};
+
+const ACCOUNT_LOCK_VESTING_PARAMETERS = {
+    label: 'AccountLockVestingParameters',
+    definition: [
+        { name: 'initialAmount', type: DATA.TYPE_UINT48 },
+        { name: 'startTime', type: DATA.TYPE_UINT48 },
+        { name: 'cliffPeriod', type: DATA.TYPE_UINT16 },
+        { name: 'vestingPeriod', type: DATA.TYPE_UINT16 }
+    ]
+};
+
+const ACCOUNT_LOCK_STAKING_PARAMETERS = {
+    label: 'AccountLockStakingParameters',
+    definition: [
+        { name: 'objectType', type: DATA.TYPE_UINT8 },
+        { name: 'objectIdentifier', type: DATA.TYPE_BIN256 }
+    ]
+};
+*/
 
 // ============================================================================================================================ //
 //  Account history references (chainReference field in DB_ACCOUNT_HISTORY)                                                     //
@@ -137,13 +202,17 @@ DB[DB_APPLICATIONS] = {
 // reference to a block (for earned fees)
 const ACCOUNT_BLOCK_REFERENCE = {
     label: 'AccountBlockReference',
-    definition: [{ name: 'height', type: DATA.TYPE_UINT48 }],
+    definition: [
+        { name: 'height', type: DATA.TYPE_UINT48 }
+    ]
 };
 
 // reference to a microblock (for paid fees)
 const ACCOUNT_MB_REFERENCE = {
     label: 'AccountMbReference',
-    definition: [{ name: 'mbHash', type: DATA.TYPE_BIN256 }],
+    definition: [
+        { name: 'mbHash', type: DATA.TYPE_BIN256 }
+    ]
 };
 
 // reference to a microblock section (for token transfers)
@@ -152,7 +221,7 @@ const ACCOUNT_SECTION_REFERENCE = {
     definition: [
         { name: 'mbHash', type: DATA.TYPE_BIN256 },
         { name: 'sectionIndex', type: DATA.TYPE_UINT16 },
-    ],
+    ]
 };
 
 export const ACCOUNT_REF_SCHEMAS: SCHEMAS.Schema[] = [];

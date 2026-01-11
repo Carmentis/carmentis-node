@@ -1,4 +1,5 @@
-import { RADIX_CST, RadixUtils, Crypto, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { RADIX_CST, RadixUtils, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { NodeCrypto } from './crypto/NodeCrypto';
 import { LevelDb } from './database/LevelDb';
 import { DbInterface } from './database/DbInterface';
 
@@ -101,6 +102,7 @@ export class RadixTree {
     Debugging method.
   */
     async getEntries() {
+        /*
         function hexa(a: any) {
             return a.map((v: any) => v.toString(16).toUpperCase().padStart(2, 0)).join('');
         }
@@ -129,7 +131,9 @@ export class RadixTree {
                         : hexa([...e[1]])),
             );
         }
-        return list;
+        return list;*
+
+         */
     }
 
     async write(key: any, value: any, nodeHash: any, depth: any) {
@@ -147,7 +151,7 @@ export class RadixTree {
             let msk = (node[0] << 8) | node[1];
             const nibble = (key[depth >> 1] >> (4 * (depth & 1))) & 0xf;
             let update = 0;
-            let hashList = [];
+            let hashList: Uint8Array[] = [];
 
             if (msk) {
                 //console.log('already standard');
@@ -217,7 +221,7 @@ export class RadixTree {
             await this.removeFromStorage(depth, nodeHash);
         }
 
-        const newHash = Crypto.Hashes.sha256AsBinary(node).slice(0, RADIX_CST.HASH_SIZE);
+        const newHash = NodeCrypto.Hashes.sha256AsBinary(node).slice(0, RADIX_CST.HASH_SIZE);
         //console.log('hash', debug(newHash), debug(node));
         await this.setToStorage(depth, newHash, node);
 

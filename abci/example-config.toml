@@ -13,6 +13,16 @@ path = '/path/to/key/file'
 sk = 'SIG:SECP256K1:SK{...}'
 env = 'ENV_VAR_NAME_CONTAINING_MY_PRIVATE_KEY'
 
+# This specifies the configuration of the workers which are used for signature verification,
+# the most CPU-expensive task that your Carmentis node is processing.
+# The value of 'max_workers' is either:
+#   0 for 'the number of available logical CPUs'
+#   a negative value -N for 'the number of available logical CPUs minus N'
+#   a positive value N for 'exactly N workers'
+# The default and recommended value is -2.
+[workers]
+max_workers = -2
+
 # This section specifies configuration for the snapshot management.
 [snapshots]
 snapshot_block_period = 1 # Period after which a snapshot is generated. (Default: 1)

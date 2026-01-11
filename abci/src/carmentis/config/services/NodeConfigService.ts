@@ -8,15 +8,19 @@ import * as toml from '@iarna/toml';
 import * as url from 'node:url';
 
 @Injectable()
-export class NodeConfigService {
-    private nodeConfig: NodeConfig;
+export class NodeConfigService implements OnModuleInit {
+    private nodeConfig?: NodeConfig;
     private logger = new Logger(NodeConfigService.name);
 
     constructor() {
+    }
+
+    onModuleInit(): void {
         this.loadConfigFile()
     }
 
     private loadConfigFile() {
+        this.logger.log('Initializing Node Config...');
         // for resilience, we search through multiple possible config files.
         // Some filenames might be undefined due to access to env variables that might be undefined./
         const candidatesConfigFilenames: (string | undefined)[] = [
@@ -29,7 +33,7 @@ export class NodeConfigService {
 
         // we construct the candidates config file paths.
         // Be aware that the order of candidates is important since we accept the first valid one, other are ignored.
-        const candidatesConfigFilePaths = [];
+        const candidatesConfigFilePaths: string[] = [];
 
         // At the top priority, we check if the user has specified a config file path using an environment variable.
         const specifiedConfigPath = process.env['ABCI_CONFIG'] || process.env['NODE_CONFIG'] || undefined;
@@ -57,6 +61,8 @@ export class NodeConfigService {
             } catch (e) {
                 if (e instanceof Error) {
                     this.logger.warn(`Failed to load config file from ${configPath}: ${e.message}`);
+                } else {
+                    this.logger.warn(`Failed to load config file`);
                 }
             }
         }
@@ -75,7 +81,7 @@ export class NodeConfigService {
      * @return {number} The gRPC port from the configuration, or the provided default port if the configuration does not specify a valid port.
      */
     getGrpcPortOrDefault(defaultPort: number): number {
-        const specifiedGrpcPort = this.nodeConfig.abci?.grpc?.port;
+        const specifiedGrpcPort = this.config.abci?.grpc?.port;
         return typeof specifiedGrpcPort === 'number' ? specifiedGrpcPort : defaultPort;
     }
 
@@ -86,8 +92,17 @@ export class NodeConfigService {
      * @return {number} The configured REST ABCI query port, or the provided default port.
      */
     getRestAbciQueryPortOrDefault(defaultPort: number): number {
-        const specifiedPort = this.nodeConfig.abci?.query?.rest?.port;
+        const specifiedPort = this.config.abci?.query?.rest?.port;
         return typeof specifiedPort === 'number' ? specifiedPort : defaultPort;
+    }
+
+    /**
+     * Retrieves the file path for the genesis runoff configuration.
+     *
+     * @return {string} The file path to the genesis runoff file as defined in the node configuration.
+     */
+    getGenesisRunoffFilePath(): string {
+        return this.genesisConfig.runoffFilePath;
     }
 
     /**
@@ -96,7 +111,7 @@ export class NodeConfigService {
      * The RPC endpoint shows a page listing all operations performed by CometBFT.
      */
     getCometbftExposedRpcEndpoint(): string {
-        return this.nodeConfig.cometbft.exposed_rpc_endpoint;
+        return this.cometbftConfig.exposed_rpc_endpoint;
     }
 
 
@@ -111,7 +126,7 @@ export class NodeConfigService {
      * - genesisSnapshotFilePath: The file path for the genesis snapshot.
      */
     getStoragePaths() {
-        const specifiedPaths = this.nodeConfig.paths;
+        const specifiedPaths = this.pathsConfig;
         const rootStoragePath = specifiedPaths.storage;
         const snapshotStoragePath = join(
             rootStoragePath,
@@ -137,7 +152,7 @@ export class NodeConfigService {
     }
 
     getCometBFTHome() {
-        return this.nodeConfig.paths.cometbft_home;
+        return this.pathsConfig.cometbft_home;
     }
 
 
@@ -148,7 +163,7 @@ export class NodeConfigService {
      */
     getSpecifiedGenesisPrivateKeyRetrievalMethod(): { sk?: string; path?: string; env?: string } {
         const unspecifiedPrivateKeyRetrievalMethod = { sk: undefined, path: undefined };
-        const genesisSection = this.nodeConfig.genesis;
+        const genesisSection = this.genesisConfig;
         const isGenesisSectionSpecified = genesisSection !== undefined;
         if (!isGenesisSectionSpecified) return unspecifiedPrivateKeyRetrievalMethod;
         return genesisSection.private_key;
@@ -158,18 +173,69 @@ export class NodeConfigService {
      * This method retrieves the RPC endpoint for the genesis snapshot from the node configuration.
      */
     getGenesisSnapshotRpcEndpoint() {
-        return this.nodeConfig.genesis_snapshot.rpc_endpoint;
+        return this.genesisSnapshotConfig.rpc_endpoint;
     }
 
     getSnapshotBlockPeriod() {
-        return this.nodeConfig.snapshots.snapshot_block_period;
+        return this.snapshotConfig.snapshot_block_period;
     }
 
     getMaxSnapshots() {
-        return this.nodeConfig.snapshots.max_snapshots;
+        return this.snapshotConfig.max_snapshots;
     }
 
     getBlockHistoryBeforeSnapshot() {
-        return this.nodeConfig.snapshots.block_history_before_snapshot
+        return this.snapshotConfig.block_history_before_snapshot
+    }
+
+    /**
+     * Retrieves the complete node configuration.
+     *
+     * @return {NodeConfig} The complete node configuration object.
+     */
+    getConfig(): NodeConfig {
+        if (this.nodeConfig === undefined) throw new Error('Node config is not initialized yet.')
+        return this.nodeConfig;
+    }
+
+    private get pathsConfig() {
+        const pathsConfig = this.config.paths;
+        if (pathsConfig === undefined) throw new Error('Paths config is not initialized yet.')
+        return pathsConfig;
+    }
+
+    private get snapshotConfig() {
+        const snapshotConfig = this.config.snapshots;
+        if (snapshotConfig === undefined) throw new Error('Snapshot config is not initialized yet.')
+        return snapshotConfig;
+    }
+
+    private get genesisConfig() {
+        const genesisConfig = this.config.genesis;
+        if (genesisConfig === undefined) throw new Error('Genesis config is not initialized yet.')
+        return genesisConfig;
+    }
+
+    private get genesisSnapshotConfig() {
+        const genesisSnapshotConfig = this.config.genesis_snapshot;
+        if (genesisSnapshotConfig === undefined) throw new Error('Genesis snapshot config is not initialized yet.')
+        return genesisSnapshotConfig;
+    }
+
+    private get cometbftConfig() {
+        const cometbftConfig = this.config.cometbft;
+        if (cometbftConfig === undefined) throw new Error('CometBFT config is not initialized yet.')
+        return cometbftConfig;
+    }
+
+    private get config() {
+        if (this.nodeConfig === undefined) throw new Error('Node config is not initialized yet.')
+        return this.nodeConfig;
+    }
+
+    static createFromConfig(genesisNodeConfig: NodeConfig) {
+        const config = new NodeConfigService();
+        config.nodeConfig = genesisNodeConfig;
+        return config;
     }
 }

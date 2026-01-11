@@ -1,17 +1,38 @@
 import { Level } from 'level';
 import { NODE_SCHEMAS } from '../constants/constants';
-import { CHAIN, SchemaSerializer, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
-import { DbInterface } from './DbInterface';
+import { CHAIN, Schema, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk/server';
+import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
+import { getLogger, Logger } from '@logtape/logtape';
+import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
+import { AbstractIteratorOptions } from 'abstract-level';
+import { ChainInformation } from '../types/valibot/db/db';
+import { NodeEncoder } from '../NodeEncoder';
+import { AbstractLevelDb } from './AbstractLevelDb';
+import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
 
-export class LevelDb implements DbInterface {
-    db: any;
-    path: string;
-    sub: any;
-    tableSchemas: any;
+export class LevelDb extends AbstractLevelDb {
+    private db: Level<Uint8Array, Uint8Array>;
+    private path: string;
+    //private sub: AbstractSublevel<Level<Uint8Array, Uint8Array>,Uint8Array,Uint8Array,Uint8Array>[] = [];
+    private sub: Map<
+        number,
+        AbstractSublevel<
+            Level<Uint8Array, Uint8Array>,
+            string | Uint8Array<ArrayBufferLike> | Buffer,
+            Uint8Array,
+            Uint8Array
+        >
+    > = new Map();
+    private static logger = getLogger(['node', 'db', LevelDb.name])
+    private static encoding  = {
+        keyEncoding: 'view',
+        valueEncoding: 'view',
+    };
 
-    constructor(path: string, tableSchemas: any) {
+    constructor(path: string) {
+        super(LevelDb.logger)
         this.path = path;
-        this.tableSchemas = tableSchemas;
+        this.db = new Level(this.path, LevelDb.encoding);
     }
 
     /**
@@ -25,36 +46,28 @@ export class LevelDb implements DbInterface {
     public static getTableIdFromVirtualBlockchainType(type: number) {
         switch (type) {
             case CHAIN.VB_ACCOUNT:
-                return NODE_SCHEMAS.DB_ACCOUNTS;
+                return LevelDbTable.ACCOUNTS_INDEX;
             case CHAIN.VB_VALIDATOR_NODE:
-                return NODE_SCHEMAS.DB_VALIDATOR_NODES;
+                return LevelDbTable.VALIDATOR_NODES_INDEX;
             case CHAIN.VB_ORGANIZATION:
-                return NODE_SCHEMAS.DB_ORGANIZATIONS;
+                return LevelDbTable.ORGANIZATIONS_INDEX;
             case CHAIN.VB_APPLICATION:
-                return NODE_SCHEMAS.DB_APPLICATIONS;
+                return LevelDbTable.APPLICATIONS_INDEX;
+            case CHAIN.VB_PROTOCOL:
+                return LevelDbTable.PROTOCOL_INDEX;
             default:
                 return -1;
         }
     }
 
-    async initialize() {
-        const encoding = {
-            keyEncoding: 'view',
-            valueEncoding: 'view',
-        };
-
-        this.db = new Level(this.path, encoding);
-        this.sub = [];
-
-        const nTables = this.getTableCount();
-
-        for (let n = 0; n < nTables; n++) {
-            this.sub[n] = this.db.sublevel(Utils.numberToHexa(n, 2), encoding);
+    initialize() {
+        this.logger.info(`Initializing LevelDB at ${this.path}`);
+        for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
+            this.sub.set(
+                tableId,
+                this.db.sublevel(Utils.numberToHexa(tableId, 2), LevelDb.encoding)
+            );
         }
-    }
-
-    getTableCount() {
-        return Object.keys(this.tableSchemas).length;
     }
 
     async open() {
@@ -66,6 +79,9 @@ export class LevelDb implements DbInterface {
     }
 
     async clear() {
+//      if (this.db.status !== 'open') {
+//          await this.open()
+//      }
         await this.db.clear();
     }
 
@@ -74,57 +90,94 @@ export class LevelDb implements DbInterface {
     }
 
     async getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined> {
+        this.logger.debug(`Accessing binary with key {key} on table {tableId}`, () => ({
+            key: Utils.binaryToHexa(key),
+            tableId,
+        }));
         try {
-            const b = await this.sub[tableId].get(key);
-            if (b !== undefined) {
-                return new Uint8Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+            const subTable = this.sub.get(tableId);
+            if (subTable) {
+                const b = await subTable.get(key);
+                if (b !== undefined) {
+                    this.logger.debug(`Returning ${b.length} bytes`);
+                    return new Uint8Array(
+                        b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
+                    );
+                }
+            } else {
+                // TODO: handle this case
             }
+
         } catch (e) {
-            console.error(e);
+            this.logger.error('{e}', { e });
         }
+        this.logger.warn(
+            `Raw entry ${Utils.binaryToHexa(key)} not found on table ${tableId}: returning undefined`,
+        );
         return undefined;
     }
 
-    async getObject(tableId: number, key: Uint8Array) {
-        const data = await this.getRaw(tableId, key);
-
-        if (data === undefined) {
-            return data;
-        }
-        return this.unserialize(tableId, data);
-    }
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
+        this.logger.debug(
+            `Setting binary with key {key} on table {tableId}: {dataLength} bytes`,
+            () => ({
+                key: Utils.binaryToHexa(key),
+                tableId,
+                dataLength: data.length,
+            }),
+        );
         try {
-            await this.sub[tableId].put(key, data);
-            return true;
+            const subTable = this.sub.get(tableId);
+            if (subTable) {
+                await subTable.put(key, data);
+                return true;
+            } else {
+                // TODO: handle this case
+                return false;
+            }
         } catch (e) {
-            console.error(e);
+            this.logger.error(`{e}`, { e });
             return false;
         }
     }
 
-    async putObject(tableId: number, key: Uint8Array, object: any) {
-        const data = this.serialize(tableId, object);
-        return await this.putRaw(tableId, key, data);
-    }
 
-    async getKeys(tableId: number) {
-        const table = this.sub[tableId];
-        const keys = [];
+    async getKeys(tableId: number): Promise<Uint8Array[]> {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to access an undefined table ${tableId}: aborting`)
+            return []
+        }
 
+        const keys: Uint8Array[] = [];
         for await (const [key] of table.iterator()) {
             keys.push(key);
         }
         return keys;
     }
 
-    async query(tableId: number, query?: any) {
-        try {
-            return this.sub[tableId].iterator(query);
-        } catch (e) {
-            console.error(e);
-            return null;
+    /**
+     * Executes a query on the specified table using provided iterator options.
+     *
+     * @param {number} tableId - The identifier of the table to execute the query on.
+     * @param {AbstractIteratorOptions<Uint8Array<ArrayBufferLike>, Uint8Array<ArrayBufferLike>>} query - The query options for the iterator.
+     * @return {Promise<Iterator | undefined>} A promise that resolves to the result of the query iterator on success, or undefined if an error occurs.
+     */
+    async query(
+        tableId: number,
+        query?: LevelQueryIteratorOptions,
+    ): Promise<LevelQueryResponseType> {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to query an undefined table ${tableId}: aborting`);
+            throw new Error("Attempted to query an undefined table");
+        }
+
+        if (query) {
+            return table.iterator(query);
+        } else {
+            return table.iterator();
         }
     }
 
@@ -134,8 +187,14 @@ export class LevelDb implements DbInterface {
     }
 
     async del(tableId: number, key: Uint8Array) {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to delete an entry an undefined table ${tableId}: aborting`);
+            return false;
+        }
+
         try {
-            await this.sub[tableId].del(key);
+            await table.del(key);
             return true;
         } catch (e) {
             console.error(e);
@@ -149,7 +208,12 @@ export class LevelDb implements DbInterface {
 
         const obj = {
             del: function (tableId: number, list: any) {
-                const options = tableId == -1 ? {} : { sublevel: sub[tableId] };
+                const table = sub.get(tableId);
+                if (table === undefined) {
+                    throw new Error('Attempted to access an undefined table');
+                }
+
+                const options = tableId == -1 ? {} : { sublevel: table };
 
                 for (const key of list) {
                     batchObject.del(key, options);
@@ -157,7 +221,12 @@ export class LevelDb implements DbInterface {
                 return obj;
             },
             put: function (tableId: number, list: any) {
-                const options = tableId == -1 ? {} : { sublevel: sub[tableId] };
+                const table = sub.get(tableId);
+                if (table === undefined) {
+                    throw new Error('Attempted to access an undefined table');
+                }
+
+                const options = tableId == -1 ? {} : { sublevel: table };
 
                 for (const [key, value] of list) {
                     batchObject.put(key, value, options);
@@ -178,14 +247,30 @@ export class LevelDb implements DbInterface {
         return obj;
     }
 
-    serialize(tableId: number, object: object) {
-        const serializer = new SchemaSerializer(NODE_SCHEMAS.DB[tableId]);
-        const data = serializer.serialize(object);
-        return data;
+    async initializeTable() {
+        const chainInfo: ChainInformation = {
+            height: 0,
+            lastBlockTimestamp: 0,
+            microblockCount: 0,
+            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0), // TODO: use version-based constants
+        };
+        await this.putRaw(
+            LevelDbTable.CHAIN_INFORMATION,
+            ChainInformationIndex.CHAIN_INFORMATION_KEY,
+            NodeEncoder.encodeChainInformation(chainInfo),
+        );
     }
 
-    unserialize(tableId: number, data: Uint8Array) {
-        const unserializer = new SchemaUnserializer(NODE_SCHEMAS.DB[tableId]);
-        return unserializer.unserialize(data);
+    async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
+        const vbType = virtualBlockchain.getType();
+        const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
+        if (indexTableId != -1) {
+            await this.putRaw(indexTableId, virtualBlockchain.getId(), new Uint8Array(0));
+        } else {
+            // no need to index this type of virtual blockchain
+            this.logger.debug(
+                `Ignore virtual blockchain from index: virtual blockchain type ${virtualBlockchain.getType()} is ignored`,
+            );
+        }
     }
 }

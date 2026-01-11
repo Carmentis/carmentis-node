@@ -1,53 +1,39 @@
+import { InitChainRequest } from '../../proto-ts/cometbft/abci/v1/types';
 import {
-    CheckTxRequest,
-    ExtendVoteRequest,
-    FinalizeBlockRequest,
-    FinalizeBlockResponse,
-    InitChainRequest,
-    PrepareProposalRequest,
-    ProcessProposalRequest,
-    ProcessProposalStatus,
-    VerifyVoteExtensionRequest,
-} from '../../proto-ts/cometbft/abci/v1/types';
-import {
-    Blockchain,
-    CHAIN,
-    CMTSToken,
-    CryptographicHash,
-    CryptoSchemeFactory,
-    ECO,
-    Economics,
+    AccountVb,
+    CryptoEncoderFactory,
+    EncoderFactory,
     Hash,
-    KeyedProvider,
+    IllegalParameterError,
     Microblock,
-    NullNetworkProvider,
     PrivateSignatureKey,
     Provider,
-    PublicSignatureKey,
-    SECTIONS,
-    SectionType,
-    Utils,
-    VirtualBlockchainType,
+    PublicSignatureKey, SectionType,
 } from '@cmts-dev/carmentis-sdk/server';
-import { EncoderFactory, IllegalParameterError } from '@cmts-dev/carmentis-sdk/server';
 import { Logger } from '@nestjs/common';
-import { NodeProvider } from './NodeProvider';
-import { LevelDb } from './database/LevelDb';
-import { Storage } from './Storage';
+import { GlobalState } from './state/GlobalState';
 
 export class InitialBlockchainStateBuilder {
     private logger = new Logger(InitialBlockchainStateBuilder.name);
 
-    private readonly issuerPublicKey: PublicSignatureKey;
     constructor(
+        private readonly state: GlobalState,
         private readonly request: InitChainRequest,
         private readonly issuerPrivateKey: PrivateSignatureKey,
-        private readonly blockchain: Blockchain,
+        private readonly issuerPublicKey: PublicSignatureKey,
     ) {
-        this.issuerPublicKey = this.issuerPrivateKey.getPublicKey();
     }
 
-    public getValidatorPublicKeyFromRequest() {
+    public static async create(
+        state: GlobalState,
+        request: InitChainRequest,
+        issuerPrivateKey: PrivateSignatureKey,
+    ) {
+        const issuerPublicKey = await issuerPrivateKey.getPublicKey();
+        const updater = new InitialBlockchainStateBuilder(state, request, issuerPrivateKey, issuerPublicKey);
+    }
+
+    public getValidatorPublicKeyFromRequest(keyTypeMapping: Record<string, string>) {
         // The init chain request should contain exactly one validator in the validator set.
         // The validator, assumed to be this running node, is used to declare the first running node.
         const validators = this.request.validators;
@@ -64,30 +50,70 @@ export class InitialBlockchainStateBuilder {
         const { pub_key_type: genesisNodePublicKeyType, pub_key_bytes } = validators[0];
         const encoder = EncoderFactory.bytesToBase64Encoder();
         const genesisNodePublicKey = encoder.encode(pub_key_bytes);
-        return { genesisNodePublicKeyType, genesisNodePublicKey };
+        const translatedGenesisNodePublicKeyType = Object.keys(keyTypeMapping).find(
+            (key) => keyTypeMapping[key] == genesisNodePublicKeyType,
+        );
+
+        if (!translatedGenesisNodePublicKeyType) {
+            throw new IllegalParameterError(`Unexpected key type '${genesisNodePublicKeyType}'`);
+        }
+
+        return {
+            genesisNodePublicKeyType: translatedGenesisNodePublicKeyType,
+            genesisNodePublicKey,
+        };
     }
 
     public async createIssuerAccountCreationTransaction() {
-        this.logger.verbose('Creating genesis account creation transaction');
-        const account = await this.blockchain.createGenesisAccount(this.issuerPublicKey);
-        const accountVb = account.vb;
-        await accountVb.setSignature(this.issuerPrivateKey);
-        const { headerData, bodyData } = account.vb.currentMicroblock.serialize();
-        return Utils.binaryFrom(headerData, bodyData);
+        const sigEncoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
+        this.logger.verbose(`Creating genesis account creation transaction`);
+        this.logger.debug(
+            `issuer public key: ${await sigEncoder.encodePublicKey(this.issuerPublicKey)}`,
+        );
+
+        const microblock = await AccountVb.createIssuerAccountCreationMicroblock(
+            this.issuerPublicKey,
+        );
+        const signature = await microblock.sign(this.issuerPrivateKey);
+        microblock.addSection({
+            type: SectionType.SIGNATURE,
+            signature,
+            schemeId: this.issuerPublicKey.getSignatureSchemeId()
+        });
+
+        const { microblockData } = microblock.serialize();
+        return microblockData;
     }
 
     public async createCarmentisOrganisationCreationTransaction() {
+        /*
         this.logger.verbose('Creating organisation creation transaction');
-        const organisation = await this.blockchain.createOrganization();
-        await organisation.setDescription({
+
+        const mb = Microblock.createGenesisOrganizationMicroblock();
+        mb.addOrganizationPublicKeySection({
+            publicKey: await this.issuerPublicKey.getPublicKeyAsBytes(),
+            schemeId: this.issuerPublicKey.getSignatureSchemeId(),
+        });
+        mb.addOrganizationDescriptionSection({
             name: 'Carmentis',
             countryCode: 'FR',
             city: 'Paris',
             website: 'https://carmentis.io',
         });
-        const organisationVb = organisation.vb;
-        await organisationVb.setSignature(this.issuerPrivateKey);
-        const serializedOrganisationMicroBlock = organisationVb.currentMicroblock.serialize();
+
+        const mbSignature = await mb.sign(this.issuerPrivateKey);
+        mb.addOrganizationSignatureSection({
+            signature: mbSignature,
+            schemeId: this.issuerPublicKey.getSignatureSchemeId(),
+        });
+
+        const { microblockHash: organizationId, microblockData: organizationCreationTransaction } =
+            mb.serialize();
+        return { organizationId, organizationCreationTransaction };
+
+        /*
+        const mb = organisation.vb.currentMicroblock;
+        const serializedOrganisationMicroBlock = mb.serialize();
         const organizationId = Hash.from(serializedOrganisationMicroBlock.microblockHash);
         const organisationCreationMicroBlockHeader = serializedOrganisationMicroBlock.headerData;
         const organisationCreationMicroBlockBody = serializedOrganisationMicroBlock.bodyData;
@@ -95,23 +121,42 @@ export class InitialBlockchainStateBuilder {
             organisationCreationMicroBlockHeader,
             organisationCreationMicroBlockBody,
         );
-        return { organizationId, organisationCreationTransaction };
+         */
     }
 
     public async createGenesisNodeDeclarationTransaction(
-        organizationId: Hash,
+        organizationId: Uint8Array,
         genesisNodePublicKey: string,
         genesisNodePublicKeyType: string,
         genesisNodeCometbftRpcEndpoint: string,
     ) {
+        /*
         // We now declare the running node as the genesis node.
-        const genesisNode = await this.blockchain.createValidatorNode(organizationId);
-        await genesisNode.setDescription({
+        const mb = Microblock.createGenesisValidatorNodeMicroblock();
+        mb.addValidatorNodeDeclarationSection({
+            organizationId,
+        });
+        mb.addValidatorNodeCometbftPublicKeyDeclarationSection({
             cometPublicKey: genesisNodePublicKey,
             cometPublicKeyType: genesisNodePublicKeyType,
         });
-        await genesisNode.setRpcEndpoint({
+        mb.addValidatorNodeRpcEndpointSection({
             rpcEndpoint: genesisNodeCometbftRpcEndpoint,
+        });
+        const signature = await mb.sign(this.issuerPrivateKey);
+        mb.addValidatorNodeSignatureSection({ signature, schemeId: this.issuerPublicKey.getSignatureSchemeId() });
+
+        const {
+            microblockHash: validatorNodeId,
+            microblockData: genesisNodeDeclarationTransaction,
+        } = mb.serialize();
+        /*
+        const genesisNode = await this.blockchain.createValidatorNode(organizationId);
+        await genesisNode.setDescription({
+
+        });
+        await genesisNode.setRpcEndpoint({
+
         });
         const validatorNodeVb = genesisNode.vb;
         await validatorNodeVb.setSignature(this.issuerPrivateKey);
@@ -124,18 +169,8 @@ export class InitialBlockchainStateBuilder {
             genesisNodeMicroBlockBody,
         );
 
-        return { genesisNodeId: validatorNodeId, genesisNodeDeclarationTransaction };
-    }
 
-    public async createGenesisNodeValidatorGrantTransaction(genesisNodeId: Hash) {
-        // We now load the genesis validator node and set the voting power to 10.
-        const loadedNode = await this.blockchain.loadValidatorNode(genesisNodeId);
-        await loadedNode.setNetworkIntegration({
-            votingPower: 10,
-        });
-        const vb = loadedNode.vb;
-        await vb.setSignature(this.issuerPrivateKey);
-        const serializedMb = vb.currentMicroblock.serialize();
-        return Utils.binaryFrom(serializedMb.headerData, serializedMb.bodyData);
+        return { genesisNodeId: validatorNodeId, genesisNodeDeclarationTransaction };
+        */
     }
 }

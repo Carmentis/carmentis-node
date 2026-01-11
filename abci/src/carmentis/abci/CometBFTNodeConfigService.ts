@@ -31,21 +31,28 @@ export interface Genesis {
 @Injectable()
 export class CometBFTNodeConfigService implements OnModuleInit {
     private readonly logger = new Logger(CometBFTNodeConfigService.name);
-    private readonly nodeHome: string;
-    private readonly genesisPath: string;
-    private readonly cometbftKeyPath: string;
-
     private validatorPublicKey?: TendermintPublicKey;
     private genesis?: Genesis;
 
     constructor(private readonly nodeConfig: NodeConfigService) {
-        this.nodeHome = this.nodeConfig.getCometBFTHome();
-        this.genesisPath = path.join(this.nodeHome, 'config', 'genesis.json');
-        this.cometbftKeyPath = path.join(this.nodeHome, 'config', 'priv_validator_key.json');
+    }
+
+    private get nodeHome() {
+        return this.nodeConfig.getCometBFTHome();
+    }
+
+    private get genesisPath() {
+        return path.join(this.nodeHome, 'config', 'genesis.json');
+    }
+
+    private get cometbftKeyPath() {
+        return path.join(this.nodeHome, 'config', 'priv_validator_key.json');
     }
 
     async onModuleInit(): Promise<void> {
-        await Promise.all([this.loadValidatorPublicKey(), this.loadGenesis()]);
+        if (this.genesis === undefined || this.validatorPublicKey === undefined) {
+            await Promise.all([this.loadValidatorPublicKey(), this.loadGenesis()]);
+        }
     }
 
     getPublicKey(): TendermintPublicKey {
@@ -101,5 +108,12 @@ export class CometBFTNodeConfigService implements OnModuleInit {
             this.logger.debug(e instanceof Error ? e.message : JSON.stringify(e));
             throw e;
         }
+    }
+
+    static createFromGenesisAndTandermintPublicKey(nodeService: NodeConfigService, genesis: Genesis, pk: TendermintPublicKey) {
+        const service = new CometBFTNodeConfigService(nodeService);
+        service.genesis = genesis;
+        service.validatorPublicKey = pk;
+        return service;
     }
 }

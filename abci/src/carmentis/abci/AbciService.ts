@@ -3,6 +3,8 @@ import {
     ApplySnapshotChunkResponse,
     ApplySnapshotChunkResult,
     CheckTxRequest,
+    CheckTxResponse,
+    CheckTxType,
     CommitRequest,
     CommitResponse,
     EchoRequest,
@@ -22,6 +24,7 @@ import {
     ListSnapshotsResponse,
     LoadSnapshotChunkRequest,
     LoadSnapshotChunkResponse,
+    Misbehavior,
     OfferSnapshotRequest,
     OfferSnapshotResponse,
     OfferSnapshotResult,
@@ -34,94 +37,71 @@ import {
     QueryResponse,
     Snapshot as SnapshotProto,
     VerifyVoteExtensionRequest,
-    VerifyVoteExtensionResponse,
+    VerifyVoteExtensionResponse
 } from '../../proto-ts/cometbft/abci/v1/types';
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { KeyManagementService } from './services/KeyManagementService';
 import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
-import { CachedLevelDb } from './database/CachedLevelDb';
-import { Storage } from './Storage';
+import { Storage } from './storage/Storage';
+import { Performance } from './Performance';
 
 import {
-    Base64,
-    Blockchain,
+    AbciQueryEncoder,
+    AbciResponse,
+    AbciResponseType,
+    BlockchainUtils,
     CHAIN,
-    CMTSToken,
-    Crypto,
-    CryptographicHash,
-    CryptoSchemeFactory,
     ECO,
-    Economics,
     EncoderFactory,
-    GenesisSnapshotDTO,
-    Hash,
-    KeyedProvider,
-    MessageSerializer,
-    MessageUnserializer,
-    MicroblockImporter,
+    GenesisSnapshotAbciResponse,
+    Microblock,
+    MicroblockConsistencyChecker,
     NetworkProvider,
-    NullNetworkProvider,
     PrivateSignatureKey,
-    Provider,
-    PublicSignatureKey,
-    SCHEMAS,
-    SECTIONS,
-    Utils, VirtualBlockchain,
+    SectionLabel,
+    SectionType,
+    Utils
 } from '@cmts-dev/carmentis-sdk/server';
-
-import { AccountManager } from './AccountManager';
-import { RadixTree } from './RadixTree';
 import { LevelDb } from './database/LevelDb';
 import { SnapshotsManager } from './SnapshotsManager';
-import { SectionCallback } from './types/SectionCallback';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
-import { NodeProvider } from './NodeProvider';
-import { NODE_SCHEMAS } from './constants/constants';
 import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
-import { InitialBlockchainStateBuilder } from './InitialBlockchainStateBuilder';
-import { AccountInformation } from './types/AccountInformation';
 import { AbciHandlerInterface } from './AbciHandlerInterface';
 import { NodeConfigService } from '../config/services/NodeConfigService';
-import { Cache } from './types/Cache';
+import { MicroblockCheckResult } from './types/MicroblockCheckResult';
+import { GlobalState } from './state/GlobalState';
+import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
+import { GenesisRunoff } from './GenesisRunoff';
+import { getLogger } from '@logtape/logtape';
+import { GlobalStateUpdateCometParameters } from './types/GlobalStateUpdateCometParameters';
+import { GenesisRunoffTransactionsBuilder } from './GenesisRunoffTransactionsBuilder';
+import { CheckTxResponseCode } from './CheckTxResponseCode';
 
 const APP_VERSION = 1;
 
 const KEY_TYPE_MAPPING = {
-  'tendermint/PubKeyEd25519': 'ed25519'
+    'tendermint/PubKeyEd25519': 'ed25519',
 };
 
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
-    private logger = new Logger(AbciService.name);
-    accountManager: AccountManager;
-    blockchain: Blockchain;
-    db: LevelDb;
-    storage: Storage;
-    snapshot: SnapshotsManager;
-    sectionCallbacks: Map<number, SectionCallback>;
-    finalizedBlockCache: Cache | null;
-    importedSnapshot: SnapshotProto | null;
-
-    // storage paths
-    private dbPath: string;
-    private storagePath: string;
-    private snapshotPath: string;
-
-    // Serializers are used to serialize/deserialize the messages sent to the application.
-    private messageSerializer = new MessageSerializer(SCHEMAS.NODE_MESSAGES);
-    private messageUnserializer = new MessageUnserializer(SCHEMAS.NODE_MESSAGES);
-
-    // Two radix trees are used to maintain the state of tokens and virtual blockchains.
-    private vbRadix: RadixTree;
-    private tokenRadix: RadixTree;
+    private initialized: boolean;
+    private logger = getLogger(['node', AbciService.name]);
+    private perf: Performance;
 
     // The ABCI query handler is used to handle queries sent to the application via the abci_query method.
-    private abciQueryHandler: ABCIQueryHandler;
+    private abciQueryHandler?: ABCIQueryHandler;
 
-    // storage paths
+    private isCatchingUp: boolean;
+    private storage?: Storage;
+    private db?: LevelDb;
+
+    private state?: GlobalState;
+    private snapshot?: SnapshotsManager;
+    private importedSnapshot?: SnapshotProto;
+    private genesisRunoffs: GenesisRunoff;
 
     constructor(
         private readonly nodeConfig: NodeConfigService,
@@ -129,6 +109,47 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         private readonly kms: KeyManagementService,
         private genesisSnapshotStorage: GenesisSnapshotStorageService,
     ) {
+        this.initialized = false;
+        this.isCatchingUp = false;
+        this.perf = new Performance(this.logger, true);
+        this.genesisRunoffs = GenesisRunoff.noRunoff();
+    }
+
+    private getStorage(): Storage {
+        if (!this.storage) {
+            throw new Error('Storage is not initialized');
+        }
+        return this.storage;
+    }
+
+    private getLevelDb(): LevelDb {
+        if (!this.db) {
+            throw new Error('LevelDb is not initialized');
+        }
+        return this.db;
+    }
+
+    private getSnapshot(): SnapshotsManager {
+        if (!this.snapshot) {
+            throw new Error('SnapshotsManager is not initialized');
+        }
+        return this.snapshot;
+    }
+
+    private getGlobalState(): GlobalState {
+        if (!this.state) {
+            throw new Error('GlobalState is not initialized');
+        }
+        return this.state;
+    }
+
+    async onModuleInit() {
+        // this may be called twice by Nest, so we use this safeguard to prevent a double initialization
+        if(this.initialized) {
+            return;
+        }
+        this.initialized = true;
+
         // define the paths where are stored the database, the storage and the snapshots.
         const {
             rootStoragePath: abciStoragePath,
@@ -136,222 +157,25 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             microblocksStoragePath,
             snapshotStoragePath,
         } = this.nodeConfig.getStoragePaths();
-        this.logger.log(`ABCI storage at ${abciStoragePath}`);
-        this.dbPath = dbStoragePath;
-        this.storagePath = microblocksStoragePath;
-        this.snapshotPath = snapshotStoragePath;
+        this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreateNoRunoff(
+            this.nodeConfig.getGenesisRunoffFilePath(),
+        );
+        this.logger.info(`ABCI storage at ${abciStoragePath}`);
 
-        // Create and initialize the database.
-        this.db = new LevelDb(this.dbPath, NODE_SCHEMAS.DB);
+        this.db = new LevelDb(dbStoragePath);
         this.db.initialize();
+        this.storage = new Storage(this.db, microblocksStoragePath);
 
-        // Create and initialize file storage management and snapshot management.
-        this.storage = new Storage(this.db, this.storagePath, []);
-        this.snapshot = new SnapshotsManager(this.db, this.snapshotPath, this.logger);
+        // creates the snapshot system
+        const snapshotPath = snapshotStoragePath;
+        this.snapshot = new SnapshotsManager(this.db, snapshotPath, this.logger);
+        this.state = new GlobalState(this.db, this.storage);
 
-        // Create unauthenticated blockchain client
-        const internalProvider = new NodeProvider(this.db, this.storage);
-        const provider = new Provider(internalProvider, new NullNetworkProvider());
-        this.blockchain = new Blockchain(provider);
-        this.accountManager = new AccountManager(this.db, this.tokenRadix);
-
-        // Set up the ABCI query handler
         this.abciQueryHandler = new ABCIQueryHandler(
-            this.blockchain,
+            this.state,
             this.db,
-            this.accountManager,
             this.genesisSnapshotStorage,
         );
-
-        // instantiate radix trees
-        this.vbRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_VB_RADIX);
-        this.tokenRadix = new RadixTree(this.db, NODE_SCHEMAS.DB_TOKEN_RADIX);
-
-        this.finalizedBlockCache = null;
-
-        // we do not import snapshot by default
-        this.importedSnapshot = null;
-
-        // we register the callbacks for the sections
-        this.sectionCallbacks = new Map();
-        this.registerSectionCallbacks();
-    }
-
-    private registerSectionCallbacks() {
-        this.registerSectionPostUpdateCallbacks(CHAIN.VB_ACCOUNT, [
-            [SECTIONS.ACCOUNT_TOKEN_ISSUANCE, this.accountTokenIssuanceCallback],
-            [SECTIONS.ACCOUNT_CREATION, this.accountCreationCallback],
-            [SECTIONS.ACCOUNT_TRANSFER, this.accountTokenTransferCallback],
-        ]);
-
-        this.registerSectionPostUpdateCallbacks(CHAIN.VB_VALIDATOR_NODE, [
-            [SECTIONS.VN_DESCRIPTION, this.validatorNodeDescriptionCallback],
-            [SECTIONS.VN_NETWORK_INTEGRATION, this.validatorNodeNetworkIntegrationCallback],
-        ]);
-    }
-
-    onModuleInit() {}
-
-    /**
-     Account callbacks
-     */
-    async accountTokenIssuanceCallback(context: any) {
-        const rawPublicKey = await context.vb.getPublicKey();
-        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
-
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SENT_ISSUANCE,
-                payerAccount: null,
-                payeeAccount: context.vb.identifier,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-            this.logger,
-        );
-
-        await context.cache.accountManager.saveAccountByPublicKey(
-            context.vb.identifier,
-            rawPublicKey,
-        );
-    }
-
-    async accountCreationCallback(context: any) {
-        const rawPublicKey = await context.vb.getPublicKey();
-        await context.cache.accountManager.testPublicKeyAvailability(rawPublicKey);
-
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SALE,
-                payerAccount: context.section.object.sellerAccount,
-                payeeAccount: context.vb.identifier,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-            this.logger,
-        );
-
-        await context.cache.accountManager.saveAccountByPublicKey(
-            context.vb.identifier,
-            rawPublicKey,
-        );
-    }
-
-    async accountTokenTransferCallback(context: any) {
-        await context.cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_SENT_PAYMENT,
-                payerAccount: context.vb.identifier,
-                payeeAccount: context.section.object.account,
-                amount: context.section.object.amount,
-            },
-            {
-                mbHash: context.mb.hash,
-                sectionIndex: context.section.index,
-            },
-            context.timestamp,
-            this.logger,
-        );
-    }
-
-    /**
-     Validator node callbacks
-     */
-    async validatorNodeDescriptionCallback(context: any) {
-        const cometPublicKeyBytes = Base64.decodeBinary(context.section.object.cometPublicKey);
-        const cometAddress =
-            CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
-
-        const networkIntegration = await context.object.getNetworkIntegration();
-
-        // create the new link: Comet address -> identifier
-        await context.cache.db.putRaw(
-            NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
-            cometAddress,
-            context.vb.identifier,
-        );
-
-        if(networkIntegration.votingPower) {
-            const validatorSetUpdateEntry = {
-                power: networkIntegration.votingPower,
-                pub_key_type: KEY_TYPE_MAPPING[context.section.object.cometPublicKeyType],
-                pub_key_bytes: cometPublicKeyBytes,
-            };
-
-            context.cache.validatorSetUpdate.push(validatorSetUpdateEntry);
-        }
-    }
-
-    async validatorNodeNetworkIntegrationCallback(context: any) {
-        const description = await context.object.getDescription();
-        const cometPublicKeyBytes = Base64.decodeBinary(description.cometPublicKey);
-
-        const validatorSetUpdateEntry = {
-            power: context.section.object.votingPower,
-            pub_key_type: KEY_TYPE_MAPPING[description.cometPublicKeyType],
-            pub_key_bytes: cometPublicKeyBytes,
-        };
-
-        context.cache.validatorSetUpdate.push(validatorSetUpdateEntry);
-    }
-
-    registerSectionPreUpdateCallbacks(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-    ) {
-        this.putSectionCallbackInRegister(objectType, callbackList, 0);
-    }
-
-    registerSectionPostUpdateCallbacks(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-    ) {
-        this.putSectionCallbackInRegister(objectType, callbackList, 1);
-    }
-
-    putSectionCallbackInRegister(
-        objectType: number,
-        callbackList: Array<[number, SectionCallback]>,
-        isPostUpdate: number,
-    ) {
-        for (const [sectionType, callback] of callbackList) {
-            const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
-            this.sectionCallbacks.set(key, callback.bind(this));
-        }
-    }
-
-    async invokeSectionPreUpdateCallback(objectType: number, sectionType: number, context: any) {
-        await this.invokeSectionCallback(objectType, sectionType, context, 0);
-    }
-
-    async invokeSectionPostUpdateCallback(objectType: number, sectionType: number, context: any) {
-        await this.invokeSectionCallback(objectType, sectionType, context, 1);
-    }
-
-    async invokeSectionCallback(
-        objectType: number,
-        sectionType: number,
-        context: any,
-        isPostUpdate: number,
-    ) {
-        const key = (sectionType << 5) | (objectType << 1) | isPostUpdate;
-
-        if (this.sectionCallbacks.has(key)) {
-            const sectionCallback = this.sectionCallbacks.get(key);
-
-            if (!sectionCallback) {
-                throw new Error(`internal error: undefined section callback`);
-            }
-            await sectionCallback(context);
-        }
     }
 
     /**
@@ -361,7 +185,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      */
     async Query(request: QueryRequest): Promise<QueryResponse> {
         const response = await this.forwardAbciQueryToHandler(new Uint8Array(request.data));
-        return Promise.resolve({
+        return {
             code: 2,
             log: '',
             info: '',
@@ -371,67 +195,76 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             proof_ops: undefined,
             height: 0,
             codespace: 'Carmentis',
-        });
+        };
     }
 
     private async forwardAbciQueryToHandler(serializedQuery: Uint8Array) {
-        // We deserialize the query to identity the request type and content.
-        const { type, object } = this.messageUnserializer.unserialize(serializedQuery);
-        this.logger.log(`Received query ${SCHEMAS.NODE_MESSAGES[type].label} (${type})`);
-        try {
-            return await this.abciQueryHandler.handleQuery(type, object);
-        } catch (error) {
-            this.logger.error(error);
-            const errorMsg = error instanceof Error ? error.toString() : 'error';
-            return this.messageSerializer.serialize(SCHEMAS.MSG_ERROR, {
-                error: errorMsg,
+        // we reject the query if the handler is not initialized yet.
+        if (this.abciQueryHandler === undefined) {
+            this.logger.error(`ABCI query handler is not initialized yet.`);
+            return AbciQueryEncoder.encodeAbciResponse({
+                responseType: AbciResponseType.ERROR,
+                error: 'ABCI query handler is not initialized yet.',
             });
+        }
+
+        try {
+            // decoding the request
+            const abciRequest = AbciQueryEncoder.decodeAbciRequest(serializedQuery);
+            this.logger.info(`Receiving request of type ${abciRequest.requestType}`);
+
+            // handle the request, encode and sends back the response
+            const response = await this.abciQueryHandler.handleAbciRequest(abciRequest);
+            return AbciQueryEncoder.encodeAbciResponse(response);
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(
+                `ABCI query execution failed due to the following error: ${errorMsg}`,
+            );
+            if (error instanceof Error) {
+                this.logger.debug(error.stack ?? 'No stack provided');
+            }
+            const errorResponse: AbciResponse = {
+                responseType: AbciResponseType.ERROR,
+                error: errorMsg,
+            };
+            return AbciQueryEncoder.encodeAbciResponse(errorResponse);
         }
     }
 
     async Info(request: InfoRequest) {
-        this.logger.log(`info`);
-        this.importedSnapshot = null;
-
-        const { height: last_block_height } = <any>(
-            await this.db.getObject(
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            )
-        ) || {
-            height: 0,
-        };
-
+        this.logger.info(`info`);
+        this.isCatchingUp = false;
+        const chainInformation = await this.getLevelDb().getChainInformation();
+        const last_block_height = chainInformation?.height || 0;
         if (last_block_height === 0) {
-            this.logger.log(`(Info) Aborting info request because the chain is empty.`);
+            this.logger.info(`(Info) Aborting info request because the chain is empty.`);
             return InfoResponse.create({
                 version: '1',
                 data: 'Carmentis ABCI application',
                 app_version: APP_VERSION,
                 last_block_height,
             });
+        } else {
+            const { appHash } = await this.getGlobalState().getApplicationHash();
+
+            const hex = EncoderFactory.bytesToHexEncoder();
+            this.logger.info(`(Info) last_block_height: ${last_block_height}`);
+            this.logger.info(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
+
+            return InfoResponse.create({
+                version: '1',
+                data: 'Carmentis ABCI application',
+                app_version: APP_VERSION,
+                last_block_height,
+                last_block_app_hash: appHash,
+            });
         }
-
-        const { appHash } = await this.computeApplicationHash(
-            this.tokenRadix,
-            this.vbRadix,
-            this.storage,
-        );
-
-        const hex = EncoderFactory.bytesToHexEncoder();
-        this.logger.log(`(Info) last_block_height: ${last_block_height}`);
-        this.logger.log(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
-
-        return InfoResponse.create({
-            version: '1',
-            data: 'Carmentis ABCI application',
-            app_version: APP_VERSION,
-            last_block_height,
-            last_block_app_hash: appHash,
-        });
     }
 
     async InitChain(request: InitChainRequest) {
+        this.logger.info(`[ InitChain ] --------------------------------------------------------`);
+
         // we start by cleaning database, snapshots and storage
         await this.clearDatabase();
         await this.clearStorage();
@@ -440,12 +273,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // depending on if the current node is a genesis node or not
         const isGenesisNode = this.isGenesisNode(request);
         if (isGenesisNode) {
-            this.logger.log(`This node is the genesis node.`);
+            this.logger.info(`This node is the genesis node.`);
             const issuerPrivateKey = this.kms.getIssuerPrivateKey();
             const appHash = await this.initChainAsGenesis(request, issuerPrivateKey);
             return this.createInitChainResponse(appHash);
         } else {
-            this.logger.log(`This node is not the genesis node.`);
+            this.logger.info(`This node is not the genesis node.`);
             const appHash = await this.initChainAsNode(request);
             return this.createInitChainResponse(appHash);
         }
@@ -463,12 +296,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Hence, I assume that the types of both keys are identical.
         const currentNodePublicKey = this.cometConfig.getPublicKey();
         const initialValidatorSet = request.validators;
+        this.logger.debug(`Current node public key: ${currentNodePublicKey.value}`);
         for (const validator of initialValidatorSet) {
             const base64 = EncoderFactory.bytesToBase64Encoder();
             const validatorPublicKeyValue = base64.encode(validator.pub_key_bytes);
             const validatorPublicKeyType = validator.pub_key_type;
+            this.logger.debug(`Validator node public key: ${validatorPublicKeyValue}`);
             const isPublicKeyValueMatching = validatorPublicKeyValue === currentNodePublicKey.value;
             const isPublicKeyTypeMatching = validatorPublicKeyType === currentNodePublicKey.type;
+
             const isGenesisNode = isPublicKeyValueMatching;
             if (isGenesisNode) {
                 return true;
@@ -480,14 +316,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private async initChainAsNode(request: InitChainRequest) {
         const genesisSnapshot = await this.searchGenesisSnapshotChunksFromGenesisNode();
         await this.loadReceivedGenesisSnapshotChunks(genesisSnapshot);
-        await this.genesisSnapshotStorage.writeGenesisSnapshotChunksInDiskFromEncodedChunks(
+        await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
             genesisSnapshot,
         );
-        const { appHash } = await this.computeApplicationHash(
-            this.tokenRadix,
-            this.vbRadix,
-            this.storage,
-        );
+        const { appHash } = await this.getGlobalState().getApplicationHash();
         return appHash;
     }
 
@@ -496,45 +328,47 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++) {
             const chunk = genesisSnapshotChunks[chunkIndex];
             const isLastChunk = chunkIndex === genesisSnapshotChunks.length - 1;
-            await this.snapshot.loadReceivedChunk(this.storage, chunkIndex, chunk, isLastChunk);
+            await this.getSnapshot().loadReceivedChunk(
+                this.getStorage(),
+                chunkIndex,
+                chunk,
+                isLastChunk,
+            );
         }
     }
 
-    private async initChainAsGenesis(request: InitChainRequest, issuerPrivateKey: PrivateSignatureKey) {
-        //
+    private async initChainAsGenesis(
+        request: InitChainRequest,
+        issuerPrivateKey: PrivateSignatureKey,
+    ) {
+        // initialize the database
+        await this.getLevelDb().initializeTable();
+
         await this.storeInitialValidatorSet(request);
-
-        // we construct a keyed blockchain client equipped with a dummy, static private key
-        const internalProvider = new NodeProvider(this.db, this.storage);
-        const provider = new KeyedProvider(
-            issuerPrivateKey,
-            internalProvider,
-            new NullNetworkProvider(),
-        );
-        const blockchain = new Blockchain(provider);
-
-        this.logger.log(`Creating initial state for initial height ${request.initial_height}`);
-        const appHash = await this.publishInitialBlockchainState(
-            blockchain,
-            issuerPrivateKey,
-            request,
-        );
+        this.logger.info(`Creating initial state for initial height ${request.initial_height}`);
+        const appHash = await this.publishInitialBlockchainState(issuerPrivateKey, request);
 
         // we create the genesis state snapshot and export it.
         await this.storeGenesisStateSnapshotInSnapshotsFolder();
-        await this.saveGenesisSnapshotInDisk();
+        await this.saveGenesisSnapshotToDisk();
 
         return appHash;
     }
 
     private async storeGenesisStateSnapshotInSnapshotsFolder() {
-        this.logger.log(`Creating genesis snapshot`);
-        await this.snapshot.create();
+        this.logger.info(`Creating genesis snapshot`);
+        await this.getSnapshot().create();
     }
 
     private async searchGenesisSnapshotChunksFromGenesisNode() {
+        // we raise an exception if the url is not provided
         const genesisNodeUrl = this.nodeConfig.getGenesisSnapshotRpcEndpoint();
-        this.logger.verbose(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`);
+        if (genesisNodeUrl === undefined) {
+            throw new Error(
+                `The genesis snapshot RPC endpoint is not defined. Please provide it in the configuration file.`,
+            );
+        }
+        this.logger.debug(`Looking for genesis snapshot on the genesis node: ${genesisNodeUrl}`);
         const provider = new NetworkProvider(genesisNodeUrl);
         const snapshot = await provider.getGenesisSnapshot();
         const encoder = EncoderFactory.bytesToBase64Encoder();
@@ -544,40 +378,41 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         return genesisSnapshotChunks;
     }
 
-    private async saveGenesisSnapshotInDisk() {
-        // we assume that after the genesis state, the chain contains three blocks (starting at zero).
-        const chainHeightAfterGenesis = 2;
+    private async saveGenesisSnapshotToDisk() {
+        // we assume that after the genesis state, the chain contains one block (starting at one)
+        const chainHeightAfterGenesis = 1;
 
         // the genesis state's chunks are encoded in base64
         const base64Encoder = EncoderFactory.bytesToBase64Encoder();
 
         // we generate and export the genesis state as a snapshot
-        const numberOfChunksToExport = 4;
-        const genesisChunks = [];
+        const numberOfChunksToExport = 4; // TODO(explain): why 4?
+        const genesisChunks: Uint8Array[] = [];
         for (
             let chunkIndexToExport = 0;
             chunkIndexToExport < numberOfChunksToExport;
             chunkIndexToExport++
         ) {
-            const chunk = await this.snapshot.getChunk(
-                this.storage,
+            const chunk = await this.getSnapshot().getChunk(
+                this.getStorage(),
                 chainHeightAfterGenesis,
                 chunkIndexToExport,
             );
             genesisChunks.push(chunk);
         }
 
-        const genesisState: GenesisSnapshotDTO = {
+        const genesisState: GenesisSnapshotAbciResponse = {
+            responseType: AbciResponseType.GENESIS_SNAPSHOT,
             base64EncodedChunks: genesisChunks.map((chunk) => base64Encoder.encode(chunk)),
         };
 
-        await this.genesisSnapshotStorage.writeGenesisSnapshotInDisk(genesisState);
+        await this.genesisSnapshotStorage.writeGenesisSnapshotToDisk(genesisState);
     }
 
     private createInitChainResponse(appHash: Uint8Array) {
         const consensusParams = {
             validator: {
-                pub_key_types: ['ed25519'] // ['tendermint/PubKeyEd25519']
+                pub_key_types: ['ed25519'], // ['tendermint/PubKeyEd25519']
             },
         };
         /*
@@ -617,7 +452,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
               }
           },
         */
-//      const consensusParams = {};
+        //      const consensusParams = {};
         return InitChainResponse.create({
             consensus_params: consensusParams,
             validators: [],
@@ -626,63 +461,171 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async storeInitialValidatorSet(request: InitChainRequest) {
+        const db = this.getLevelDb();
         for (const validator of request.validators) {
             const address = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
             );
-            const record = await this.db.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address);
+            const record = await db.getValidatorNodeByAddress(address);
+            //const record = await db.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address);
 
             if (!record) {
-                this.logger.log(`Adding unknown validator address: ${Utils.binaryToHexa(address)}`);
-                await this.db.putRaw(
+                this.logger.info(
+                    `Adding unknown validator address: ${Utils.binaryToHexa(address)}`,
+                );
+                await db.putValidatorNode(address);
+                /*
+                await db.putRaw(
                     NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
                     address,
                     Utils.getNullHash(),
                 );
+
+                 */
             }
         }
     }
 
     private async publishInitialBlockchainState(
-        blockchain: Blockchain,
         issuerPrivateKey: PrivateSignatureKey,
         request: InitChainRequest,
     ) {
-        // we first create a blockchain client equipped with the key of the
-        const stateBuilder = new InitialBlockchainStateBuilder(
-            request,
-            issuerPrivateKey,
-            blockchain,
-        );
+        // define variables used below
+        const issuerPublicKey = await issuerPrivateKey.getPublicKey();
 
-        // we first publish the issuer account creation transaction and Carmentis organization creation transaction
-        const issuerAccountCreationTransaction =
-            await stateBuilder.createIssuerAccountCreationTransaction();
-        const { organizationId, organisationCreationTransaction } =
-            await stateBuilder.createCarmentisOrganisationCreationTransaction();
-        const transactionsPublishedInFirstBlock = [
-            issuerAccountCreationTransaction,
-            organisationCreationTransaction,
+        // we first create the issuer account
+        this.logger.info('Creating microblock for issuer account creation');
+        const issuerAccountCreationMicroblock = Microblock.createGenesisAccountMicroblock();
+        issuerAccountCreationMicroblock.addSections([
+            {
+                type: SectionType.ACCOUNT_PUBLIC_KEY,
+                publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
+                schemeId: issuerPublicKey.getSignatureSchemeId(),
+            },
+            {
+                type: SectionType.ACCOUNT_TOKEN_ISSUANCE,
+                amount: ECO.INITIAL_OFFER,
+            },
+        ]);
+        await issuerAccountCreationMicroblock.seal(issuerPrivateKey);
+        const {
+            microblockData: issuerAccountCreationSerializedMicroblock,
+            microblockHash: issuerAccountHash,
+        } = issuerAccountCreationMicroblock.serialize();
+
+        // we now create the Carmentis Governance organization
+        this.logger.info('Creating governance organization microblock');
+        const governanceOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
+        governanceOrganizationMicroblock.addSections([
+            {
+                type: SectionType.ORG_CREATION,
+                accountId: issuerAccountHash,
+            },
+            {
+                type: SectionType.ORG_DESCRIPTION,
+                name: 'Carmentis Governance',
+                website: '',
+                countryCode: 'FR',
+                city: '',
+            },
+        ]);
+        await governanceOrganizationMicroblock.seal(issuerPrivateKey);
+        const { microblockData: governanceOrganizationData, microblockHash: governanceOrgId } =
+            governanceOrganizationMicroblock.serialize();
+        this.logger.debug(governanceOrganizationMicroblock.toString());
+
+        // we now create the Carmentis SAS organization
+        this.logger.info('Creating Carmentis SAS organization microblock');
+        const carmentisOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
+        carmentisOrganizationMicroblock.addSections([
+            {
+                type: SectionType.ORG_CREATION,
+                accountId: issuerAccountHash,
+            },
+            {
+                type: SectionType.ORG_DESCRIPTION,
+                name: 'Carmentis SAS',
+                website: '',
+                countryCode: 'FR',
+                city: '',
+            },
+        ]);
+        await carmentisOrganizationMicroblock.seal(issuerPrivateKey);
+        const { microblockData: carmentisOrganizationData, microblockHash: carmentisOrgId } =
+            carmentisOrganizationMicroblock.serialize();
+
+        // we create the (single) protocol virtual blockchain
+        this.logger.info('Creating protocol microblock');
+        const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
+        protocolMicroblock.addSection({
+            type: SectionType.PROTOCOL_CREATION,
+            organizationId: governanceOrgId,
+        });
+        await protocolMicroblock.seal(issuerPrivateKey);
+        const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
+
+        // We now declare the running node as the genesis node.
+        this.logger.info('Creating genesis validator node microblock');
+        const mb = Microblock.createGenesisValidatorNodeMicroblock();
+        const genesisValidator = request.validators[0];
+        const rpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
+        this.logger.info(Utils.binaryToHexa(genesisValidator.pub_key_bytes));
+        this.logger.info(`RPC endpoint: ${rpcEndpoint}`);
+        mb.addSections([
+            {
+                type: SectionType.VN_CREATION,
+                organizationId: carmentisOrgId,
+            },
+            {
+                type: SectionType.VN_COMETBFT_PUBLIC_KEY_DECLARATION,
+                cometPublicKey: Utils.binaryToHexa(genesisValidator.pub_key_bytes),
+                cometPublicKeyType: 'tendermint/PubKeyEd25519',
+            },
+            {
+                type: SectionType.VN_RPC_ENDPOINT,
+                rpcEndpoint,
+            },
+        ]);
+        await mb.seal(issuerPrivateKey);
+        const { microblockData: carmentisNodeMicroblock } = mb.serialize();
+        this.logger.debug(mb.toString());
+
+        const validatorNodeVotingPowerUpdateMb = Microblock.createGenesisValidatorNodeMicroblock();
+        validatorNodeVotingPowerUpdateMb.addSections([
+            {
+                type: SectionType.VN_VOTING_POWER_UPDATE,
+                votingPower: 20,
+            },
+        ]);
+        validatorNodeVotingPowerUpdateMb.setAsSuccessorOf(mb);
+        await validatorNodeVotingPowerUpdateMb.seal(issuerPrivateKey);
+        const { microblockData: serializedVnVotingPowerUpdateMb } =
+            validatorNodeVotingPowerUpdateMb.serialize();
+        this.logger.debug(validatorNodeVotingPowerUpdateMb.toString());
+
+        // we now proceed to the runoff
+        const transactions: Uint8Array[] = [
+            issuerAccountCreationSerializedMicroblock,
+            governanceOrganizationData,
+            protocolInitialUpdate,
+            carmentisOrganizationData,
+            carmentisNodeMicroblock,
+            serializedVnVotingPowerUpdateMb,
         ];
-        await this.publishGenesisTransactions(transactionsPublishedInFirstBlock, 0);
+        const runoffTransactionsBuilder = new GenesisRunoffTransactionsBuilder(
+            this.genesisRunoffs,
+            issuerAccountHash,
+            issuerPrivateKey,
+            issuerPublicKey,
+            issuerAccountCreationMicroblock,
+        );
+        const runoffsTransactions = await runoffTransactionsBuilder.createRunoffTransactions();
+        transactions.push(...runoffsTransactions);
 
-        // in the second block, we publish the genesis node declaration transaction
-        const { genesisNodePublicKey, genesisNodePublicKeyType } =
-            stateBuilder.getValidatorPublicKeyFromRequest();
-        const genesisNodeCometbftRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
-        const { genesisNodeId, genesisNodeDeclarationTransaction } =
-            await stateBuilder.createGenesisNodeDeclarationTransaction(
-                organizationId,
-                genesisNodePublicKey,
-                genesisNodePublicKeyType,
-                genesisNodeCometbftRpcEndpoint
-            );
-        await this.publishGenesisTransactions([genesisNodeDeclarationTransaction], 1);
+        await this.publishGenesisTransactions(transactions, 1);
 
-        // finally, in the third block, we publish the grant to be a validator for the genesis node
-        const genesisNodeValidatorGrantTransaction =
-            await stateBuilder.createGenesisNodeValidatorGrantTransaction(genesisNodeId);
-        return await this.publishGenesisTransactions([genesisNodeValidatorGrantTransaction], 2);
+        const { appHash } = await this.getGlobalState().getApplicationHash();
+        return appHash;
     }
 
     private async publishGenesisTransactions(
@@ -691,82 +634,261 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     ) {
         // Since we are publishing transactions at the genesis, publication timestamp is at the lowest possible value.
         // The proposer address is undefined since we do not have published this node.
-        const blockTimestamp = Math.floor(Date.now() / 1000);
-        const proposerAddress = new Uint8Array(32);
+        const logger = getLogger(['node', 'genesis']);
+        const blockTimestamp = Utils.getTimestampInSeconds();
+        const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+        let txIndex = 0;
+        // we create working state to check the transaction
+        const workingState = this.getGlobalState();
+        for (const tx of transactions) {
+            txIndex += 1;
+            logger.debug(`Handling transaction ${txIndex} on ${transactions.length}`);
+            try {
+                const serializedMicroblock = tx;
+                const parsedMicroblock =
+                    Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+                logger.info(
+                    `Transaction parsed successfully: microblock ${parsedMicroblock.getHash().encode()} (type ${parsedMicroblock.getType()})`,
+                );
+                logger.debug(parsedMicroblock.toString());
 
-        const cache = this.getCacheInstance(transactions);
-        const processBlockResult = await this.processBlock(
-            cache,
-            publishedBlockHeight,
-            blockTimestamp,
-            transactions,
+                const checkResult = await this.checkMicroblockLocalStateConsistency(
+                    workingState,
+                    parsedMicroblock,
+                    true,
+                );
+                if (checkResult.checked) {
+                    const vb = checkResult.vb;
+                    // we now check the consistency of the working state with the global state
+                    const updatedVirtualBlockchain = checkResult.vb;
+                    await globalStateUpdater.updateGlobalStateOnMicroblockDuringGenesis(
+                        workingState,
+                        updatedVirtualBlockchain,
+                        parsedMicroblock,
+                        {
+                            blockHeight: publishedBlockHeight,
+                            blockTimestamp,
+                            blockMisbehaviors: [],
+                        },
+                        tx,
+                    );
+                } else {
+                    logger.warn(`Microblock ${parsedMicroblock.getHash().encode()} rejected`);
+                }
+            } catch (e) {
+                logger.error(`An error occurred during handling of genesis microblock: ${e}`);
+                if (e instanceof Error) {
+                    logger.debug(e.stack ?? 'No stack provided');
+                }
+            }
+        }
+
+        // finalize the working state
+        this.logger.info(
+            `Finalizing publication of ${transactions.length} transactions at height ${publishedBlockHeight}`,
         );
-        const appHash = processBlockResult.appHash;
-        await this.setBlockInformation(
-            cache,
-            publishedBlockHeight,
-            Utils.getNullHash(),
-            blockTimestamp,
-            proposerAddress,
-            processBlockResult.blockSize,
-            transactions.length,
-        );
-        await this.setBlockContent(cache, publishedBlockHeight, processBlockResult.microblocks);
+        await globalStateUpdater.finalizeBlockApproval(workingState, {
+            hash: Utils.getNullHash(),
+            height: publishedBlockHeight,
+            misbehavior: [],
+            next_validators_hash: Utils.getNullHash(),
+            proposer_address: Utils.getNullHash(),
+            syncing_to_height: publishedBlockHeight,
+            txs: transactions,
+        });
 
-        // commit database and flush storage.
-        await cache.db.commit();
-        await cache.storage.flush();
+        // commit the state
+        this.logger.info(`Committing state at height ${publishedBlockHeight}`);
+        const state = this.getGlobalState();
+        await state.commit();
 
+        const { appHash } = await state.getApplicationHash();
         return appHash;
     }
     /**
      Incoming transaction
      */
-    async CheckTx(request: CheckTxRequest) {
-        this.logger.log(`EVENT: checkTx`);
+    async CheckTx(request: CheckTxRequest): Promise<CheckTxResponse> {
+        const perfMeasure = this.perf.start('CheckTx');
+        this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
+        this.logger.info(`Size of transaction: ${request.tx.length} bytes`);
 
-        const cache = this.getCacheInstance([]);
-        const importer = cache.blockchain.getMicroblockImporter(
-            Utils.bufferToUint8Array(request.tx),
-        );
-        const success = await this.checkMicroblock(cache, importer);
-
-        // In case of microblock check success, we log the content of the microblock
-        if (success) {
-            this.logger.log(`Type: ${CHAIN.VB_NAME[importer.vb.type]}`);
-            this.logger.log(`Total size: ${request.tx.length} bytes`);
-
-            const vb: any = await importer.getVirtualBlockchain();
-            for (const section of vb.currentMicroblock.sections) {
-                const sectionLabel = SECTIONS.DEF[importer.vb.type][section.type].label;
-                const sectionLengthInBytes = section.data.length;
-                const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
-                this.logger.log(message);
-            }
+        // for performance, we reject already-checked microblock
+        if (request.type === CheckTxType.CHECK_TX_TYPE_RECHECK) {
+            this.logger.info("Microblock already checked but rechecked again, possibly to proposal building error: aborting")
+            return {
+                code: CheckTxResponseCode.KO,
+                log: '',
+                data: new Uint8Array(),
+                gas_wanted: 0,
+                gas_used: 0,
+                info: 'Microblock already checked and checkTx executed twice: aborting',
+                events: [],
+                codespace: 'app',
+            };
         }
 
-        return Promise.resolve({
-            code: success ? 0 : 1,
-            log: '',
-            data: new Uint8Array(request.tx),
-            gas_wanted: 0,
-            gas_used: 0,
-            info: success ? '' : importer.error,
-            events: [],
-            codespace: 'app',
-        });
+        // we first attempt to parse the microblock
+        try {
+            const serializedMicroblock = request.tx;
+            const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+            this.logger.info(`Checking microblock ${parsedMicroblock.getHash().encode()}`);
+
+            // we create working state to check the transaction
+            const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
+            const checkResult = await this.checkMicroblockLocalStateConsistency(
+                workingState,
+                parsedMicroblock,
+            );
+            if (checkResult.checked) {
+                const vb = checkResult.vb;
+                this.logger.info(`Type: ${CHAIN.VB_NAME[vb.getType()]}`);
+                for (const section of parsedMicroblock.getAllSections()) {
+                    const serializedSection = BlockchainUtils.encodeSection(section);
+                    const sectionLabel = SectionLabel.getSectionLabelFromSection(section);
+                    //const sectionLabel = SECTIONS.DEF[vb.getType()][section.type].label;
+                    const sectionLengthInBytes = serializedSection.length;
+                    const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
+                    this.logger.info(message);
+                }
+
+                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} accepted`);
+                return {
+                    code: CheckTxResponseCode.OK,
+                    log: '',
+                    data: new Uint8Array(),
+                    gas_wanted: 0,
+                    gas_used: 0,
+                    info: '',
+                    events: [],
+                    codespace: 'app',
+                };
+            } else {
+                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected: not checked: ${checkResult.error}`)
+                return {
+                    code: CheckTxResponseCode.KO,
+                    log: '',
+                    data: new Uint8Array(),
+                    gas_wanted: 0,
+                    gas_used: 0,
+                    info: checkResult.error,
+                    events: [],
+                    codespace: 'app',
+                };
+            }
+        } catch (e) {
+            if (e instanceof Error) {
+                this.logger.info(
+                    `Microblock rejected due to an unexpected error: ${e.message} at ${e.stack}`,
+                );
+            } else {
+                this.logger.warn('Microblock rejected due to an error');
+            }
+
+            return {
+                code: CheckTxResponseCode.KO,
+                log: '',
+                data: new Uint8Array(),
+                gas_wanted: 0,
+                gas_used: 0,
+                info: e instanceof Error ? e.message : typeof e === 'string' ? e : 'CheckTx error',
+                events: [],
+                codespace: 'app',
+            };
+        } finally {
+            perfMeasure.end();
+        }
     }
 
     /**
-     Executed by the proposer
+     * Extract the relevant Comet parameters from a Comet request
+     * This supports PrepareProposalRequest, ProcessProposalRequest and FinalizeBlockRequest
+     */
+    extractCometParameters(
+        request: PrepareProposalRequest | ProcessProposalRequest | FinalizeBlockRequest,
+    ): GlobalStateUpdateCometParameters {
+        const defaultTimestamp = 0;
+        const timeInRequest = request.time?.seconds;
+        if (timeInRequest === undefined) {
+            this.logger.warn(`No block timestamp provided in request: using timestamp ${defaultTimestamp}`);
+        }
+        const blockHeight = Number(request.height);
+        const blockTimestamp = Number(request.time?.seconds ?? defaultTimestamp);
+        const blockMisbehaviors: Misbehavior[] = request.misbehavior;
+
+        return { blockHeight, blockTimestamp, blockMisbehaviors };
+    }
+
+    /**
+     * Prepares a proposal by validating transactions against specific criteria
+     * and returns a prepared proposal response containing only valid transactions.
+     *
+     * @param {PrepareProposalRequest} request - The proposal request containing
+     * transaction data, block height, and timestamp.
+     * @param {Array<string>} request.txs - An array of transactions to be validated.
+     * @param {number} request.height - The height of the current block.
+     * @param {Object} [request.time] - The block timestamp object.
+     * @param {number} [request.time.seconds] - The seconds part of the block timestamp.
+     *
+     * @return {Promise<PrepareProposalResponse>} A promise resolving to the proposal response
+     * object containing the filtered list of valid transactions.
      */
     async PrepareProposal(request: PrepareProposalRequest) {
-        this.logger.log(`EVENT: prepareProposal (${request.txs.length} txs)`);
+        const cometParameters = this.extractCometParameters(request);
 
-        const proposedTxs = [];
+        this.logger.info(
+            `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
+        );
+        this.logger.info(
+            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
+        );
+
+        const proposedTxs: Uint8Array[] = [];
+        const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
+        //const cache = this.getCacheInstance(request.txs);
+        const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+
+        await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
+
         for (const tx of request.txs) {
-            proposedTxs.push(tx);
+            try {
+                // we attempt to parse the received microblock and check its consistency
+                // with the local state of the virtual blockchain where it is attached
+                const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
+                const localStateConsistentWithMicroblock =
+                    await this.checkMicroblockLocalStateConsistency(workingState, parsedMicroblock);
+
+                if (localStateConsistentWithMicroblock.checked) {
+                    // we now check the consistency of the working state with the global state
+                    const updatedVirtualBlockchain = localStateConsistentWithMicroblock.vb;
+                    await globalStateUpdater.updateGlobalStateOnMicroblock(
+                        workingState,
+                        updatedVirtualBlockchain,
+                        parsedMicroblock,
+                        cometParameters,
+                        tx,
+                    );
+                    proposedTxs.push(tx);
+                } else {
+                    // we rejected, the microblock goes back to the mempool
+                    this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`)
+                }
+            } catch (e) {
+                // TODO: reject case
+                if (e instanceof Error) {
+                    this.logger.error(
+                        `Microblock rejected due to the following error: ${e.message}`,
+                    );
+                    this.logger.debug(
+                        `Details of the error: ${e.stack}`,
+                    );
+                }
+            }
         }
+
+        this.logger.info(
+            `included ${proposedTxs.length} transaction(s) out of ${request.txs.length}`,
+        );
 
         return PrepareProposalResponse.create({
             txs: proposedTxs,
@@ -774,28 +896,64 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     /**
-     Executed by all validators
-     answer:
-     PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
-     PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
-     PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
+     * Executed by all validators answer:
+     *      PROPOSAL_UNKNOWN = 0; // Unknown status. Returning this from the application is always an error.
+     *      PROPOSAL_ACCEPT  = 1; // Status that signals that the application finds the proposal valid.
+     *      PROPOSAL_REJECT  = 2; // Status that signals that the application finds the proposal invalid.
+     *
+     * @param request
+     * @constructor
      */
     async ProcessProposal(request: ProcessProposalRequest) {
-        this.logger.log(`EVENT: processProposal (${request.txs.length} txs)`);
+        const perfMeasure = this.perf.start('ProcessProposal');
+        const cometParameters = this.extractCometParameters(request);
 
-        const cache = this.getCacheInstance(request.txs);
-        const blockHeight = +request.height;
-        const blockTimestamp = +(request.time?.seconds ?? 0);
-        const processBlockResult = await this.processBlock(
-            cache,
-            blockHeight,
-            blockTimestamp,
-            request.txs,
+        this.logger.info(
+            `[ ProcessProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
+        );
+        this.logger.info(
+            `Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`,
         );
 
-        this.logger.log(
+        const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
+        const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+
+        await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
+
+        for (const tx of request.txs) {
+            try {
+                // we attempt to parse the received microblock and check its consistency with
+                // with the local state of the virtual blockchain where it is attached
+                const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
+                const localStateConsistentWithMicroblock =
+                    await this.checkMicroblockLocalStateConsistency(workingState, parsedMicroblock);
+
+                // we now check the consistency of the working state with the global state
+                if (localStateConsistentWithMicroblock.checked) {
+                    const updatedVirtualBlockchain = localStateConsistentWithMicroblock.vb;
+                    await globalStateUpdater.updateGlobalStateOnMicroblock(
+                        workingState,
+                        updatedVirtualBlockchain,
+                        parsedMicroblock,
+                        cometParameters,
+                        tx,
+                    );
+                } else {
+                    // TODO: reject case
+                }
+            } catch (e) {
+                // TODO: reject case
+            }
+        }
+
+        /*
+        this.logger.info(
             `processProposal / total block fees: ${processBlockResult.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`,
         );
+
+         */
+
+        perfMeasure.end();
 
         return ProcessProposalResponse.create({
             status: ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT,
@@ -811,307 +969,67 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async FinalizeBlock(request: FinalizeBlockRequest) {
-        const numberOfTransactionsInBlock = request.txs.length;
+        const perfMeasure = this.perf.start('FinalizeBlock');
+        const cometParameters = this.extractCometParameters(request);
 
-        this.logger.log(`EVENT: finalizeBlock (${numberOfTransactionsInBlock} txs)`);
-
-        // raise a warning if finalizedBlock() called before commit()
-        if (this.finalizedBlockCache !== null) {
-            this.logger.warn(`finalizeBlock() called before the previous commit()`);
-        }
-        this.finalizedBlockCache = this.getCacheInstance(request.txs);
-
-        // Extract height and timestamp of the block being published, as well as the votes
-        // of validator involved in the publishing of this block. We proceed to the payment of the
-        // validators.
-        const blockHeight = +request.height;
-        const blockTimestamp = +(request.time?.seconds ?? 0);
-        const votes = request.decided_last_commit?.votes || [];
-        await this.payValidators(this.finalizedBlockCache, votes, blockHeight, blockTimestamp);
-
-        const processBlockResult = await this.processBlock(
-            this.finalizedBlockCache,
-            blockHeight,
-            blockTimestamp,
-            request.txs,
+        this.logger.info(
+            `[ FinalizeBlock - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
-        const fees = CMTSToken.createAtomic(processBlockResult.totalFees);
-        this.logger.log(`Total block fees: ${fees.toString()}`);
-
-        await this.setBlockInformation(
-            this.finalizedBlockCache,
-            blockHeight,
-            request.hash,
-            blockTimestamp,
-            request.proposer_address,
-            processBlockResult.blockSize,
-            request.txs.length,
+        this.logger.info(
+            `Handling ${request.txs.length} transactions at ts=$cometParameters.{blockTimestamp}`,
         );
 
-        await this.setBlockContent(
-            this.finalizedBlockCache,
-            blockHeight,
-            processBlockResult.microblocks,
-        );
+        const workingState = this.getGlobalState();
+        const txResults: ExecTxResult[] = [];
+        const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 
-        this.finalizedBlockCache.validatorSetUpdate.forEach((entry) => {
-            this.logger.log(`validatorSet update: pub_key=[${entry.pub_key_type}]${Base64.encodeBinary(entry.pub_key_bytes)}, power=${entry.power}`);
-        });
+        await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
 
-        return FinalizeBlockResponse.create({
-            tx_results: processBlockResult.txResults,
-            app_hash: processBlockResult.appHash,
-            events: [],
-            validator_updates: this.finalizedBlockCache.validatorSetUpdate,
-            consensus_param_updates: undefined,
-        });
-    }
+        for (const tx of request.txs) {
+            try {
+                // we attempt to parse the received microblock and check its consistency with
+                // with the local state of the virtual blockchain where it is attached
+                const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
+                const localStateConsistentWithMicroblock =
+                    await this.checkMicroblockLocalStateConsistency(workingState, parsedMicroblock);
 
-    async payValidators(cache: Cache, votes: any, blockHeight: number, blockTimestamp: number) {
-        this.logger.log(`payValidators`);
+                if (localStateConsistentWithMicroblock.checked) {
+                    // we now check the consistency of the working state with the global state
+                    const updatedVirtualBlockchain = localStateConsistentWithMicroblock.vb;
+                    await globalStateUpdater.updateGlobalStateOnMicroblock(
+                        workingState,
+                        updatedVirtualBlockchain,
+                        parsedMicroblock,
+                        cometParameters,
+                        tx,
+                    );
 
-        /**
-         get the pending fees from the fees account
-         */
-        const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
-            ECO.ACCOUNT_BLOCK_FEES,
-        );
-        const feesAccountInfo: AccountInformation =
-            await cache.accountManager.loadInformation(feesAccountIdentifier);
-        const pendingFees = feesAccountInfo.state.balance;
+                    perfMeasure.event('fees');
 
-        if (!pendingFees) {
-            return;
-        }
-
-        /**
-         get the validator accounts from decided_last_commit.votes sent by Comet
-         */
-        const validatorAccounts = [];
-
-        for (const vote of votes) {
-            if (vote.block_id_flag == 'BLOCK_ID_FLAG_COMMIT') {
-                const address = Utils.bufferToUint8Array(vote.validator.address);
-                const validatorNodeHash = await cache.db.getRaw(
-                    NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
-                    address,
-                );
-
-                if (!validatorNodeHash) {
-                    this.logger.error(`unknown validator address ${Utils.binaryToHexa(address)}`);
-                } else if (Utils.binaryIsEqual(validatorNodeHash, Utils.getNullHash())) {
-                    this.logger.warn(
-                        `validator address ${Utils.binaryToHexa(address)} is not yet linked to a validator node VB`,
+                    txResults.push(
+                        ExecTxResult.create({
+                            code: 0,
+                            data: new Uint8Array(),
+                            log: '',
+                            info: '',
+                            gas_wanted: 0,
+                            gas_used: 0,
+                            events: [],
+                            codespace: 'app',
+                        }),
                     );
                 } else {
-                    const validatorNode = await cache.blockchain.loadValidatorNode(
-                        new Hash(validatorNodeHash),
+                    this.logger.fatal(
+                        `Microblock ${parsedMicroblock.getHash().encode()} has been rejected during FinalizeBlock`,
                     );
-                    const validatorPublicKey: PublicSignatureKey =
-                        await validatorNode.getOrganizationPublicKey();
-                    const hash: CryptographicHash =
-                        CryptoSchemeFactory.createDefaultCryptographicHash();
-                    const account = await cache.accountManager.loadAccountByPublicKeyHash(
-                        hash.hash(validatorPublicKey.getPublicKeyAsBytes()),
-                    );
-                    validatorAccounts.push(account);
                 }
+            } catch (e) {
+                this.logger.fatal(`A transaction has been rejected during FinalizeBlock`);
             }
         }
-
-        // ensure that we have enough validators
-        const nValidators = validatorAccounts.length;
-        if (nValidators === 0) {
-            this.logger.warn('empty list of validator accounts: fees payment is delayed');
-            return;
-        }
-
-        /**
-         split the fees among the validators
-         */
-        const feesQuotient = Math.floor(pendingFees / nValidators);
-        const feesRest = pendingFees % nValidators;
-
-        for (const n in validatorAccounts) {
-            const paidFees =
-                (+n + blockHeight) % nValidators < feesRest ? feesQuotient + 1 : feesQuotient;
-
-            await cache.accountManager.tokenTransfer(
-                {
-                    type: ECO.BK_PAID_BLOCK_FEES,
-                    payerAccount: feesAccountIdentifier,
-                    payeeAccount: validatorAccounts[n],
-                    amount: paidFees,
-                },
-                {
-                    height: blockHeight - 1,
-                },
-                blockTimestamp,
-                this.logger,
-            );
-        }
-    }
-
-    async processBlock(
-        cache: Cache,
-        blockHeight: number,
-        timestamp: number,
-        txs: Uint8Array[],
-        executedDuringGenesis = false,
-    ) {
-        this.logger.log(`processBlock`);
-
-        const txResults = [];
-        const newObjects = Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0);
-        const microblocks = [];
-        let totalFees = 0;
-        let blockSize = 0;
-        let blockSectionCount = 0;
-
-        for (let txId = 0; txId < txs.length; txId++) {
-            const tx = txs[txId];
-            const importer = cache.blockchain.getMicroblockImporter(Utils.bufferToUint8Array(tx));
-            const success = await this.checkMicroblock(
-                cache,
-                importer,
-                timestamp,
-                executedDuringGenesis,
-            );
-
-            const vb: VirtualBlockchain<unknown> = await importer.getVirtualBlockchain();
-            if (vb.height == 1) {
-                newObjects[vb.type]++;
-            }
-
-            blockSize += tx.length;
-
-            this.logger.log(`gas = ${vb.currentMicroblock.header.gas}, gas price = ${vb.currentMicroblock.header.gasPrice / ECO.TOKEN} ${ECO.TOKEN_NAME}`);
-
-            const fees = Math.floor(
-                (vb.currentMicroblock.header.gas * vb.currentMicroblock.header.gasPrice) / ECO.GAS_UNIT,
-            );
-            const feesPayerAccount = vb.currentMicroblock.getFeesPayerAccount();
-
-            totalFees += fees;
-
-            this.logger.log(`Confirmed microblock ${Utils.binaryToHexa(vb.currentMicroblock.hash)}`);
-            this.logger.log(
-                `fees = ${fees / ECO.TOKEN} ${ECO.TOKEN_NAME}, paid by ${cache.accountManager.getShortAccountString(feesPayerAccount)}`,
-            );
-
-            await importer.store();
-
-            const sectionCount: number = vb.currentMicroblock.sections.length;
-
-            microblocks.push({
-                hash: vb.currentMicroblock.hash,
-                vbIdentifier: vb.identifier,
-                vbType: vb.type,
-                height: vb.height,
-                size: tx.length,
-                sectionCount,
-            });
-
-            blockSectionCount += sectionCount;
-
-            await cache.storage.writeMicroblock(importer.vb.expirationDay, txId);
-
-            const stateData = await cache.blockchain.provider.getVirtualBlockchainStateInternal(
-                importer.vb.identifier,
-            );
-            // @ts-expect-error stateData has an invalid type
-            const stateHash = Crypto.Hashes.sha256AsBinary(stateData);
-            await cache.vbRadix.set(importer.vb.identifier, stateHash);
-
-            const isFeesPayerAccountDefined = feesPayerAccount !== null;
-            if (isFeesPayerAccountDefined) {
-                const chainReference = vb.currentMicroblock.hash as Uint8Array;
-                await this.sendFeesFromFeesPayerAccountToFeesAccount(
-                    cache,
-                    feesPayerAccount,
-                    fees,
-                    chainReference,
-                    timestamp,
-                );
-            }
-
-            txResults.push(
-                ExecTxResult.create({
-                    code: 0,
-                    data: new Uint8Array(),
-                    log: '',
-                    info: '',
-                    gas_wanted: 0,
-                    gas_used: 0,
-                    events: [],
-                    codespace: 'app',
-                }),
-            );
-        }
-
-        const chainInfoObject = (await cache.db.getObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-        )) || {
-            microblockCount: 0,
-            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0),
-        };
-
-        chainInfoObject.height = blockHeight;
-        chainInfoObject.lastBlockTimestamp = timestamp;
-        chainInfoObject.microblockCount += txs.length;
-        chainInfoObject.objectCounts = chainInfoObject.objectCounts.map(
-            (count, ndx) => count + newObjects[ndx],
-        );
-        await cache.db.putObject(
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-            NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            chainInfoObject,
-        );
-
-        const { tokenRadixHash, vbRadixHash, radixHash, storageHash, appHash } =
-            await this.computeApplicationHash(cache.tokenRadix, cache.vbRadix, cache.storage);
-
-        return {
-            txResults,
-            totalFees,
-            appHash,
-            blockSize,
-            microblocks,
-        };
-    }
-
-    private async sendFeesFromFeesPayerAccountToFeesAccount(
-        cache: Cache,
-        feesPayerAccount: Uint8Array,
-        fees: number,
-        chainReference: Uint8Array,
-        sentAt: number,
-    ) {
-        await cache.accountManager.tokenTransfer(
-            {
-                type: ECO.BK_PAID_TX_FEES,
-                payerAccount: feesPayerAccount,
-                payeeAccount: Economics.getSpecialAccountTypeIdentifier(ECO.ACCOUNT_BLOCK_FEES),
-                amount: fees,
-            },
-            {
-                mbHash: chainReference,
-            },
-            sentAt,
-            this.logger,
-        );
-    }
-
-    async computeApplicationHash(tokenRadix: RadixTree, vbRadix: RadixTree, storage: Storage) {
-        const tokenRadixHash = await tokenRadix.getRootHash();
-        const vbRadixHash = await vbRadix.getRootHash();
-        const radixHash = Crypto.Hashes.sha256AsBinary(
-            Utils.binaryFrom(vbRadixHash, tokenRadixHash),
-        );
-        //const finalAppHash = radixHash;
-        const storageHash = await storage.processChallenge(radixHash);
-        const appHash = Crypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
+        await globalStateUpdater.finalizeBlockApproval(workingState, request);
+        const { appHash, vbRadixHash, tokenRadixHash, radixHash, storageHash } =
+            await workingState.getApplicationHash();
 
         this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
         this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
@@ -1119,68 +1037,50 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
         this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
-        return { tokenRadixHash, vbRadixHash, appHash, storageHash, radixHash };
+        perfMeasure.end();
+
+        return FinalizeBlockResponse.create({
+            tx_results: txResults,
+            app_hash: appHash,
+            events: [],
+            validator_updates: globalStateUpdater.getValidatorSetUpdates(),
+            consensus_param_updates: undefined,
+        });
     }
 
     async Commit(request: CommitRequest) {
-        this.logger.log(`EVENT: commit`);
-
-        if (this.finalizedBlockCache === null) {
+        this.logger.info(`[ Commit ] --------------------------------------------------------`);
+        const state = this.getGlobalState();
+        const db = this.getLevelDb();
+        const snapshot = this.getSnapshot();
+        if (!state.hasSomethingToCommit()) {
             this.logger.warn(`nothing to commit`);
-            return;
+            return CommitResponse.create({});
         }
 
-        await this.finalizedBlockCache.db.commit();
-        await this.finalizedBlockCache.storage.flush();
-
-        this.finalizedBlockCache = null;
-
-        this.logger.log(`Commit done`);
-
-        const chainInfoObject = <any>(
-            await this.db.getObject(
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION,
-                NODE_SCHEMAS.DB_CHAIN_INFORMATION_KEY,
-            )
-        );
+        await state.commit();
+        this.logger.info(`Commit done`);
 
         // Create snapshots under conditions that we are not already importing snapshots and it is
         // the right period to generate snapshots.
         let retainedHeight = 0;
-        const isNotImportingSnapshot = this.importedSnapshot === null;
+        const isNotImportingSnapshot = !this.isCatchingUp;
         const snapshotBlockPeriod = this.nodeConfig.getSnapshotBlockPeriod();
-        const isTimeToGenerateSnapshot =
-            chainInfoObject.height % snapshotBlockPeriod == 0;
+        const chainInfoObject = await db.getChainInformation();
+        const isTimeToGenerateSnapshot = chainInfoObject.height % snapshotBlockPeriod == 0;
         if (isNotImportingSnapshot && isTimeToGenerateSnapshot) {
-            this.logger.log(`Creating snapshot at height ${chainInfoObject.height}`);
+            this.logger.info(`Creating snapshot at height ${chainInfoObject.height}`);
             const maxSnapshots = this.nodeConfig.getMaxSnapshots();
-            await this.snapshot.clear(maxSnapshots - 1);
-            await this.snapshot.create();
-            this.logger.log(`Done creating snapshot`);
+            await snapshot.clear(maxSnapshots - 1);
+            await snapshot.create();
+            this.logger.info(`Done creating snapshot`);
 
             // We preserve a certain amount of blocks that are not put in a snapshot.
             const blockHistoryBeforeSnapshot = this.nodeConfig.getBlockHistoryBeforeSnapshot();
             if (blockHistoryBeforeSnapshot) {
-                retainedHeight = Math.max(
-                    0,
-                    chainInfoObject.height - blockHistoryBeforeSnapshot,
-                );
+                retainedHeight = Math.max(0, chainInfoObject.height - blockHistoryBeforeSnapshot);
             }
         }
-
-        // TODO: This test takes some time, so I comment it
-        // !! BEGIN TEST
-        /*
-        this.logger.log(`Listing snapshots`);
-        const list = await this.snapshot.getList();
-        const lastSnapshot = list[list.length - 1];
-        for(let n = 0; n < lastSnapshot.chunks; n++) {
-            this.logger.log(`Loading snapshot chunk ${n + 1} out of ${lastSnapshot.chunks}`);
-            const buffer = await this.snapshot.getChunk(this.storage, lastSnapshot.height, n);
-            await this.snapshot.loadReceivedChunk(this.storage, n, buffer, n == lastSnapshot.chunks - 1);
-        }
-         */
-        // !! END TEST
 
         return CommitResponse.create({
             retain_height: retainedHeight,
@@ -1188,17 +1088,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async ListSnapshots(request: ListSnapshotsRequest) {
-        this.logger.log(`listSnapshots`);
+        this.logger.info(`EVENT: listSnapshots`);
 
-        const list = await this.snapshot.getList();
+        const list = await this.getSnapshot().getList();
 
-        this.logger.log(`snapshot.getList()`, list.length);
-        list.forEach((object) => console.log({
-            height: object.height,
-            format: object.format,
-            chunks: object.chunks,
-            hash: Utils.binaryFromHexa(object.hash),
-        }));
+        this.logger.info(`snapshot.getList(): ${list.length}`);
+        list.forEach((object) =>
+            console.log({
+                height: object.height,
+                format: object.format,
+                chunks: object.chunks,
+                hash: Utils.binaryFromHexa(object.hash),
+            }),
+        );
 
         return ListSnapshotsResponse.create({
             snapshots: list.map((object) => {
@@ -1217,9 +1119,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async LoadSnapshotChunk(request: LoadSnapshotChunkRequest) {
-        this.logger.log(`loadSnapshotChunk height=${request.height}`);
+        this.logger.info(`EVENT: loadSnapshotChunk height=${request.height}`);
 
-        const chunk = await this.snapshot.getChunk(this.storage, request.height, request.chunk);
+        const chunk = await this.getSnapshot().getChunk(
+            this.getStorage(),
+            request.height,
+            request.chunk,
+        );
 
         return LoadSnapshotChunkResponse.create({
             chunk,
@@ -1227,7 +1133,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async OfferSnapshot(request: OfferSnapshotRequest) {
-        this.logger.log(`offerSnapshot`);
+        this.logger.info(`EVENT: offerSnapshot`);
 
         this.importedSnapshot = request.snapshot;
 
@@ -1237,10 +1143,23 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async ApplySnapshotChunk(request: ApplySnapshotChunkRequest) {
-        this.logger.log(`applySnapshotChunk index=${request.index}`);
+        this.logger.info(`EVENT: applySnapshotChunk index=${request.index}`);
+
+        // reject if the provided snapshot is not defined
+        if (this.importedSnapshot === undefined) {
+            this.logger.error(`Cannot apply snapshot chunk: imported snapshot undefined`);
+            return ApplySnapshotChunkResponse.create({
+                result: ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT,
+            });
+        }
 
         const isLast = request.index == this.importedSnapshot.chunks - 1;
-        await this.snapshot.loadReceivedChunk(this.storage, request.index, request.chunk, isLast);
+        await this.getSnapshot().loadReceivedChunk(
+            this.getStorage(),
+            request.index,
+            request.chunk,
+            isLast,
+        );
         const result = ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 
         return ApplySnapshotChunkResponse.create({
@@ -1250,127 +1169,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         });
     }
 
-    /**
-     Checks a microblock and invokes the section callbacks of the node.
-     */
-    private async checkMicroblock(
-        cache: Cache,
-        importer: MicroblockImporter,
-        timestamp: number = Utils.getTimestampInSeconds(),
-        executedDuringGenesis = false,
-    ) {
-        if (executedDuringGenesis) {
-            this.logger.log(
-                'Micro-block verification performed during genesis, skipping verification',
-            );
-            await importer.checkHeader();
-            await importer.instantiateVirtualBlockchain();
-            await importer.importMicroblock();
-            await importer.checkGas();
-        } else {
-            this.logger.log(`Checking microblock ${Utils.binaryToHexa(importer.hash)}`);
-            const status =
-                (await importer.checkHeader()) ||
-                (await importer.checkTimestamp(timestamp)) ||
-                (await importer.instantiateVirtualBlockchain()) ||
-                (await importer.importMicroblock()) ||
-                (await importer.checkGas());
-
-            const checkFailed = status !== 0;
-            if (checkFailed) {
-                this.logger.error(`Rejected with status ${status}: ${importer.error}`);
-                return false;
-            }
-        }
-
-        for (const section of importer.vb.currentMicroblock.sections) {
-            const context = {
-                cache,
-                object: importer.object,
-                vb: importer.vb,
-                mb: importer.vb.currentMicroblock,
-                section,
-                timestamp,
-            };
-            try {
-                await this.invokeSectionPostUpdateCallback(importer.vb.type, section.type, context);
-            }
-            catch (error) {
-                this.logger.error(error);
-                this.logger.error(`Rejected`);
-                return false;
-            }
-        }
-
-        const indexTableId = this.getIndexTableId(importer.vb.type);
-
-        if (indexTableId != -1) {
-            await cache.db.putObject(indexTableId, importer.vb.identifier, {});
-        }
-
-        this.logger.log(`Accepted`);
-        return true;
-    }
-
-    private async setBlockInformation(
-        cache: Cache,
-        height: number,
-        hash: Uint8Array,
-        timestamp: number,
-        proposerAddress: Uint8Array,
-        size: number,
-        microblockCount: number,
-    ) {
-        await cache.db.putObject(NODE_SCHEMAS.DB_BLOCK_INFORMATION, this.heightToTableKey(height), {
-            hash,
-            timestamp,
-            proposerAddress,
-            size,
-            microblockCount,
-        });
-    }
-
-    private async setBlockContent(cache: Cache, height: number, microblocks: any[]) {
-        await cache.db.putObject(NODE_SCHEMAS.DB_BLOCK_CONTENT, this.heightToTableKey(height), {
-            microblocks,
-        });
-    }
-
-    private heightToTableKey(height: number) {
-        return LevelDb.convertHeightToTableKey(height);
-    }
-
-    private getIndexTableId(type) {
-        return LevelDb.getTableIdFromVirtualBlockchainType(type);
-    }
-
-    private getCacheInstance(txs: Uint8Array[]): Cache {
-        const db = new CachedLevelDb(this.db);
-        const storage = new Storage(db, this.storagePath, txs);
-        const cachedInternalProvider = new NodeProvider(db, storage);
-        const cachedProvider = new Provider(cachedInternalProvider, new NullNetworkProvider());
-        const blockchain = new Blockchain(cachedProvider);
-        const vbRadix = new RadixTree(db, NODE_SCHEMAS.DB_VB_RADIX);
-        const tokenRadix = new RadixTree(db, NODE_SCHEMAS.DB_TOKEN_RADIX);
-        const accountManager = new AccountManager(db, tokenRadix);
-        const validatorSetUpdate: any[] = [];
-
-        return { db, storage, blockchain, accountManager, vbRadix, tokenRadix, validatorSetUpdate };
-    }
-
     private async clearDatabase() {
-        this.logger.log(`Clearing database`);
-        await this.db.clear();
+        this.logger.info(`Clearing database`);
+        await this.getLevelDb().clear();
     }
 
     private async clearStorage() {
-        this.logger.log(`Clearing storage`);
-        await this.storage.clear();
+        this.logger.info(`Clearing storage`);
+        await this.getStorage().clear();
     }
 
     private async clearSnapshots() {
-        this.logger.log(`Clearing snapshots`);
-        await this.snapshot.clear(0);
+        this.logger.info(`Clearing snapshots`);
+        await this.getSnapshot().clear(0);
     }
 
     Echo(request: EchoRequest): Promise<EchoResponse> {
@@ -1380,6 +1191,56 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     Flush(request: FlushRequest): Promise<FlushResponse> {
-        return Promise.resolve(undefined);
+        return Promise.resolve({});
+    }
+
+    /**
+     Checks a microblock and invokes the section callbacks of the node.
+     */
+    private async checkMicroblockLocalStateConsistency(
+        workingState: GlobalState,
+        checkedMicroblock: Microblock,
+        executedDuringGenesis = false,
+    ): Promise<MicroblockCheckResult> {
+        this.logger.debug(
+            `Checking microblock local state consistency: genesis mode enabled? ${executedDuringGenesis}`,
+        );
+        const microblockCheckTimer = this.perf.start('checking microblock');
+        try {
+            const checker = new MicroblockConsistencyChecker(workingState, checkedMicroblock);
+
+            // loading and checking virtual blockchain consistency when adding the microblock
+            this.logger.debug(`Checking virtual blockchain consistency...`);
+            await checker.checkVirtualBlockchainConsistencyOrFail();
+
+            // check the consistency of the timestamp defined in the microbloc
+            this.logger.debug('Checking timestamp consistency...');
+            checker.checkTimestampOrFail();
+
+            // checking gas consistency (skipped when running in genesis mode)
+            if (executedDuringGenesis) {
+                this.logger.debug('Running in genesis mode, skipping gas consistency check...');
+            } else {
+                this.logger.debug('Checking gas consistency...');
+                await checker.checkGasOrFail();
+            }
+
+            this.logger.debug('Checks are done');
+            const vb = checker.getVirtualBlockchain();
+            return { checked: true, vb: vb };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Microblock rejected: ${errorMessage}`);
+            if (error instanceof Error) {
+                this.logger.debug(`Error details: ${error}`);
+                this.logger.debug(error.stack || 'No stack trace available');
+            }
+            return {
+                checked: false,
+                error: errorMessage,
+            };
+        } finally {
+            microblockCheckTimer.end();
+        }
     }
 }

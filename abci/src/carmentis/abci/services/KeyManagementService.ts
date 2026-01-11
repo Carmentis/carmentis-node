@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
+    CryptoEncoderFactory,
     PrivateSignatureKey,
     Secp256k1PrivateSignatureKey,
-    StringSignatureEncoder,
 } from '@cmts-dev/carmentis-sdk/server';
 import { NodeConfigService } from '../../config/services/NodeConfigService';
 import process from 'node:process';
@@ -16,11 +16,11 @@ import process from 'node:process';
 export class KeyManagementService implements OnModuleInit {
 
     private logger = new Logger(KeyManagementService.name);
-    private privateKey: PrivateSignatureKey;
+    private privateKey?: PrivateSignatureKey;
 
     constructor(private nodeConfig: NodeConfigService) {}
 
-    onModuleInit() {
+    async onModuleInit() {
         // get the specified private key retrieval method for the genesis private key.
         const { sk, path, env} = this.nodeConfig.getSpecifiedGenesisPrivateKeyRetrievalMethod();
         const specifiedEncodedPrivateKey = sk;
@@ -32,25 +32,29 @@ export class KeyManagementService implements OnModuleInit {
         let retrievedPrivateKey: PrivateSignatureKey;
         if (typeof specifiedEncodedPrivateKey === 'string') {
             this.logger.log(`Retrieving private key provided in the config file...`);
-            retrievedPrivateKey = this.loadPrivateKeyFromEncodedPrivateKey(
+            retrievedPrivateKey = await this.loadPrivateKeyFromEncodedPrivateKey(
                 specifiedEncodedPrivateKey,
             );
         } else if (typeof specifiedPrivateKeyFilePath === 'string') {
             this.logger.log(`Retrieving private key from file ${specifiedPrivateKeyFilePath}...`);
-            retrievedPrivateKey = this.loadPrivateKeyFromFilePath(specifiedPrivateKeyFilePath);
+            retrievedPrivateKey = await this.loadPrivateKeyFromFilePath(specifiedPrivateKeyFilePath);
         } else if (typeof specifiedEnvVarName === 'string') {
             this.logger.log(`Retrieving private key from env variable ${specifiedEnvVarName}...`);
-            retrievedPrivateKey = this.loadPrivateKeyFromEnvVar(specifiedEnvVarName);
+            retrievedPrivateKey = await this.loadPrivateKeyFromEnvVar(specifiedEnvVarName);
+        } else {
+            const errorMsg = "No private key source provided"
+            this.logger.error(errorMsg);
+            throw new Error(errorMsg);
         }
 
         // log the success (or not) of the private key retrieval
         if (retrievedPrivateKey) {
             this.logger.log('Private key retrieved successfully.');
             this.privateKey = retrievedPrivateKey;
-            const publicKey = retrievedPrivateKey.getPublicKey();
-            const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
+            const publicKey = await retrievedPrivateKey.getPublicKey();
+            const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
             this.logger.log(
-                `Loaded genesis public key: ${encoder.encodePublicKey(publicKey)}`,
+                `Loaded genesis public key: ${await encoder.encodePublicKey(publicKey)}`,
             );
         } else {
             this.logger.warn(
@@ -59,12 +63,13 @@ export class KeyManagementService implements OnModuleInit {
         }
     }
 
-    private loadPrivateKeyFromEnvVar(envVarName: string): PrivateSignatureKey {
+    private async loadPrivateKeyFromEnvVar(envVarName: string): Promise<PrivateSignatureKey> {
+        this.logger.log(`Loading private key from env variable ${envVarName}...`);
         const envVarValue = process.env[envVarName];
         if (envVarValue === undefined) throw new Error(`Cannot load private key from env variable ${envVarName}: undefined value.`);
-        const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
+        const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
         try {
-            return encoder.decodePrivateKey(envVarValue);
+            return await encoder.decodePrivateKey(envVarValue);
         } catch (e) {
             if (e instanceof Error) {
                 this.logger.error(
@@ -75,12 +80,13 @@ export class KeyManagementService implements OnModuleInit {
         }
     }
 
-    private loadPrivateKeyFromEncodedPrivateKey(encodedPrivateKey: string): PrivateSignatureKey {
-        const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
-        return encoder.decodePrivateKey(encodedPrivateKey);
+    private async loadPrivateKeyFromEncodedPrivateKey(encodedPrivateKey: string): Promise<PrivateSignatureKey> {
+        this.logger.log(`Loading private key from encoded private key...`);
+        const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
+        return await encoder.decodePrivateKey(encodedPrivateKey);
     }
 
-    getIssuerPrivateKey(): PrivateSignatureKey | undefined {
+    getIssuerPrivateKey(): PrivateSignatureKey {
         if (this.privateKey === undefined)
             throw new Error(
                 'Issuer (genesis) private key is not defined: Have you specified a retrieval method in the config file?',
@@ -88,7 +94,7 @@ export class KeyManagementService implements OnModuleInit {
         return this.privateKey;
     }
 
-    private loadPrivateKeyFromFilePath(privateKeyFilePath: string): PrivateSignatureKey {
+    private async loadPrivateKeyFromFilePath(privateKeyFilePath: string): Promise<PrivateSignatureKey> {
         const keyFilePath = privateKeyFilePath;
         this.logger.log(`Loading keys from file: ${keyFilePath}`);
 
@@ -105,8 +111,8 @@ export class KeyManagementService implements OnModuleInit {
                     privateKey.length > 0 &&
                     publicKey.length > 0
                 ) {
-                    const encoder = StringSignatureEncoder.defaultStringSignatureEncoder();
-                    return encoder.decodePrivateKey(privateKey);
+                    const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
+                    return await encoder.decodePrivateKey(privateKey);
                 } else {
                     this.logger.error(
                         `Key file found but missing required fields 'privateKey'/'publicKey' or invalid format.`,
