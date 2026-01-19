@@ -157,9 +157,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             microblocksStoragePath,
             snapshotStoragePath,
         } = this.nodeConfig.getStoragePaths();
-        this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreateNoRunoff(
-            this.nodeConfig.getGenesisRunoffFilePath(),
-        );
+
+        // instantiate the genesis runoff path if specified
+        if (this.nodeConfig.isGenesisRunoffFilePathSpecified()) {
+            const runoffPath = this.nodeConfig.getGenesisRunoffFilePath();
+            this.logger.info(`Loading genesis runoff from file ${runoffPath}`);
+            this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreateNoRunoff(runoffPath);
+        } else {
+            this.logger.info("No genesis runoff file specified, using no runoff")
+        }
+
+
         this.logger.info(`ABCI storage at ${abciStoragePath}`);
 
         this.db = new LevelDb(dbStoragePath);
