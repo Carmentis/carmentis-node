@@ -12,11 +12,10 @@ export class NodeConfigService implements OnModuleInit {
     private nodeConfig?: NodeConfig;
     private logger = new Logger(NodeConfigService.name);
 
-    constructor() {
-    }
+    constructor() {}
 
     onModuleInit(): void {
-        this.loadConfigFile()
+        this.loadConfigFile();
     }
 
     private loadConfigFile() {
@@ -24,11 +23,11 @@ export class NodeConfigService implements OnModuleInit {
         // for resilience, we search through multiple possible config files.
         // Some filenames might be undefined due to access to env variables that might be undefined./
         const candidatesConfigFilenames: (string | undefined)[] = [
+            process.env['ABCI_CONFIG_FILENAME'],
+            process.env['NODE_CONFIG_FILENAME'],
             'config.toml',
             'abci-config.toml',
             'node-config.toml',
-            process.env['ABCI_CONFIG_FILENAME'],
-            process.env['NODE_CONFIG_FILENAME'],
         ];
 
         // we construct the candidates config file paths.
@@ -36,11 +35,11 @@ export class NodeConfigService implements OnModuleInit {
         const candidatesConfigFilePaths: string[] = [];
 
         // At the top priority, we check if the user has specified a config file path using an environment variable.
-        const specifiedConfigPath = process.env['ABCI_CONFIG'] || process.env['NODE_CONFIG'] || undefined;
+        const specifiedConfigPath =
+            process.env['ABCI_CONFIG'] || process.env['NODE_CONFIG'] || undefined;
         if (specifiedConfigPath !== undefined) {
             candidatesConfigFilePaths.push(specifiedConfigPath);
         }
-
 
         // we exclude undefined filenames and appends the current working directory to each filename.
         const currentWorkDirectory = process.cwd();
@@ -48,7 +47,6 @@ export class NodeConfigService implements OnModuleInit {
             .filter((filename) => filename !== undefined)
             .map((filename) => join(currentWorkDirectory, filename));
         candidatesConfigFilePaths.push(...filteredCurrentDirectoryCandidatesPaths);
-
 
         // we now search for the first config file that exists.
         for (const configPath of candidatesConfigFilePaths) {
@@ -70,9 +68,10 @@ export class NodeConfigService implements OnModuleInit {
         // if we reach this point, we have not found a valid config file.
         // we throw an error.
         const formattedSearchedCandidates = candidatesConfigFilePaths.join(', ');
-        throw new Error(`Failed to load config file from any of the following paths: ${formattedSearchedCandidates}`);
+        throw new Error(
+            `Failed to load config file from any of the following paths: ${formattedSearchedCandidates}`,
+        );
     }
-
 
     /**
      * Retrieves the gRPC port specified in the node configuration. If the port is not defined or is invalid, returns the provided default port.
@@ -114,7 +113,6 @@ export class NodeConfigService implements OnModuleInit {
         return this.cometbftConfig.exposed_rpc_endpoint;
     }
 
-
     /**
      * Retrieves various storage paths configured for the application.
      *
@@ -148,13 +146,17 @@ export class NodeConfigService implements OnModuleInit {
             dbStoragePath,
             microblocksStoragePath,
             genesisSnapshotFilePath,
-        }
+        };
     }
 
     getCometBFTHome() {
         return this.pathsConfig.cometbft_home;
     }
 
+    isGenesisPrivateKeyRetrievalMethodSpecified(): boolean {
+        const genesisSection = this.config.genesis;
+        return genesisSection !== undefined;
+    }
 
     /**
      * Retrieves the private key retrieval method from the genesis section of the node configuration,
@@ -163,7 +165,7 @@ export class NodeConfigService implements OnModuleInit {
      */
     getSpecifiedGenesisPrivateKeyRetrievalMethod(): { sk?: string; path?: string; env?: string } {
         const unspecifiedPrivateKeyRetrievalMethod = { sk: undefined, path: undefined };
-        const genesisSection = this.genesisConfig;
+        const genesisSection = this.config.genesis;
         const isGenesisSectionSpecified = genesisSection !== undefined;
         if (!isGenesisSectionSpecified) return unspecifiedPrivateKeyRetrievalMethod;
         return genesisSection.private_key;
@@ -185,7 +187,7 @@ export class NodeConfigService implements OnModuleInit {
     }
 
     getBlockHistoryBeforeSnapshot() {
-        return this.snapshotConfig.block_history_before_snapshot
+        return this.snapshotConfig.block_history_before_snapshot;
     }
 
     /**
@@ -194,42 +196,45 @@ export class NodeConfigService implements OnModuleInit {
      * @return {NodeConfig} The complete node configuration object.
      */
     getConfig(): NodeConfig {
-        if (this.nodeConfig === undefined) throw new Error('Node config is not initialized yet.')
+        if (this.nodeConfig === undefined) throw new Error('Node config is not initialized yet.');
         return this.nodeConfig;
     }
 
     private get pathsConfig() {
         const pathsConfig = this.config.paths;
-        if (pathsConfig === undefined) throw new Error('Paths config is not initialized yet.')
+        if (pathsConfig === undefined) throw new Error('Paths config is not initialized yet.');
         return pathsConfig;
     }
 
     private get snapshotConfig() {
         const snapshotConfig = this.config.snapshots;
-        if (snapshotConfig === undefined) throw new Error('Snapshot config is not initialized yet.')
+        if (snapshotConfig === undefined)
+            throw new Error('Snapshot config is not initialized yet.');
         return snapshotConfig;
     }
 
     private get genesisConfig() {
         const genesisConfig = this.config.genesis;
-        if (genesisConfig === undefined) throw new Error('Genesis config is not initialized yet.')
+        if (genesisConfig === undefined) throw new Error('Genesis config is not initialized yet.');
         return genesisConfig;
     }
 
     private get genesisSnapshotConfig() {
         const genesisSnapshotConfig = this.config.genesis_snapshot;
-        if (genesisSnapshotConfig === undefined) throw new Error('Genesis snapshot config is not initialized yet.')
+        if (genesisSnapshotConfig === undefined)
+            throw new Error('Genesis snapshot config is not initialized yet.');
         return genesisSnapshotConfig;
     }
 
     private get cometbftConfig() {
         const cometbftConfig = this.config.cometbft;
-        if (cometbftConfig === undefined) throw new Error('CometBFT config is not initialized yet.')
+        if (cometbftConfig === undefined)
+            throw new Error('CometBFT config is not initialized yet.');
         return cometbftConfig;
     }
 
     private get config() {
-        if (this.nodeConfig === undefined) throw new Error('Node config is not initialized yet.')
+        if (this.nodeConfig === undefined) throw new Error('Node config is not initialized yet.');
         return this.nodeConfig;
     }
 
@@ -237,5 +242,9 @@ export class NodeConfigService implements OnModuleInit {
         const config = new NodeConfigService();
         config.nodeConfig = genesisNodeConfig;
         return config;
+    }
+
+    isGenesisRunoffFilePathSpecified() {
+        return this.config.genesis !== undefined && this.config.genesis.runoffFilePath !== undefined;
     }
 }

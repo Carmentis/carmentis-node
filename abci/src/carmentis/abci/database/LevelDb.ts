@@ -218,7 +218,7 @@ export class LevelDb extends AbstractLevelDb {
             del: function (tableId: number, list: any) {
                 const table = sub.get(tableId);
                 if (table === undefined) {
-                    throw new Error('Attempted to access an undefined table');
+                    throw new Error(`Attempted to access an undefined table (table id ${tableId})`);
                 }
 
                 const options = tableId == -1 ? {} : { sublevel: table };

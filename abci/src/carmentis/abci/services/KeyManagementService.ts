@@ -21,6 +21,11 @@ export class KeyManagementService implements OnModuleInit {
     constructor(private nodeConfig: NodeConfigService) {}
 
     async onModuleInit() {
+        if (!this.nodeConfig.isGenesisPrivateKeyRetrievalMethodSpecified()) {
+            this.logger.log('No private key retrieval method specified in the config file: skipping private key retrieval.');
+            return;
+        }
+
         // get the specified private key retrieval method for the genesis private key.
         const { sk, path, env} = this.nodeConfig.getSpecifiedGenesisPrivateKeyRetrievalMethod();
         const specifiedEncodedPrivateKey = sk;
