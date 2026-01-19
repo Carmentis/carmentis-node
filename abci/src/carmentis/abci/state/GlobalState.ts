@@ -56,7 +56,7 @@ export class GlobalState extends AbstractProvider {
         this.cachedDb = new CachedLevelDb(this.db);
         this.cachedStorage = new CachedStorage(this.storage, this.cachedDb);
         this.vbRadix = new RadixTree(this.cachedDb, LevelDbTable.VB_RADIX);
-        this.cachedAccountManager = new AccountManager(this.cachedDb, this.logger);
+        this.cachedAccountManager = new AccountManager(this.cachedDb);
         this.perf = new Performance(this.logger);
     }
 
@@ -106,7 +106,7 @@ export class GlobalState extends AbstractProvider {
         return status;
     }
 
-    async getProtocolVariables(): Promise<ProtocolInternalState> {
+    async getProtocolState(): Promise<ProtocolInternalState> {
        try {
            const protocolVirtualBlockchainIdentifier =
                await this.cachedDb.getProtocolVirtualBlockchainIdentifier();
@@ -334,7 +334,7 @@ export class GlobalState extends AbstractProvider {
     async isProtocolVbDefined() {
         this.logger.debug('Check if protocol VB state is defined in database');
         try {
-            await this.getProtocolVariables();
+            await this.getProtocolState();
             return true;
         } catch (e) {
             this.logger.debug(

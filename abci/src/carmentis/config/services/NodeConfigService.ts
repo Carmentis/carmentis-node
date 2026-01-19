@@ -5,7 +5,7 @@ import process from 'node:process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import * as toml from '@iarna/toml';
-import * as url from 'node:url';
+import * as v from 'valibot';
 
 @Injectable()
 export class NodeConfigService implements OnModuleInit {
@@ -56,7 +56,7 @@ export class NodeConfigService implements OnModuleInit {
                 this.logger.log(`Loading config file from ${configPath}`);
                 const config = readFileSync(configPath, 'utf8');
                 const parsedConfig = toml.parse(config) as Record<string, any>;
-                this.nodeConfig = ConfigSchema.parse(parsedConfig);
+                this.nodeConfig = v.parse(ConfigSchema, parsedConfig);
                 return;
             } catch (e) {
                 if (e instanceof Error) {

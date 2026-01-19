@@ -473,21 +473,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
             );
             const record = await db.getValidatorNodeByAddress(address);
-            //const record = await db.getRaw(NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS, address);
 
             if (!record) {
                 this.logger.info(
                     `Adding unknown validator address: ${Utils.binaryToHexa(address)}`,
                 );
                 await db.putValidatorNode(address);
-                /*
-                await db.putRaw(
-                    NODE_SCHEMAS.DB_VALIDATOR_NODE_BY_ADDRESS,
-                    address,
-                    Utils.getNullHash(),
-                );
-
-                 */
             }
         }
     }

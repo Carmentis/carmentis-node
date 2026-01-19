@@ -3,13 +3,10 @@ import {
 } from '../../proto-ts/cometbft/abci/v1/types';
 
 import {
-    ECO,
-    CMTSToken,
     Microblock,
     MicroblockConsistencyChecker,
     PrivateSignatureKey,
-    SectionType,
-    VirtualBlockchainType,
+    CryptoEncoderFactory,
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
 
@@ -37,154 +34,22 @@ export class GenesisInitialTransactionsBuilder {
         issuerPrivateKey: PrivateSignatureKey,
         request: InitChainRequest,
     ) {
-        // define variables used below
         const issuerPublicKey = await issuerPrivateKey.getPublicKey();
-
-        // we first create the issuer account
-        this.logger.info('Creating microblock for issuer account creation');
-        const issuerAccountCreationMicroblock = Microblock.createGenesisAccountMicroblock();
-        issuerAccountCreationMicroblock.addSections([
-            {
-                type: SectionType.ACCOUNT_PUBLIC_KEY,
-                publicKey: await issuerPublicKey.getPublicKeyAsBytes(),
-                schemeId: issuerPublicKey.getSignatureSchemeId(),
-            },
-            {
-                type: SectionType.ACCOUNT_TOKEN_ISSUANCE,
-                amount: ECO.INITIAL_OFFER,
-            },
-        ]);
-        await issuerAccountCreationMicroblock.seal(issuerPrivateKey);
-        const {
-            microblockData: issuerAccountCreationSerializedMicroblock,
-            microblockHash: issuerAccountHash,
-        } = issuerAccountCreationMicroblock.serialize();
-
-        // we now create the Carmentis Governance organization
-        this.logger.info('Creating governance organization microblock');
-        const governanceOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
-        governanceOrganizationMicroblock.addSections([
-            {
-                type: SectionType.ORG_CREATION,
-                accountId: issuerAccountHash,
-            },
-            {
-                type: SectionType.ORG_DESCRIPTION,
-                name: 'Carmentis Governance',
-                website: '',
-                countryCode: 'FR',
-                city: '',
-            },
-        ]);
-        await governanceOrganizationMicroblock.seal(issuerPrivateKey);
-        const { microblockData: governanceOrganizationData, microblockHash: governanceOrgId } =
-            governanceOrganizationMicroblock.serialize();
-        this.logger.debug(governanceOrganizationMicroblock.toString());
-
-        // we now create the Carmentis SAS organization
-        this.logger.info('Creating Carmentis SAS organization microblock');
-        const carmentisOrganizationMicroblock = Microblock.createGenesisOrganizationMicroblock();
-        carmentisOrganizationMicroblock.addSections([
-            {
-                type: SectionType.ORG_CREATION,
-                accountId: issuerAccountHash,
-            },
-            {
-                type: SectionType.ORG_DESCRIPTION,
-                name: 'Carmentis SAS',
-                website: '',
-                countryCode: 'FR',
-                city: '',
-            },
-        ]);
-        await carmentisOrganizationMicroblock.seal(issuerPrivateKey);
-        const { microblockData: carmentisOrganizationData, microblockHash: carmentisOrgId } =
-            carmentisOrganizationMicroblock.serialize();
-
-        // we create the (single) protocol virtual blockchain
-        this.logger.info('Creating protocol microblock');
-        const protocolMicroblock = Microblock.createGenesisProtocolMicroblock();
-        protocolMicroblock.addSection({
-            type: SectionType.PROTOCOL_CREATION,
-            organizationId: governanceOrgId,
-        });
-        await protocolMicroblock.seal(issuerPrivateKey);
-        const { microblockData: protocolInitialUpdate } = protocolMicroblock.serialize();
-
-        // We now declare the running node as the genesis node.
-        this.logger.info('Creating genesis validator node microblock');
-        const genesisNodeMb = Microblock.createGenesisValidatorNodeMicroblock();
         const genesisValidator = request.validators[0];
-        const rpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
-        this.logger.info(Utils.binaryToHexa(genesisValidator.pub_key_bytes));
-        this.logger.info(`RPC endpoint: ${rpcEndpoint}`);
-        genesisNodeMb.addSections([
-            {
-                type: SectionType.VN_CREATION,
-                organizationId: carmentisOrgId,
-            },
-            {
-                type: SectionType.VN_COMETBFT_PUBLIC_KEY_DECLARATION,
-                cometPublicKey: Utils.binaryToHexa(genesisValidator.pub_key_bytes),
-                cometPublicKeyType: 'tendermint/PubKeyEd25519',
-            },
-            {
-                type: SectionType.VN_RPC_ENDPOINT,
-                rpcEndpoint,
-            },
-        ]);
-        await genesisNodeMb.seal(issuerPrivateKey);
-        const { microblockData: carmentisNodeMicroblock, microblockHash: genesisNodeId } = genesisNodeMb.serialize();
-        this.logger.debug(genesisNodeMb.toString());
+        const genesisNodePubKey = genesisValidator.pub_key_bytes;
+        const genesisNodeRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
+        const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
 
-        // We stake the tokens for the genesis node
-        this.logger.info('Creating staking for genesis validator node');
-        const genesisNodeStakingMb = Microblock.createGenesisAccountMicroblock();
-        genesisNodeStakingMb.addSection({
-            type: SectionType.ACCOUNT_STAKE,
-            amount: CMTSToken.createCMTS(1_000_000).getAmount(),
-            objectType: VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN,
-            objectIdentifier: genesisNodeId
-        });
-        genesisNodeStakingMb.setAsSuccessorOf(issuerAccountCreationMicroblock);
-        await genesisNodeStakingMb.seal(issuerPrivateKey);
-        const { microblockData: genesisNodeStaking } = genesisNodeStakingMb.serialize();
-
-        // We emit the approval of the governance for the genesis node as a validator
-        const validatorNodeVotingPowerUpdateMb = Microblock.createGenesisValidatorNodeMicroblock();
-        validatorNodeVotingPowerUpdateMb.addSections([
-            {
-                type: SectionType.VN_APPROVAL,
-                status: true,
-            },
-        ]);
-        validatorNodeVotingPowerUpdateMb.setAsSuccessorOf(genesisNodeMb);
-        await validatorNodeVotingPowerUpdateMb.seal(issuerPrivateKey);
-        const { microblockData: serializedVnVotingPowerUpdateMb } =
-            validatorNodeVotingPowerUpdateMb.serialize();
-        this.logger.debug(validatorNodeVotingPowerUpdateMb.toString());
-
-        // we now proceed to the runoff
-        const transactions: Uint8Array[] = [
-            issuerAccountCreationSerializedMicroblock,
-            governanceOrganizationData,
-            protocolInitialUpdate,
-            carmentisOrganizationData,
-            carmentisNodeMicroblock,
-            genesisNodeStaking,
-            serializedVnVotingPowerUpdateMb,
-        ];
         const runoffTransactionsBuilder = new GenesisRunoffTransactionsBuilder(
             this.genesisRunoffs,
-            issuerAccountHash,
-            issuerPrivateKey,
-            issuerPublicKey,
-            [ issuerAccountCreationMicroblock, genesisNodeStakingMb ],
+            await encoder.encodePrivateKey(issuerPrivateKey),
+            await encoder.encodePublicKey(issuerPublicKey),
+            Utils.binaryToHexa(genesisNodePubKey),
+            genesisNodeRpcEndpoint,
         );
         const runoffsTransactions = await runoffTransactionsBuilder.createRunoffTransactions();
-        transactions.push(...runoffsTransactions);
 
-        await this.publishGenesisTransactions(transactions, 1);
+        await this.publishGenesisTransactions(runoffsTransactions, 1);
 
         const { appHash } = await this.globalState.getApplicationHash();
         return appHash;

@@ -4,6 +4,7 @@
 .cometbft*
 .carmentis
 .idea
+abci/package-lock.json
 *.bat
 log*.txt
 out

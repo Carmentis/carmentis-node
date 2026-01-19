@@ -18,6 +18,8 @@ import {
     AccountState,
     BlockchainUtils,
     BalanceAvailability,
+    VirtualBlockchainType,
+    ProtocolInternalState,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Escrow } from '../types/Escrow';
 import { getLogger, Logger } from '@logtape/logtape';
@@ -62,11 +64,11 @@ export class AccountManager {
     private readonly perf: Performance;
     private readonly logger: Logger;
 
-    constructor(db: DbInterface, logger: Logger = getLogger([ 'node', 'accounts', AccountManager.name ])) {
+    constructor(db: DbInterface) {
         this.db = db;
         this.accountRadix = new RadixTree(this.db, LevelDbTable.TOKEN_RADIX);
-        this.logger = logger;
-        this.perf = new Performance(logger, true);
+        this.logger = getLogger([ 'node', 'accounts', AccountManager.name ]);
+        this.perf = new Performance(this.logger, true);
     }
 
     getAccountRootHash() {
@@ -284,7 +286,19 @@ export class AccountManager {
         amount: number,
         objectType: number,
         objectIdentifier: Uint8Array,
+        protocolState: ProtocolInternalState,
     ) {
+        if (objectType != VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN) {
+            throw new Error(`Staking and unstaking are currently supported for validator nodes only`);
+        }
+
+        const minimumAmount = protocolState.getMinimumNodeStakingAmountInAtomics();
+        const maximumAmount = protocolState.getMaximumNodeStakingAmountInAtomics();
+
+        if (amount < minimumAmount || amount > maximumAmount) {
+            throw new Error(`Staking amount in atomics must be in [${minimumAmount} .. ${maximumAmount}], got ${amount}`);
+        }
+
         const accountInformation = await this.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
         const balanceAvailability = new BalanceAvailability(
@@ -301,14 +315,39 @@ export class AccountManager {
     /**
      * Declares that the user wants to unstake some tokens.
      */
-    async declareUnstake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array) {
+    async declareUnstake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array, timestamp: number, protocolState: ProtocolInternalState) {
+        if (objectType != VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN) {
+            throw new Error(`Staking and unstaking are currently supported for validator nodes only`);
+        }
+
+        const minimumAmount = protocolState.getMinimumNodeStakingAmountInAtomics();
+        const delayInDays = protocolState.getUnstakingDelayInDays();
+        const plannedUnlockTimestamp = Utils.addDaysToTimestamp(timestamp, delayInDays);
+
         const accountInformation = await this.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
         const balanceAvailability = new BalanceAvailability(
             accountState.balance,
             accountState.locks,
         );
-        // ...
+        const stakedAmount = balanceAvailability.getNodeStakingLockAmount(objectIdentifier);
+        const newStakedAmount = stakedAmount - amount;
+
+        if (newStakedAmount < 0) {
+            throw new Error(`Cannot unstake more than ${stakedAmount} atomic units, got ${newStakedAmount}`);
+        }
+        if (newStakedAmount > 0 && newStakedAmount < minimumAmount) {
+            throw new Error(`The updated staked amount must be either 0 or greater than or equal to ${minimumAmount} atomic units, got ${newStakedAmount}`);
+        }
+        balanceAvailability.planNodeStakingUnlock(
+            amount,
+            plannedUnlockTimestamp,
+            objectIdentifier
+        );
+        accountState.balance = balanceAvailability.getBalanceAsAtomics();
+        accountState.locks = balanceAvailability.getLocks();
+
+        await this.saveState(accountHash, accountState);
     }
 
     /**

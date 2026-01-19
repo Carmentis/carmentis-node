@@ -1,10 +1,4 @@
 import {
-    AccountStakeSection,
-    AccountTransferSection,
-    AccountEscrowTransferSection,
-    AccountEscrowSettlementSection,
-    AccountVestingTransferSection,
-    AccountState,
     AccountInformation,
     AccountVb,
     Base64,
@@ -16,8 +10,6 @@ import {
     Hash,
     Microblock,
     ProtocolVb,
-    PublicSignatureKey,
-    Section,
     SectionType,
     Utils,
     ValidatorNodeCometbftPublicKeyDeclarationSection,
@@ -27,13 +19,10 @@ import {
     BalanceAvailability,
 } from '@cmts-dev/carmentis-sdk/server';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
-import { NODE_SCHEMAS } from '../constants/constants';
-import { getLogger, Logger } from '@logtape/logtape';
+import { getLogger } from '@logtape/logtape';
 import { AccountManager, Transfer } from '../accounts/AccountManager';
 import { GlobalState } from './GlobalState';
 import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
-import { BlockInformation } from '../types/BlockInformation';
-import { Escrow } from '../types/Escrow';
 import { GlobalStateUpdateCometParameters } from '../types/GlobalStateUpdateCometParameters';
 import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { LevelDb } from '../database/LevelDb';
@@ -74,6 +63,20 @@ export class GlobalStateUpdater {
             0;
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
 
+        // process misbehaviors
+        for(const misbehavior of cometParameters.blockMisbehaviors) {
+            // retrieve node address and node hash
+            if (misbehavior.validator === undefined) throw new Error(`Misbehavior of type ${misbehavior.type} detected, but no validator specified`);
+            const validatorNodeAddress = misbehavior.validator.address;
+            this.logger.error(`MISBEHAVIOR OF TYPE ${misbehavior.type} DETECTED FOR NODE '${Utils.binaryToHexa(validatorNodeAddress)}'`);
+            const dataObject = await database.getValidatorNodeByAddress(validatorNodeAddress);
+            if (dataObject === undefined) throw new Error(`Validator node with address ${Utils.binaryToHexa(validatorNodeAddress)} not found`);
+            const validatorNodeHash = dataObject.validatorNodeHash;
+            const validatorNode = await globalState.loadValidatorNodeVirtualBlockchain(new Hash(validatorNodeHash));
+            const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+        }
+
+        // if this is the first block of the day, apply daily updates
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
             // update vesting locks
@@ -305,8 +308,8 @@ export class GlobalStateUpdater {
         // case 2: The fees payer account does not have enough tokens to pay (fast case)
         const feesPayerAccountBalance =
             await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
-        const protocolParameters = await globalState.getProtocolVariables();
-        const feesCalculationVersion = protocolParameters.getFeesCalculationVersion();
+        const protocolState = await globalState.getProtocolState();
+        const feesCalculationVersion = protocolState.getFeesCalculationVersion();
         const signatureSection = microblock.getLastSignatureSection();
         const usedSignatureSchemeId = signatureSection.schemeId;
         const usedFeesCalculationFormula =
@@ -396,7 +399,6 @@ export class GlobalStateUpdater {
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
-        //await this.payValidators(this.finalizedBlockContext, votes, blockHeight, blockTimestamp);
         await this.dispatchFeesAmongValidators(state, request);
         await this.storeBlockInformationInBuffer(
             state,
@@ -479,7 +481,7 @@ export class GlobalStateUpdater {
     }
 
     private async dispatchFeesAmongValidators(state: GlobalState, request: FinalizeBlockRequest) {
-        this.logger.info(`payValidators`);
+        this.logger.info(`dispatchFeesAmongValidators`);
         const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
             ECO.ACCOUNT_BLOCK_FEES,
         );
@@ -629,22 +631,29 @@ export class GlobalStateUpdater {
             // check staking
             if (sectionType === SectionType.ACCOUNT_STAKE) {
                 const { amount, objectType, objectIdentifier } = section;
+                const protocolState = await globalState.getProtocolState();
                 await accountManager.stake(
                     accountVb.getId(),
                     amount,
                     objectType,
-                    objectIdentifier
+                    objectIdentifier,
+                    protocolState
                 );
             }
 
             // check unstaking
+            // TODO: it would be better to use the Comet block timestamp instead of the MB timestamp
+            // (for the MB timestamp may already be pointing at the next day)
             if (sectionType === SectionType.ACCOUNT_UNSTAKE) {
                 const { amount, objectType, objectIdentifier } = section;
+                const protocolState = await globalState.getProtocolState();
                 await accountManager.declareUnstake(
                     accountVb.getId(),
                     amount,
                     objectType,
-                    objectIdentifier
+                    objectIdentifier,
+                    microblock.getTimestamp(),
+                    protocolState
                 );
             }
 

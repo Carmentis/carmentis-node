@@ -420,7 +420,7 @@ export class SnapshotsManager {
             if (rd.bytesRead < size) {
                 throw new Error(`Encountered end of file while reading value from DB file`);
             }
-            batch.put(-1, [[keyBuffer, valueBuffer]]);
+            batch.putAtRoot([[keyBuffer, valueBuffer]]);
         }
         await handle.close();
     }
