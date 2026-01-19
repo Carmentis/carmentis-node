@@ -43,7 +43,7 @@ import {
 } from "../../../../../carmentis-core/src/common/type/valibot/provider/abci/AbciResponse";
 
 interface RunOffsAccountInterface {
-    name: string,
+    id: string,
     publicKey: string,
     privateKey?: string
 }
@@ -175,14 +175,15 @@ describe('Abci', () => {
         const sellerPk = await sellerSk.getPublicKey();
         const sellerAccountId = await scriptManager.getAccountByPublicKey(sellerPk);
 
-        const invest1AccountId = await scriptManager.getAccountIdByName('invest-1')
+        const invest1AccountId = await scriptManager.getAccountHashByAccountId('invest-1')
         let invest1AccountState;
-        const invest2AccountId = await scriptManager.getAccountIdByName('invest-2')
+        const invest2AccountId = await scriptManager.getAccountHashByAccountId('invest-2')
         let invest2AccountState;
 
         invest2AccountState = await scriptManager.getAccountState(invest2AccountId);
         console.log('invest2AccountState', Utils.binaryToHexa(invest2AccountId), invest2AccountState);
 
+        // create a 1st account
         await (async () => {
             const mb = new Microblock(VirtualBlockchainType.ACCOUNT_VIRTUAL_BLOCKCHAIN);
             const sk = Secp256k1PrivateSignatureKey.gen();
@@ -203,6 +204,7 @@ describe('Abci', () => {
             await scriptManager.addMicroblock(mb, sellerAccountId, sellerSk, 0);
         })();
 
+        // create a 2nd account
         await (async () => {
             const mb = new Microblock(VirtualBlockchainType.ACCOUNT_VIRTUAL_BLOCKCHAIN);
             const sk = Secp256k1PrivateSignatureKey.gen();
@@ -225,6 +227,7 @@ describe('Abci', () => {
 
         await scriptManager.processCometConsensus(0);
 
+        // check linear vesting
         for(let n = 0; n <= 11; n++) {
             await scriptManager.processCometConsensus(n * 24);
 
@@ -236,6 +239,9 @@ describe('Abci', () => {
             console.log(`invest2AccountState after ${n} days`, Utils.binaryToHexa(invest2AccountId), invest2AccountState);
             expect(invest2AccountState.locks[0]?.lockedAmountInAtomics || 0).toEqual(Math.max(0, 2_000_000 - n * (2_000_000 / 10)));
         }
+
+        // simulate misbehavior
+        await scriptManager.processCometConsensus(12 * 24, 1);
     }, 45000);
 });
 
@@ -245,6 +251,7 @@ class TestScriptManager {
     referenceTimestamp: number;
     runOffsFile: string;
     txs: Uint8Array[];
+    blockTimestamp: number[];
 
     constructor(abci: GrpcAbciController, initialHeight: number, referenceTimestamp: number, runOffsFile: string) {
         this.abci = abci;
@@ -252,6 +259,7 @@ class TestScriptManager {
         this.referenceTimestamp = referenceTimestamp;
         this.runOffsFile = runOffsFile;
         this.txs = [];
+        this.blockTimestamp = [];
     }
 
     async addMicroblock(mb: Microblock, payerAccountHash: Uint8Array, payerSk: PrivateSignatureKey, elapsedHours: number) {
@@ -276,17 +284,37 @@ class TestScriptManager {
         this.txs.push(mb.serialize().microblockData);
     }
 
-    async processCometConsensus(elapsedHours: number) {
+    async processCometConsensus(elapsedHours: number, misbehaviorType = -1) {
         const timestampInSeconds = this.referenceTimestamp + elapsedHours * 3600;
         const time = {
             seconds: timestampInSeconds,
             nanos: 0
         };
 
+        this.blockTimestamp[this.height] = timestampInSeconds;
+
+        const misbehavior = [];
+
+        if (misbehaviorType != -1) {
+            misbehavior.push({
+                type: misbehaviorType,
+                validator: {
+                    address: new Uint8Array(20),
+                    power: 100000000000
+                },
+                height: this.height - 1,
+                time: {
+                    seconds: this.blockTimestamp[this.height - 1],
+                    nanos: 0
+                },
+                total_voting_power: 100000000000
+            });
+        }
+
         const prepareProposalResponse = await this.abci.PrepareProposal({
             txs: this.txs,
             max_tx_bytes: 2 ** 24,
-            misbehavior: [],
+            misbehavior,
             height: this.height,
             proposer_address: new Uint8Array,
             next_validators_hash: new Uint8Array,
@@ -303,7 +331,7 @@ class TestScriptManager {
         const processProposalResponse = await this.abci.ProcessProposal({
             txs: this.txs,
             proposed_last_commit: lastCommit,
-            misbehavior: [],
+            misbehavior,
             hash: new Uint8Array,
             height: this.height,
             proposer_address: new Uint8Array,
@@ -316,7 +344,7 @@ class TestScriptManager {
         const finalizeBlockResponse = await this.abci.FinalizeBlock({
             txs: this.txs,
             decided_last_commit: lastCommit,
-            misbehavior: [],
+            misbehavior,
             hash: new Uint8Array,
             height: this.height,
             proposer_address: new Uint8Array,
@@ -333,13 +361,13 @@ class TestScriptManager {
         this.height++;
     }
 
-    async getAccountIdByName(name: string) {
-        const account = this.getAccountFromRunOffs(name);
+    async getAccountHashByAccountId(id: string) {
+        const account = this.getAccountFromRunOffs(id);
         const encodedPk = account.publicKey;
         const sigEncoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
         const pk = await sigEncoder.decodePublicKey(encodedPk);
-        const accountId = await this.getAccountByPublicKey(pk);
-        return accountId;
+        const accountHash = await this.getAccountByPublicKey(pk);
+        return accountHash;
     }
 
     async getAccountByPublicKey(pk: PublicSignatureKey) {
@@ -383,13 +411,13 @@ class TestScriptManager {
         return abciResponse;
     }
 
-    getAccountFromRunOffs(name: string): RunOffsAccountInterface {
+    getAccountFromRunOffs(id: string): RunOffsAccountInterface {
         const data = readFileSync(this.runOffsFile);
         const object = JSON.parse(data.toString()) as { accounts: RunOffsAccountInterface[] };
-        const account = object.accounts.find((account) => account.name == name);
+        const account = object.accounts.find((account) => account.id == id);
 
         if(account === undefined) {
-            throw new Error(`account '${name}' not found in runOffs file`);
+            throw new Error(`account '${id}' not found in runOffs file`);
         }
         return account;
     }

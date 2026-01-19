@@ -234,7 +234,15 @@ export class LevelDb extends AbstractLevelDb {
                     throw new Error('Attempted to access an undefined table');
                 }
 
-                const options = tableId == -1 ? {} : { sublevel: table };
+                const options = { sublevel: table };
+
+                for (const [key, value] of list) {
+                    batchObject.put(key, value, options);
+                }
+                return obj;
+            },
+            putAtRoot: function (list: any) {
+                const options = {};
 
                 for (const [key, value] of list) {
                     batchObject.put(key, value, options);

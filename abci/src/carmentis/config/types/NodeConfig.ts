@@ -1,88 +1,97 @@
-import * as z from "zod";
+import * as v from "valibot";
 
 // Sink configurations
-const ConsoleSinkConfigSchema = z.object({
-    type: z.literal("console"),
+const ConsoleSinkConfigSchema = v.object({
+    type: v.literal("console"),
 });
 
-const FileSinkConfigSchema = z.object({
-    type: z.literal("file"),
-    path: z.string(),
+const FileSinkConfigSchema = v.object({
+    type: v.literal("file"),
+    path: v.string(),
 });
 
-const OtelSinkConfigSchema = z.object({
-    type: z.literal("otel"),
-    serviceName: z.string(),
-    otlpExporterConfig: z.object({
-        url: z.string(),
-        headers: z.record(z.string(), z.string()).optional(),
+const OtelSinkConfigSchema = v.object({
+    type: v.literal("otel"),
+    serviceName: v.string(),
+    otlpExporterConfig: v.object({
+        url: v.string(),
+        headers: v.optional(v.record(v.string(), v.string())),
     }),
 });
 
-const SinkConfigSchema = z.union([
+const SinkConfigSchema = v.union([
     ConsoleSinkConfigSchema,
     FileSinkConfigSchema,
     OtelSinkConfigSchema,
 ]);
 
 // Log category configuration
-const LogCategoryConfigSchema = z.object({
-    category: z.union([z.string(), z.array(z.string())]),
-    lowestLevel: z.enum(["debug", "info", "warning", "error", "fatal"]).default("info"),
-    sinks: z.array(z.string()),
+const LogCategoryConfigSchema = v.object({
+    category: v.union([v.string(), v.array(v.string())]),
+    lowestLevel: v.fallback(
+        v.enum({
+            debug: 'debug',
+            info: 'info',
+            warning: 'warning',
+            error: 'error',
+            fatal: 'fatal',
+        }),
+        'info'
+    ),
+    sinks: v.array(v.string()),
 });
 
-export const ConfigSchema = z.object({
-    genesis: z.object({
-        runoffFilePath: z.string().default("genesisRunoffs.json"),
-        private_key: z.union([
-            z.object({
-                sk: z.string(),
+export const ConfigSchema = v.object({
+    genesis: v.optional(v.object({
+        runoffFilePath: v.fallback(v.string(), "genesisRunoffs.json"),
+        private_key: v.union([
+            v.object({
+                sk: v.string(),
             }),
-            z.object({
-                path: z.string(),
+            v.object({
+                path: v.string(),
             }),
-            z.object({
-                env: z.string(),
+            v.object({
+                env: v.string(),
             })
         ])
-    }).optional(),
-    genesis_snapshot: z.object({
-        path: z.string().optional(),
-        rpc_endpoint: z.string().optional(),
-    }).optional(),
-    snapshots: z.object({
-        snapshot_block_period: z.number().default(1),
-        block_history_before_snapshot: z.number().default(0),
-        max_snapshots: z.number().default(3),
-    }).optional(),
-    cometbft: z.object({
-        exposed_rpc_endpoint: z.string(),
+    })),
+    genesis_snapshot: v.optional(v.object({
+        path: v.optional(v.string()),
+        rpc_endpoint: v.optional(v.string()),
+    })),
+    snapshots: v.optional(v.object({
+        snapshot_block_period: v.fallback(v.number(), 1),
+        block_history_before_snapshot: v.fallback(v.number(), 0),
+        max_snapshots: v.fallback(v.number(), 3),
+    })),
+    cometbft: v.object({
+        exposed_rpc_endpoint: v.string(),
     }),
-    abci: z.object({
-        grpc: z.object({
-            port: z.number().optional(),
-        }).optional(),
-        query: z.object({
-            rest: z.object({
-                port: z.number().optional(),
-            }).optional(),
-        }).optional(),
+    abci: v.object({
+        grpc: v.optional(v.object({
+            port: v.optional(v.number()),
+        })),
+        query: v.optional(v.object({
+            rest: v.optional(v.object({
+                port: v.optional(v.number()),
+            })),
+        })),
     }),
-    paths: z.object({
-        cometbft_home: z.string(),
-        storage: z.string(),
-        storage_relative_snapshots_folder: z.string().default('snapshots'),
-        storage_relative_db_folder: z.string().default('db'),
-        storage_relative_microblocks_folder: z.string().default('microblocks'),
-        storage_relative_genesis_snapshot_file: z.string().default('genesis_snapshot.json'),
+    paths: v.object({
+        cometbft_home: v.string(),
+        storage: v.string(),
+        storage_relative_snapshots_folder: v.fallback(v.string(), 'snapshots'),
+        storage_relative_db_folder: v.fallback(v.string(), 'db'),
+        storage_relative_microblocks_folder: v.fallback(v.string(), 'microblocks'),
+        storage_relative_genesis_snapshot_file: v.fallback(v.string(), 'genesis_snapshot.json'),
     }),
-    logs: z.object({
-        sinks: z.record(z.string(), SinkConfigSchema),
-        loggers: z.array(LogCategoryConfigSchema),
-    }).optional(),
+    logs: v.optional(v.object({
+        sinks: v.record(v.string(), SinkConfigSchema),
+        loggers: v.array(LogCategoryConfigSchema),
+    })),
 });
 
-export type NodeConfig = z.infer<typeof ConfigSchema>;
-export type SinkConfig = z.infer<typeof SinkConfigSchema>;
-export type LogCategoryConfig = z.infer<typeof LogCategoryConfigSchema>;
+export type NodeConfig = v.InferOutput<typeof ConfigSchema>;
+export type SinkConfig = v.InferOutput<typeof SinkConfigSchema>;
+export type LogCategoryConfig = v.InferOutput<typeof LogCategoryConfigSchema>;
