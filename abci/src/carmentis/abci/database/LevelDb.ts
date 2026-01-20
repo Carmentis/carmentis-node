@@ -124,13 +124,14 @@ export class LevelDb extends AbstractLevelDb {
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
         this.logger.debug(
-            `Setting binary with key {key} on table {tableName}: {dataLength} bytes`,
-            () => ({
+            `Storing raw data with key {key} on table {tableName} in buffer: length = {length} bytes, data extract = {data}`, () => ({
                 key: Utils.binaryToHexa(key),
                 tableName: LevelDb.getTableName(tableId),
-                dataLength: data.length,
-            }),
+                length: data.length,
+                data: Utils.binaryToHexa(data.slice(0, 128)),
+            })
         );
+
         try {
             const subTable = this.sub.get(tableId);
             if (subTable) {

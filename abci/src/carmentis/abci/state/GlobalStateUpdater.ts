@@ -496,8 +496,13 @@ export class GlobalStateUpdater {
         const validatorAccounts: Uint8Array[] = [];
         const votes = request.decided_last_commit?.votes || [];
         const stateDb = state.getCachedDatabase();
+
+        this.logger.debug(`${votes.length} vote(s)`);
+
         for (const vote of votes) {
-            if (vote.block_id_flag === BlockIDFlag.BLOCK_ID_FLAG_COMMIT ) {
+            // TODO: figure out why vote.block_id_flag is not an integer
+            // if (vote.block_id_flag === BlockIDFlag.BLOCK_ID_FLAG_COMMIT ) {
+            if ((vote.block_id_flag).toString() == 'BLOCK_ID_FLAG_COMMIT') {
                 // skip if validator field not set in the vote
                 if (vote.validator == null) {
                     this.logger.warn(`Received undefined validator in commit vote: skipping vote`);
@@ -506,10 +511,13 @@ export class GlobalStateUpdater {
 
                 // TODO: clean
                 const address = Utils.bufferToUint8Array(vote.validator.address);
-                const validatorNodeHash = await stateDb.getRaw(
-                    LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
-                    address,
-                );
+                const nodeByAddress = await stateDb.getValidatorNodeByAddress(address);
+                if(nodeByAddress == undefined) throw new Error('Invalid validator address');
+                const validatorNodeHash = nodeByAddress.validatorNodeHash;
+//              const validatorNodeHash = await stateDb.getRaw(
+//                  LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
+//                  address,
+//              );
 
                 if (!validatorNodeHash) {
                     this.logger.error(`unknown validator address ${Utils.binaryToHexa(address)}`);
@@ -524,6 +532,7 @@ export class GlobalStateUpdater {
 
                     //const validatorPublicKey: PublicSignatureKey = await validatorNode.getOrganizationPublicKey();
                     const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+                    this.logger.debug(`adding validator node with account ${accountId}`);
                     //const validatorAccountHash = accountManager.loadAccountByPublicKey(validatorPublicKey);
 
                     validatorAccounts.push(accountId.toBytes());
@@ -750,13 +759,16 @@ export class GlobalStateUpdater {
         const cometPublicKeyBytes = Base64.decodeBinary(cometPublicKey);
         const cometAddress = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(cometPublicKeyBytes);
 
+        this.logger.debug(`new node with public key ${cometPublicKey} and address ${Utils.binaryToHexa(cometAddress)}`);
+
         // we search for the last known voting power from the internal VB state
         const localState = vb.getInternalState();
         const approvalStatus = localState.getLastKnownApprovalStatus();
 
         // create the new link: Comet address -> identifier
         const database = globalState.getCachedDatabase();
-        await database.putRaw(LevelDbTable.VALIDATOR_NODE_BY_ADDRESS, cometAddress, vb.getId());
+//      await database.putRaw(LevelDbTable.VALIDATOR_NODE_BY_ADDRESS, cometAddress, vb.getId());
+        await database.putValidatorNodeByAddress(cometAddress, vb.getId());
 
         await this.processValidatorSetUpdate(
             globalState,
