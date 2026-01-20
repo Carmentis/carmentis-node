@@ -52,8 +52,8 @@
         },
         {
             "id": "carmentis",
-            "privateKey": "SIG:SECP256K1:SK{88605383d48b8e191074f89406d8652de7d0e9cd330de9a4a96ce8aa40f20c99}",
-            "publicKey": "SIG:SECP256K1:PK{03462c3fbe62d54136091c0ac0cee3131f42349df883b216160f542ca514f707da}"
+            "privateKey": "SIG:SECP256K1:SK{1ff569ba6cb3afb0f0f129fc6e4b000a0b605862be875444482ba4454d105506}",
+            "publicKey": "SIG:SECP256K1:PK{02cec48992a1134cb4529e1ab933a02274e172f02d5d9b358d68232d156a094136}"
         },
         {
             "id": "julien",
@@ -97,7 +97,7 @@
             "type": "transfer",
             "source": "issuer",
             "destination": "carmentis",
-            "amount": 1000
+            "amount": 2000000
         },
         {
             "type": "organizationCreation",
@@ -116,7 +116,7 @@
         {
             "type": "nodeCreation",
             "node": "genesis",
-            "organization": "governance"
+            "organization": "carmentis"
         },
         {
             "type": "staking",
