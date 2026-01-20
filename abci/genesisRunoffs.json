@@ -158,14 +158,14 @@
             "source": "team-advisors",
             "destination": "invest-2",
             "vesting": "invest",
-            "amount":  20
+            "amount": 20
         },
         {
             "type": "transfer",
             "source": "team-advisors",
             "destination": "invest-3",
             "vesting": "test",
-            "amount":  30
+            "amount": 30
         }
     ]
 }

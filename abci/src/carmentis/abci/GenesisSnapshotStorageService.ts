@@ -30,7 +30,6 @@ export class GenesisSnapshotStorageService {
         }
         return await this.writeGenesisSnapshotToDisk(genesisSnapshot);
     }
-
     
     async writeGenesisSnapshotToDisk(data: StoredGenesisSnapshot) {
         this.logger.verbose(`Writing genesis snapshot to ${this.genesisSnapshotPath}`);
@@ -38,6 +37,7 @@ export class GenesisSnapshotStorageService {
             const dir = path.dirname(this.genesisSnapshotPath);
             await mkdir(dir, { recursive: true });
             const json = JSON.stringify(data, null, 2);
+            this.logger.verbose(`Genesis snapshot size as JSON: ${json.length} bytes`);
             await writeFile(this.genesisSnapshotPath, json, { encoding: 'utf8' });
         } catch (error) {
             const msg = error instanceof Error ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
@@ -57,6 +57,4 @@ export class GenesisSnapshotStorageService {
             throw error;
         }
     }
-    
-
 }

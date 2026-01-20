@@ -336,6 +336,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++) {
             const chunk = genesisSnapshotChunks[chunkIndex];
             const isLastChunk = chunkIndex === genesisSnapshotChunks.length - 1;
+            this.logger.info(`processing genesis snapshot chunk ${chunkIndex + 1} of ${genesisSnapshotChunks.length} (last: ${isLastChunk ?'yes' : 'no'})`)
             await this.getSnapshot().loadReceivedChunk(
                 this.getStorage(),
                 chunkIndex,
@@ -400,8 +401,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const base64Encoder = EncoderFactory.bytesToBase64Encoder();
 
         // we generate and export the genesis state as a snapshot
-        const numberOfChunksToExport = 4; // TODO(explain): why 4?
+        const snapshotList = await this.getSnapshot().getList();
+        const snapshotDescription = snapshotList.find((desc) => desc.height == chainHeightAfterGenesis);
+
+        if (snapshotDescription == undefined) {
+            throw new Error(`Unable to find the genesis snapshot (height = ${chainHeightAfterGenesis})`);
+        }
+
+        const numberOfChunksToExport = snapshotDescription.chunks;
         const genesisChunks: Uint8Array[] = [];
+        this.logger.info(`exporting ${numberOfChunksToExport} chunks from the genesis snapshot`);
         for (
             let chunkIndexToExport = 0;
             chunkIndexToExport < numberOfChunksToExport;
@@ -497,7 +506,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     async CheckTx(request: CheckTxRequest, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<CheckTxResponse> {
         const perfMeasure = this.perf.start('CheckTx');
         this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
-        this.logger.info(`Size of transaction: ${request.tx.length} bytes`);
+        this.logger.info(`Size of transaction: ${request.tx.length} bytes / request type: ${request.type}`);
 
         // for performance, we reject already-checked microblock
         if (request.type === CheckTxType.CHECK_TX_TYPE_RECHECK) {
