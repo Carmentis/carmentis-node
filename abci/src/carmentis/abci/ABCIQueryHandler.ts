@@ -94,8 +94,6 @@ export class ABCIQueryHandler {
         }
     }
 
-
-
     async getGenesisSnapshot(request: GetGenesisSnapshotAbciRequest): Promise<GenesisSnapshotAbciResponse> {
         const snapshot = await this.genesisSnapshotHandler.readGenesisSnapshotFromDisk();
         return {

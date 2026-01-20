@@ -1,8 +1,5 @@
-import fs from 'node:fs';
-import stream from 'node:stream/promises';
-import { FileHandle, open } from 'node:fs/promises';
-import path from 'path';
-
+import { open } from 'node:fs/promises';
+import {getLogger} from '@logtape/logtape';
 import { Utils } from '@cmts-dev/carmentis-sdk/server';
 
 const CHUNK_HEIGHT_LENGTH = 6;
@@ -15,6 +12,7 @@ const CHUNK_RECORD_LENGTH = CHUNK_FILE_IDENTIFIER_LENGTH + CHUNK_OFFSET_LENGTH +
 
 export class SnapshotChunksFile {
     filePath: string;
+    private logger = getLogger(['node', 'snapshots', SnapshotChunksFile.name])
 
     constructor(filePath: string) {
         this.filePath = filePath;
@@ -87,6 +85,7 @@ export class SnapshotChunksFile {
         callback: (fileIdentifier: number, offset: number, size: number) => Promise<void>,
     ) {
         const info = await this.getInformation();
+        this.logger.info(`processing chunk index = ${index}, file = ${this.filePath}, height = ${info.height}, chunksCount = ${info.chunksCount}, fileSize = ${info.fileSize}`);
         const handle = await open(this.filePath, 'r');
 
         // get the initial and maximum pointers from the index

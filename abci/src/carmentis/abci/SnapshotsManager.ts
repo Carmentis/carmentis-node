@@ -2,18 +2,19 @@ import fs from 'node:fs';
 import path from 'path';
 import crypto from 'node:crypto';
 import stream from 'node:stream/promises';
-import { NodeCrypto } from './crypto/NodeCrypto';
-import { FileHandle, access, mkdir, open, rename, readdir, rm } from 'node:fs/promises';
-import { LevelDb } from './database/LevelDb';
-import { Storage } from './storage/Storage';
-import { SnapshotDataCopyManager } from './SnapshotDataCopyManager';
-import { SnapshotChunksFile } from './SnapshotChunksFile';
-import { NODE_SCHEMAS } from './constants/constants';
+import {NodeCrypto} from './crypto/NodeCrypto';
+import {access, mkdir, open, readdir, rename, rm} from 'node:fs/promises';
+import {LevelDb} from './database/LevelDb';
+import {Storage} from './storage/Storage';
+import {SnapshotDataCopyManager} from './SnapshotDataCopyManager';
+import {SnapshotChunksFile} from './SnapshotChunksFile';
 
-import { SCHEMAS, SchemaUnserializer, Utils } from '@cmts-dev/carmentis-sdk/server';
-import { getLogger } from '@logtape/logtape';
-import { ChainInformationObject } from './types/ChainInformationObject';
-import { StoredSnapshot, StoredSnapshotSchema } from './types/valibot/snapshots/StoredSnapshot';
+import {Utils} from '@cmts-dev/carmentis-sdk/server';
+import {getLogger} from '@logtape/logtape';
+import {StoredSnapshot, StoredSnapshotSchema} from './types/valibot/snapshots/StoredSnapshot';
+import * as v from 'valibot';
+import {NodeEncoder} from './NodeEncoder';
+import {LevelDbTable} from './database/LevelDbTable';
 
 const FORMAT = 1;
 const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
@@ -24,11 +25,6 @@ const DB_SUFFIX = '-db.bin';
 const JSON_SUFFIX = '.json';
 const DB_DUMP_IN_PROGRESS_FILENAME = 'db-dump-in-progress.bin';
 const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
-import * as v from 'valibot';
-import { ChainInformationSchema } from './types/valibot/db/db';
-import {decode} from 'cbor-x';
-import { NodeEncoder } from './NodeEncoder';
-import { LevelDbTable } from './database/LevelDbTable';
 
 export class SnapshotsManager {
     db: LevelDb;
@@ -96,6 +92,8 @@ export class SnapshotsManager {
      * Called from LoadSnapshotChunk.
      */
     async getChunk(storage: Storage, height: number, index: number): Promise<Uint8Array> {
+        this.logger.info(`getChunk() with height = ${height}, index = ${index}`);
+
         const emptyBuffer = new Uint8Array();
         const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + JSON_SUFFIX);
         let jsonData;
@@ -155,20 +153,24 @@ export class SnapshotsManager {
         const buffer = new Uint8Array(chunkSize);
         let bufferOffset = 0;
 
-        await chunksFile.processChunk(index - 1, async (fileIdentifier, fileOffset, size) => {
-            if (fileIdentifier == 0) {
-                await this.copyDbFileToBuffer(height, buffer, bufferOffset, fileOffset, size);
-            } else {
-                await storage.copyFileToBuffer(
-                    fileIdentifier,
-                    buffer,
-                    bufferOffset,
-                    fileOffset,
-                    size,
-                );
+        await chunksFile.processChunk(
+            index - 1,
+            async (fileIdentifier, fileOffset, size) => {
+                this.logger.info(`getChunk() - processChunk callback with fileIdentifier: ${Utils.numberToHexa(fileIdentifier, 8)}, fileOffset: ${fileOffset}, size: ${size}`);
+                if (fileIdentifier == 0) {
+                    await this.copyDbFileToBuffer(height, buffer, bufferOffset, fileOffset, size);
+                } else {
+                    await storage.copyFileToBuffer(
+                        fileIdentifier,
+                        buffer,
+                        bufferOffset,
+                        fileOffset,
+                        size,
+                    );
+                }
+                bufferOffset += size;
             }
-            bufferOffset += size;
-        });
+        );
 
         return buffer;
     }
@@ -178,12 +180,15 @@ export class SnapshotsManager {
      * Called from ApplySnapshotChunk.
      */
     async loadReceivedChunk(storage: Storage, index: number, buffer: Uint8Array, isLast: boolean) {
+        this.logger.info(`loadReceivedChunk() with index = ${index}`);
+
         await this.createPath();
 
         const chunksFilePath = path.join(this.path, IMPORTED_CHUNKS_FILENAME);
 
         // the very first chunk contains the chunks description file
         if (index == 0) {
+            this.logger.info(`first chunk: saving chunks description file ${chunksFilePath}`);
             fs.writeFileSync(chunksFilePath, buffer);
             return;
         }
@@ -192,20 +197,24 @@ export class SnapshotsManager {
         const info = await chunksFile.getInformation();
         let bufferOffset = 0;
 
-        await chunksFile.processChunk(index - 1, async (fileIdentifier, fileOffset, size) => {
-            if (fileIdentifier == 0) {
-                await this.copyBufferToDbFile(info.height, buffer, bufferOffset, fileOffset, size);
-            } else {
-                await storage.copyBufferToFile(
-                    fileIdentifier,
-                    buffer,
-                    bufferOffset,
-                    fileOffset,
-                    size,
-                );
+        await chunksFile.processChunk(
+            index - 1,
+            async (fileIdentifier, fileOffset, size) => {
+                this.logger.info(`loadReceivedChunk() - processChunk callback with fileIdentifier: ${Utils.numberToHexa(fileIdentifier, 8)}, fileOffset: ${fileOffset}, size: ${size}`);
+                if (fileIdentifier == 0) {
+                    await this.copyBufferToDbFile(info.height, buffer, bufferOffset, fileOffset, size);
+                } else {
+                    await storage.copyBufferToFile(
+                        fileIdentifier,
+                        buffer,
+                        bufferOffset,
+                        fileOffset,
+                        size,
+                    );
+                }
+                bufferOffset += size;
             }
-            bufferOffset += size;
-        });
+        );
 
         if (isLast) {
             await this.importDbFile(info.height);
@@ -241,6 +250,7 @@ export class SnapshotsManager {
         // open database in writing mode
         const copyManager = new SnapshotDataCopyManager();
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
+        this.logger.info(`copying to DB file ${dbFilePath}`);
 
         await copyManager.copyBufferToFile(dbFilePath, buffer, bufferOffset, fileOffset, size);
     }
@@ -434,6 +444,8 @@ export class SnapshotsManager {
         let currentChunkSize = 0;
 
         for (const [fileIdentifier, fileSize] of files) {
+            this.logger.info(`adding to chunks file: fileIdentifier = ${Utils.numberToHexa(fileIdentifier, 8)}, fileSize = ${fileSize}`);
+
             let remainingSize = fileSize;
             let offset = 0;
 
