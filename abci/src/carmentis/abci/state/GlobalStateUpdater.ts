@@ -306,8 +306,7 @@ export class GlobalStateUpdater {
         }
 
         // case 2: The fees payer account does not have enough tokens to pay (fast case)
-        const feesPayerAccountBalance =
-            await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
+        const feesPayerAccountBalance = await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
         const protocolState = await globalState.getProtocolState();
         const feesCalculationVersion = protocolState.getFeesCalculationVersion();
         const signatureSection = microblock.getLastSignatureSection();
@@ -395,7 +394,7 @@ export class GlobalStateUpdater {
 
     async finalizeBlockApproval(state: GlobalState, request: FinalizeBlockRequest) {
         const blockHeight = +request.height;
-        const blockTimestamp = +(request.time?.seconds ?? 0);
+        const blockTimestamp: number = +(request.time?.seconds ?? 0);
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
@@ -551,7 +550,7 @@ export class GlobalStateUpdater {
         const feesQuotient = (pendingFees - feesRest) / nValidators;
         const blockHeight = request.height;
         const defaultTimestamp = 0;
-        const timeInRequest = request.time?.seconds ?? defaultTimestamp;
+        const timeInRequest: number = +(request.time?.seconds ?? defaultTimestamp);
         for (const n in validatorAccounts) {
             const paidFees =
                 (+n + blockHeight) % nValidators < feesRest ? feesQuotient + 1 : feesQuotient;
