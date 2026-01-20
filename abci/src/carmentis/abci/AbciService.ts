@@ -501,7 +501,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     /**
-     Incoming transaction
+     * Incoming transaction
      */
     async CheckTx(request: CheckTxRequest, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<CheckTxResponse> {
         const perfMeasure = this.perf.start('CheckTx');
@@ -509,8 +509,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.info(`Size of transaction: ${request.tx.length} bytes / request type: ${request.type}`);
 
         // for performance, we reject already-checked microblock
-        if (request.type === CheckTxType.CHECK_TX_TYPE_RECHECK) {
-            this.logger.info("Microblock already checked but rechecked again, possibly to proposal building error: aborting")
+        // TODO: figure out why request.type is not an integer
+        // if (request.type === CheckTxType.CHECK_TX_TYPE_RECHECK) {
+        if (request.type === 'CHECK_TX_TYPE_RECHECK') {
+            this.logger.info("Microblock already checked but rechecked again, possibly due to rejection in prepareProposal: aborting")
             return {
                 code: CheckTxResponseCode.KO,
                 log: '',
@@ -992,7 +994,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     /**
-     Checks a microblock and invokes the section callbacks of the node.
+     * Checks a microblock and invokes the section callbacks of the node.
      */
     private async checkMicroblockLocalStateConsistency(
         workingState: GlobalState,
