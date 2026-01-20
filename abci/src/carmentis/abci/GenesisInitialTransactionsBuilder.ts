@@ -7,6 +7,7 @@ import {
     MicroblockConsistencyChecker,
     PrivateSignatureKey,
     CryptoEncoderFactory,
+    Base64,
     Utils,
 } from '@cmts-dev/carmentis-sdk/server';
 
@@ -44,7 +45,7 @@ export class GenesisInitialTransactionsBuilder {
             this.genesisRunoffs,
             await encoder.encodePrivateKey(issuerPrivateKey),
             await encoder.encodePublicKey(issuerPublicKey),
-            Utils.binaryToHexa(genesisNodePubKey),
+            Base64.encodeBinary(genesisNodePubKey),
             genesisNodeRpcEndpoint,
         );
         const runoffsTransactions = await runoffTransactionsBuilder.createRunoffTransactions();

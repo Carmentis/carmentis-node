@@ -162,7 +162,13 @@ export class GenesisRunoffTransactionsBuilder {
         const privateKey = await this.getPrivateKeyForAccountById(accountId);
         const node = this.genesisRunoffs.getNodeByIdOrFail(action.node);
 
+        const aliasedPublicKey = this.stringByAlias.get(node.publicKey);
+        const publicKey = aliasedPublicKey || node.publicKey;
+        const aliasedRpcEndpoint = this.stringByAlias.get(node.rpcEndpoint);
+        const rpcEndpoint = aliasedRpcEndpoint || node.rpcEndpoint;
+
         this.logger.info(`Creating microblock for validator node '${action.node}'`);
+        this.logger.info(`publicKey = ${publicKey}, RPC endpoint = ${rpcEndpoint}`);
         const microblock = Microblock.createGenesisValidatorNodeMicroblock();
         microblock.addSections([
             {
@@ -171,12 +177,12 @@ export class GenesisRunoffTransactionsBuilder {
             },
             {
                 type: SectionType.VN_COMETBFT_PUBLIC_KEY_DECLARATION,
-                cometPublicKey: node.publicKey,
+                cometPublicKey: publicKey,
                 cometPublicKeyType: 'tendermint/PubKeyEd25519',
             },
             {
                 type: SectionType.VN_RPC_ENDPOINT,
-                rpcEndpoint: node.rpcEndpoint,
+                rpcEndpoint: rpcEndpoint,
             },
         ]);
         await microblock.seal(privateKey);

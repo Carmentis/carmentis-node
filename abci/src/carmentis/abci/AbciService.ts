@@ -495,7 +495,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 this.logger.info(
                     `Adding unknown validator address: ${Utils.binaryToHexa(address)}`,
                 );
-                await db.putValidatorNode(address);
+                await db.putValidatorNodeByAddress(address, Utils.getNullHash());
             }
         }
     }
@@ -597,7 +597,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     /**
-     * Extract the relevant Comet parameters from a Comet request
+     * Extract the relevant Comet parameters from a Comet request: block height, block timestamp and misbehaviors
      * This supports PrepareProposalRequest, ProcessProposalRequest and FinalizeBlockRequest
      */
     extractCometParameters(

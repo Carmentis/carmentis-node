@@ -254,13 +254,15 @@ export abstract class AbstractLevelDb implements DbInterface {
         return NodeEncoder.decodeValidatorNodeByAddress(response);
     }
 
-    async putValidatorNode(nodeAddress: Uint8Array): Promise<boolean> {
-        // TODO: null hash? Really?
+    async putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array): Promise<boolean> {
+        if (validatorNodeHash.length != 32) {
+            throw new Error(`invalid size of validatorNodeHash: ${validatorNodeHash.length} bytes (expecting 32)`);
+        }
         return await this.putRaw(
             LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
             nodeAddress,
             NodeEncoder.encodeValidatorNodeByAddress({
-                validatorNodeHash: Utils.getNullHash(),
+                validatorNodeHash
             }),
         );
     }
