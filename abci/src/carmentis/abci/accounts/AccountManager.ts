@@ -122,14 +122,14 @@ export class AccountManager {
 
         const perfMeasure = this.perf.start('tokenTransfer');
 
-        const accountCreation =
-            transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
+        const accountCreation = transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
 
         let payeeBalance;
         let payerBalance;
 
         const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
         const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
+
         if (transfer.payerAccount === null) {
             this.logger.warn(ErrorMessages.UNDEFINED_FEES_PAYER);
             payerBalance = null;
@@ -147,14 +147,17 @@ export class AccountManager {
 
             payerBalance = payerInfo.state.balance;
 
-            if (payerBalance < transfer.amount) {
+            const balanceAvailability = new BalanceAvailability(payerBalance, payerInfo.state.locks);
+            const spendableTokens = balanceAvailability.getBreakdown().spendable;
+
+            if (spendableTokens < transfer.amount) {
                 throw new Error(
                     ErrorMessages.INSUFFICIENT_FUNDS(
                         transfer.amount / ECO.TOKEN,
                         ECO.TOKEN_NAME,
                         shortPayerAccountString,
                         shortPayeeAccountString,
-                        payerBalance / ECO.TOKEN,
+                        spendableTokens / ECO.TOKEN,
                     ),
                 );
             }

@@ -2,7 +2,7 @@
  * Represents a validator set update entry containing validator information
  * and voting power changes.
  */
-export interface ValidatorSetUpdate {
+export interface CometValidatorSetUpdate {
     /**
      * The voting power of the validator. Set to 0 to remove a validator.
      */
@@ -17,4 +17,9 @@ export interface ValidatorSetUpdate {
      * The raw bytes of the validator's public key.
      */
     pub_key_bytes: Uint8Array;
+};
+
+export interface ValidatorSetUpdate {
+    validatorNodeId: Uint8Array;
+    cometValidatorSetUpdate: CometValidatorSetUpdate;
 }
