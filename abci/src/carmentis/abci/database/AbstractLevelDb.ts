@@ -254,7 +254,7 @@ export abstract class AbstractLevelDb implements DbInterface {
         return NodeEncoder.decodeValidatorNodeByAddress(response);
     }
 
-    async putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array): Promise<boolean> {
+    async putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array, votingPower: number): Promise<boolean> {
         if (validatorNodeHash.length != 32) {
             throw new Error(`invalid size of validatorNodeHash: ${validatorNodeHash.length} bytes (expecting 32)`);
         }
@@ -262,7 +262,8 @@ export abstract class AbstractLevelDb implements DbInterface {
             LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
             nodeAddress,
             NodeEncoder.encodeValidatorNodeByAddress({
-                validatorNodeHash
+                validatorNodeHash,
+                votingPower,
             }),
         );
     }

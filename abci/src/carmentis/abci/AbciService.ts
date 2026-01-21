@@ -495,7 +495,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 this.logger.info(
                     `Adding unknown validator address: ${Utils.binaryToHexa(address)}`,
                 );
-                await db.putValidatorNodeByAddress(address, Utils.getNullHash());
+                await db.putValidatorNodeByAddress(address, Utils.getNullHash(), 0);
             }
         }
     }
@@ -511,7 +511,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // for performance, we reject already-checked microblock
         // TODO: figure out why request.type is not an integer
         // if (request.type === CheckTxType.CHECK_TX_TYPE_RECHECK) {
-        if (request.type === 'CHECK_TX_TYPE_RECHECK') {
+        if (request.type.toString() === 'CHECK_TX_TYPE_RECHECK') {
             this.logger.info("Microblock already checked but rechecked again, possibly due to rejection in prepareProposal: aborting")
             return {
                 code: CheckTxResponseCode.KO,
@@ -838,11 +838,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         perfMeasure.end();
 
+        const validatorSetUpdates = globalStateUpdater.getCometValidatorSetUpdates();
+
         return FinalizeBlockResponse.create({
             tx_results: txResults,
             app_hash: appHash,
             events: [],
-            validator_updates: globalStateUpdater.getValidatorSetUpdates(),
+            validator_updates: validatorSetUpdates,
             consensus_param_updates: undefined,
         });
     }

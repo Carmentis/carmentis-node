@@ -49,6 +49,7 @@ export type Escrows = v.InferOutput<typeof EscrowsSchema>;
 // ValidatorNodeByAddress
 export const ValidatorNodeByAddressSchema = v.object({
     validatorNodeHash: uint8array(),
+    votingPower: v.number(),
 });
 export type ValidatorNodeByAddress = v.InferOutput<typeof ValidatorNodeByAddressSchema>;
 

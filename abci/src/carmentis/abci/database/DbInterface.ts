@@ -38,7 +38,7 @@ export interface DbInterface {
 
     // validator node
     getValidatorNodeByAddress(nodeAddress: Uint8Array): Promise<ValidatorNodeByAddress | undefined>;
-    putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array): Promise<boolean>;
+    putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array, votingPower: number): Promise<boolean>;
 
     // data file
     getDataFileFromDataFileKey(dbFileKey: Uint8Array): Promise<DataFile | undefined>;
