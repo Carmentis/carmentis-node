@@ -17,6 +17,7 @@ import {
     ValidatorNodeVotingPowerUpdateSection,
     VirtualBlockchain,
     BalanceAvailability,
+    EncoderFactory,
 } from '@cmts-dev/carmentis-sdk/server';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
@@ -531,7 +532,7 @@ export class GlobalStateUpdater {
 
                     //const validatorPublicKey: PublicSignatureKey = await validatorNode.getOrganizationPublicKey();
                     const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
-                    this.logger.debug(`adding validator node with account ${accountId}`);
+                    this.logger.debug(`adding validator node with account ${accountId.encode()}`);
                     //const validatorAccountHash = accountManager.loadAccountByPublicKey(validatorPublicKey);
 
                     validatorAccounts.push(accountId.toBytes());
@@ -869,7 +870,8 @@ export class GlobalStateUpdater {
             pub_key_bytes: pubKeyBytes,
         };
 
-        this.logger.info(`Validator set update: Public key ${Utils.binaryToHexa(pubKeyBytes)} -> voting power at ${votingPower}`)
+        const b64 = EncoderFactory.bytesToBase64Encoder();
+        this.logger.info(`Validator set update: Public key ${b64.encode(pubKeyBytes)} (${translatedPubKeyType})-> voting power at ${votingPower}`)
         this.validatorSetUpdates.push(validatorSetUpdateEntry);
         return true;
     }

@@ -110,7 +110,7 @@ export class GenesisRunoffTransactionsBuilder {
         const accountId = this.getAccountIdByOrganizationIdOrFail(organizationId);
         const privateKey = await this.getPrivateKeyForAccountById(accountId);
 
-        this.logger.info('Creating protocol microblock');
+        this.logger.info(`Creating protocol microblock associated to organization ${Utils.binaryToHexa(organizationHash)}`);
         const microblock = Microblock.createGenesisProtocolMicroblock();
         microblock.addSection({
             type: SectionType.PROTOCOL_CREATION,
