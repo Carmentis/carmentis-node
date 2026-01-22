@@ -907,28 +907,4 @@ export class GlobalStateUpdater {
         this.logger.debug(`Staking amount for validator node ${nodeIdentifier.encode()} with linked account ${accountId.encode()}: ${stakingAmount}`);
         return stakingAmount;
     }
-
-    private addValidatorSetUpdate(
-        votingPower: number,
-        pubKeyType: string,
-        pubKeyBytes: Uint8Array,
-    ) {
-        // ensure the public key type is correct
-        const translatedPubKeyType = KEY_TYPE_MAPPING[pubKeyType];
-        if (!translatedPubKeyType) {
-            this.logger.error(`Aborting validator set update: Invalid key type '${pubKeyType}' for validator set update`);
-            return false;
-        }
-
-        const validatorSetUpdateEntry: ValidatorSetUpdate = {
-            power: votingPower,
-            pub_key_type: translatedPubKeyType,
-            pub_key_bytes: pubKeyBytes,
-        };
-
-        const b64 = EncoderFactory.bytesToBase64Encoder();
-        this.logger.info(`Validator set update: Public key ${b64.encode(pubKeyBytes)} (${translatedPubKeyType})-> voting power at ${votingPower}`)
-        this.validatorSetUpdates.push(validatorSetUpdateEntry);
-        return true;
-    }
 }

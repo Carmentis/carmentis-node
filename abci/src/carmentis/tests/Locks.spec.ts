@@ -3,7 +3,7 @@ import {
     Microblock,
     SectionType,
 } from '@cmts-dev/carmentis-sdk/server';
-
+/*
 async function run() {
     const sk = Secp256k1PrivateSignatureKey.gen();
     const pk = await sk.getPublicKey();
@@ -35,3 +35,5 @@ async function getProtocolVariables() {
 function getTimestampInSecondsFromString(str: string): number {
     return Math.floor(Date.parse(str) / 1000);
 }
+
+ */
