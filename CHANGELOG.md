@@ -1,3 +1,10 @@
+## [1.0.6](https://github.com/Carmentis/carmentis-node/compare/v1.0.5...v1.0.6) (2026-01-22)
+
+
+### Bug Fixes
+
+* remove unused scripts and outdated test cases ([6640c21](https://github.com/Carmentis/carmentis-node/commit/6640c21e1e0af7b4c8276de17cb73b4872ac9346))
+
 ## [1.0.5](https://github.com/Carmentis/carmentis-node/compare/v1.0.4...v1.0.5) (2026-01-22)
 
 
