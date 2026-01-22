@@ -97,7 +97,7 @@
             "type": "transfer",
             "source": "issuer",
             "destination": "carmentis",
-            "amount": 2000000
+            "amount": 5000000
         },
         {
             "type": "organizationCreation",

@@ -84,8 +84,8 @@ export class CachedStorage implements IStorage {
             this.logger.warn(`/!\\ Returned microblock contains a mismatch between computed and expected hash: expected ${Utils.binaryToHexa(expectedMicroblockHash)} but got ${Utils.binaryToHexa(computedHash)}`)
         }
 
-        this.logger.debug(`Showing details on recovered microblock ${Utils.binaryToHexa(computedHash)}:`);
-        this.logger.debug(microblock.toString());
+        //this.logger.debug(`Showing details on recovered microblock ${Utils.binaryToHexa(computedHash)}:`);
+        //this.logger.debug(microblock.toString());
         if (partType === MicroblockReadingMode.READ_FULL) {
             return returnedSerializedMicroblock;
         } else {
