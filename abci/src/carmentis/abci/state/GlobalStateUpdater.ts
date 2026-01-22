@@ -393,8 +393,8 @@ export class GlobalStateUpdater {
     }
 
     async finalizeBlockApproval(state: GlobalState, request: FinalizeBlockRequest) {
-        const blockHeight = +request.height;
-        const blockTimestamp: number = +(request.time?.seconds ?? 0);
+        const blockHeight: number = Number(request.height);
+        const blockTimestamp: number = Number(request.time?.seconds ?? 0);
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
@@ -565,18 +565,23 @@ export class GlobalStateUpdater {
 
         const feesRest = pendingFees % nValidators;
         const feesQuotient = (pendingFees - feesRest) / nValidators;
-        const blockHeight = request.height;
+        const blockHeight: number = Number(request.height);
         const defaultTimestamp = 0;
-        const timeInRequest: number = +(request.time?.seconds ?? defaultTimestamp);
-        for (const n in validatorAccounts) {
-            const paidFees =
-                (+n + blockHeight) % nValidators < feesRest ? feesQuotient + 1 : feesQuotient;
+        const timeInRequest: number = Number(request.time?.seconds ?? defaultTimestamp);
+
+        this.logger.info(`${pendingFees} to be dispatched among ${nValidators} validators (quotient=${feesQuotient}, rest=${feesRest}, height=${blockHeight})`);
+
+        for (let index = 0; index < nValidators; index++) {
+            const extraAtomicUnit = (index + blockHeight) % nValidators < feesRest;
+            const paidFees = extraAtomicUnit ? feesQuotient + 1 : feesQuotient;
+
+            this.logger.info(`paying ${paidFees} to validator #${index}`);
 
             await accountManager.tokenTransfer(
                 {
                     type: ECO.BK_PAID_BLOCK_FEES,
                     payerAccount: feesAccountIdentifier,
-                    payeeAccount: validatorAccounts[n],
+                    payeeAccount: validatorAccounts[index],
                     amount: paidFees,
                 },
                 {
