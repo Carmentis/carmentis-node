@@ -738,9 +738,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     );
                 } else {
                     // TODO: reject case
+                    this.logger.error(`Microblock  ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`)
                 }
             } catch (e) {
                 // TODO: reject case
+                this.logger.error(`Microblock rejected due to the following raised error: ${e}`)
             }
         }
 
