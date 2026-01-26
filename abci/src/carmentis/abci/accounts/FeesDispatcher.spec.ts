@@ -29,6 +29,7 @@ describe("fees dispatch", () => {
     it('Should dispath all fees', () => {
         testFeesDispatch(1023, [50, 50], [512, 511], 0);
         testFeesDispatch(1023, [50, 50], [511, 512], 1)
+        testFeesDispatch(1023, [50, 50], [511, 512], 3);
     });
 
     it('Should dispatch zero fees across validators', () => {
@@ -36,7 +37,11 @@ describe("fees dispatch", () => {
     });
 
     it('Should dispatch all fees to a single validator', () => {
-        testFeesDispatch(12345, [99], [12345]);
+        for (let index = 0; index < 300; ++index) {
+            const randomVoting = Math.floor(Math.random() * 1000);
+            const randomFees = Math.floor(Math.random() * 10000);
+            testFeesDispatch(randomFees, [randomVoting], [randomFees]);
+        }
     });
 
     it('Should split fees by 1:2:3 power ratio', () => {
