@@ -335,7 +335,12 @@ export class GlobalStateUpdater {
         }
 
         // Case 4: The fees payer account is allowed to write on the virtual blockchain
-        // TODO: handle the case where the payer account is not allowed to write on the virtual blockchain
+        const isAllowedToWrite = await this.isAccountIdAllowedToWriteOnVirtualBlockchain(
+            feesPayerAccountId,
+            virtualBlockchain,
+            microblock,
+            globalState
+        );
 
         if (virtualBlockchain instanceof AccountVb) {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
@@ -449,6 +454,42 @@ export class GlobalStateUpdater {
             (count, ndx) => count + this.newObjectCounts[ndx],
         );
         await database.putChainInformation(chainInfoObject);
+    }
+
+    /**
+     * This method checks whether the specified account is allowed to write on the specified virtual blockchain.
+     * @param accountId The account id to check
+     * @param vb The virtual blockchain to check
+     * @private
+     */
+    private async isAccountIdAllowedToWriteOnVirtualBlockchain(accountId: Uint8Array, vb: VirtualBlockchain, mb: Microblock, globalState: GlobalState) {
+        // Case 1 - Account creation
+        // Anyone can create an account, the only limitation is to have enough fees but this verification
+        // is not performed here.
+        if (vb instanceof AccountVb) {
+            const containsAccountCreationSection = mb.hasSection(SectionType.ACCOUNT_CREATION);
+            const isFirstBlock = mb.getHeight() == 1;
+            if (containsAccountCreationSection && isFirstBlock) return true;
+            // other cases are handled by the following check
+        }
+
+        // Case 2 - Validator node approval update
+        if (vb instanceof ValidatorNodeVb) {
+            const protocolState = await globalState.getProtocolState();
+            const protocolStateObject = protocolState.toObject();
+            const governanceOrgID = protocolStateObject.organizationId;
+            const governanceOrgVb = await globalState.loadOrganizationVirtualBlockchain(Hash.from(governanceOrgID));
+            const governanceAccountId = governanceOrgVb.getAccountId();
+            const isGovernanceAccount = Utils.binaryIsEqual(governanceAccountId.toBytes(), accountId);
+            const isApproving: boolean = mb.containsOnlyTheseSections([
+                SectionType.VN_APPROVAL,
+                SectionType.SIGNATURE,
+            ]);
+            if (isGovernanceAccount && isApproving) return true;
+        }
+
+        // Case 3 (default) - The virtual blockchain decides
+        return vb.isAccountIdAllowedToWrite(Hash.from(accountId))
     }
 
     getCometValidatorSetUpdates(): CometValidatorSetUpdate[] {
