@@ -20,6 +20,7 @@ import {
     BalanceAvailability,
     VirtualBlockchainType,
     ProtocolInternalState,
+    Hash,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Escrow } from '../types/Escrow';
 import { getLogger, Logger } from '@logtape/logtape';
@@ -704,5 +705,12 @@ export class AccountManager {
     async isAccountDefinedByAccountId(accountId: Uint8Array<ArrayBufferLike>) {
         const accountInformation = await this.loadAccountInformation(accountId);
         return accountInformation.exists;
+    }
+
+    async getStakedAmount(accountId: Hash) {
+        const accountState = await this.db.getAccountStateByAccountId(accountId.toBytes());
+        if (accountState === undefined) throw new Error(`Cannot return stake for this account: Account ${accountId.encode()} not found`);
+        const balanceAvailability = new BalanceAvailability(0, accountState.locks);
+        return balanceAvailability.getBreakdown().staked;
     }
 }
