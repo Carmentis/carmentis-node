@@ -30,6 +30,7 @@ import { LevelDb } from '../database/LevelDb';
 import { CometValidatorSetUpdate, ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
 import { BlockIDFlag } from '../../../proto-ts/cometbft/types/v1/validator';
 import { LevelDbTable } from '../database/LevelDbTable';
+import { FeesDispatcher } from '../accounts/FeesDispatcher';
 
 const KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',
@@ -510,6 +511,7 @@ export class GlobalStateUpdater {
         }
 
         const validatorAccounts: Uint8Array[] = [];
+        const validatorStakes : number[] = [];
         const votes = request.decided_last_commit?.votes || [];
         const stateDb = state.getCachedDatabase();
 
@@ -551,7 +553,9 @@ export class GlobalStateUpdater {
                     this.logger.debug(`adding validator node with account ${accountId.encode()}`);
                     //const validatorAccountHash = accountManager.loadAccountByPublicKey(validatorPublicKey);
 
-                    validatorAccounts.push(accountId.toBytes());
+                    const validatorId = accountId.toBytes();
+                    validatorAccounts.push(validatorId);
+                    validatorStakes.push(await accountManager.getStakedAmount(accountId))
                 }
             }
         }
@@ -563,26 +567,39 @@ export class GlobalStateUpdater {
             return;
         }
 
-        const feesRest = pendingFees % nValidators;
-        const feesQuotient = (pendingFees - feesRest) / nValidators;
+
+        //const feesRest = pendingFees % nValidators;
+        //const feesQuotient = (pendingFees - feesRest) / nValidators;
         const blockHeight: number = Number(request.height);
+        this.logger.info(
+            `${pendingFees} to be dispatched among ${nValidators} validators (height=${blockHeight})`,
+        );
+        const feesDispatcher = new FeesDispatcher(pendingFees, validatorStakes, blockHeight);
         const defaultTimestamp = 0;
         const timeInRequest: number = Number(request.time?.seconds ?? defaultTimestamp);
-
-        this.logger.info(`${pendingFees} to be dispatched among ${nValidators} validators (quotient=${feesQuotient}, rest=${feesRest}, height=${blockHeight})`);
-
+        const feesInAtomisToDispatchForEachValidator = feesDispatcher.dispatch();
         for (let index = 0; index < nValidators; index++) {
-            const extraAtomicUnit = (index + blockHeight) % nValidators < feesRest;
-            const paidFees = extraAtomicUnit ? feesQuotient + 1 : feesQuotient;
+            // get the fees to pay to this validator
+            const feesToSendToThisValidator = feesInAtomisToDispatchForEachValidator[index];
+            if (!Number.isInteger(feesToSendToThisValidator)) {
+                this.logger.fatal(`Fees to send to validator #${index} is not an integer: ${feesToSendToThisValidator}`);
+                continue;
+            }
 
-            this.logger.info(`paying ${paidFees} to validator #${index}`);
+            if (feesToSendToThisValidator < 0) {
+                this.logger.fatal(`feesAccountIdentifier is negative: ${feesToSendToThisValidator}`);
+                continue;
+            }
+
+            const validatorAccountId = validatorAccounts[index];
+            this.logger.info(`paying ${feesToSendToThisValidator} to validator ${Utils.binaryToHexa(validatorAccountId)}`);
 
             await accountManager.tokenTransfer(
                 {
                     type: ECO.BK_PAID_BLOCK_FEES,
                     payerAccount: feesAccountIdentifier,
                     payeeAccount: validatorAccounts[index],
-                    amount: paidFees,
+                    amount: feesToSendToThisValidator,
                 },
                 {
                     height: blockHeight - 1,
