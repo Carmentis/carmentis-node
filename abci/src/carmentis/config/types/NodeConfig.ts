@@ -40,43 +40,56 @@ const LogCategoryConfigSchema = v.object({
     ),
     sinks: v.array(v.string()),
 });
-
+const DEFAULT_MAX_BLOCK_SIZE_IN_BYTES = 4194304; // default CometBFT value
 export const ConfigSchema = v.object({
-    genesis: v.optional(v.object({
-        runoffFilePath: v.fallback(v.string(), "genesisRunoffs.json"),
-        private_key: v.union([
-            v.object({
-                sk: v.string(),
-            }),
-            v.object({
-                path: v.string(),
-            }),
-            v.object({
-                env: v.string(),
-            })
-        ])
-    })),
-    genesis_snapshot: v.optional(v.object({
-        path: v.optional(v.string()),
-        rpc_endpoint: v.optional(v.string()),
-    })),
-    snapshots: v.optional(v.object({
-        snapshot_block_period: v.fallback(v.number(), 1),
-        block_history_before_snapshot: v.fallback(v.number(), 0),
-        max_snapshots: v.fallback(v.number(), 3),
-    })),
+    genesis: v.optional(
+        v.object({
+            runoffFilePath: v.fallback(v.string(), 'genesisRunoffs.json'),
+            private_key: v.union([
+                v.object({
+                    sk: v.string(),
+                }),
+                v.object({
+                    path: v.string(),
+                }),
+                v.object({
+                    env: v.string(),
+                }),
+            ]),
+        }),
+    ),
+    genesis_snapshot: v.optional(
+        v.object({
+            path: v.optional(v.string()),
+            rpc_endpoint: v.optional(v.string()),
+        }),
+    ),
+    snapshots: v.optional(
+        v.object({
+            snapshot_block_period: v.fallback(v.number(), 1),
+            block_history_before_snapshot: v.fallback(v.number(), 0),
+            max_snapshots: v.fallback(v.number(), 3),
+        }),
+    ),
     cometbft: v.object({
         exposed_rpc_endpoint: v.string(),
     }),
     abci: v.object({
-        grpc: v.optional(v.object({
-            port: v.optional(v.number()),
-        })),
-        query: v.optional(v.object({
-            rest: v.optional(v.object({
+        grpc: v.optional(
+            v.object({
                 port: v.optional(v.number()),
-            })),
-        })),
+            }),
+        ),
+        query: v.optional(
+            v.object({
+                rest: v.optional(
+                    v.object({
+                        port: v.optional(v.number()),
+                    }),
+                ),
+            }),
+        ),
+        max_block_size_in_bytes: v.fallback(v.number(), DEFAULT_MAX_BLOCK_SIZE_IN_BYTES),
     }),
     paths: v.object({
         cometbft_home: v.string(),
@@ -86,10 +99,12 @@ export const ConfigSchema = v.object({
         storage_relative_microblocks_folder: v.fallback(v.string(), 'microblocks'),
         storage_relative_genesis_snapshot_file: v.fallback(v.string(), 'genesis_snapshot.json'),
     }),
-    logs: v.optional(v.object({
-        sinks: v.record(v.string(), SinkConfigSchema),
-        loggers: v.array(LogCategoryConfigSchema),
-    })),
+    logs: v.optional(
+        v.object({
+            sinks: v.record(v.string(), SinkConfigSchema),
+            loggers: v.array(LogCategoryConfigSchema),
+        }),
+    ),
 });
 
 export type NodeConfig = v.InferOutput<typeof ConfigSchema>;

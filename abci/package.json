@@ -43,6 +43,7 @@
     "@nestjs/platform-express": "^11",
     "@nestjs/platform-socket.io": "^11",
     "@nestjs/platform-ws": "^11",
+    "@nestjs/schedule": "^6.1.0",
     "@nestjs/websockets": "^11",
     "@noble/secp256k1": "^2.3.0",
     "cbor-x": "^1.6.0",

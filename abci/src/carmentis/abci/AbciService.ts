@@ -81,6 +81,7 @@ import { GlobalStateUpdateCometParameters } from './types/GlobalStateUpdateComet
 import { CheckTxResponseCode } from './CheckTxResponseCode';
 import { ConsensusParams } from '../../proto/tendermint/types/params';
 import { CometBFTUtils } from './CometBFTUtils';
+import { EarlyMicroblockRejectionService } from './services/EarlyMicroblockRejectionService';
 
 const APP_VERSION = 1;
 
@@ -111,6 +112,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         private readonly cometConfig: CometBFTNodeConfigService,
         private readonly kms: KeyManagementService,
         private genesisSnapshotStorage: GenesisSnapshotStorageService,
+        private earlyMicroblockRejectionService: EarlyMicroblockRejectionService,
     ) {
         this.initialized = false;
         this.isCatchingUp = false;
@@ -148,7 +150,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     async onModuleInit() {
         // this may be called twice by Nest, so we use this safeguard to prevent a double initialization
-        if(this.initialized) {
+        if (this.initialized) {
             return;
         }
         this.initialized = true;
@@ -167,9 +169,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             this.logger.info(`Loading genesis runoff from file ${runoffPath}`);
             this.genesisRunoffs = GenesisRunoff.loadFromFilePathOrCreateNoRunoff(runoffPath);
         } else {
-            this.logger.info("No genesis runoff file specified, using no runoff")
+            this.logger.info('No genesis runoff file specified, using no runoff');
         }
-
 
         this.logger.info(`ABCI storage at ${abciStoragePath}`);
 
@@ -255,7 +256,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 data: 'Carmentis ABCI application',
                 //app_version: APP_VERSION,
                 //last_block_height,
-                last_block_height: last_block_height
+                last_block_height: last_block_height,
             });
         } else {
             const { appHash } = await this.getGlobalState().getApplicationHash();
@@ -308,11 +309,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Hence, I assume that the types of both keys are identical.
         const currentNodePublicKey = this.cometConfig.getPublicKey();
         const initialValidatorSet = request.validators;
-        console.debug(request)
+        console.debug(request);
         this.logger.debug(`Current node public key: ${currentNodePublicKey.value}`);
         for (const validator of initialValidatorSet) {
             const validatorPublicKey = validator.pub_key;
-            console.log(validator, validatorPublicKey)
+            console.log(validator, validatorPublicKey);
             /*
             const { pubKey: validatorPublicKey } =
                 CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
@@ -323,7 +324,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
              */
             const base64 = EncoderFactory.bytesToBase64Encoder();
-            const {pub_keyType: validatorPublicKeyType, pub_key: validatorPublicKeyValue} = CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
+            const { pub_keyType: validatorPublicKeyType, pub_key: validatorPublicKeyValue } =
+                CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
             const b64EncodedNodePublicKey = base64.encode(validatorPublicKeyValue);
             //const validatorPublicKeyValue = base64.encode(validator.pubKey);
             //const validatorPublicKeyType = validator.pub_key_type;
@@ -354,7 +356,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         for (let chunkIndex = 0; chunkIndex < genesisSnapshotChunks.length; chunkIndex++) {
             const chunk = genesisSnapshotChunks[chunkIndex];
             const isLastChunk = chunkIndex === genesisSnapshotChunks.length - 1;
-            this.logger.info(`processing genesis snapshot chunk ${chunkIndex + 1} of ${genesisSnapshotChunks.length} (last: ${isLastChunk ?'yes' : 'no'})`)
+            this.logger.info(
+                `processing genesis snapshot chunk ${chunkIndex + 1} of ${genesisSnapshotChunks.length} (last: ${isLastChunk ? 'yes' : 'no'})`,
+            );
             await this.getSnapshot().loadReceivedChunk(
                 this.getStorage(),
                 chunkIndex,
@@ -377,7 +381,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const builder = new GenesisInitialTransactionsBuilder(
             this.nodeConfig,
             this.getGlobalState(),
-            this.genesisRunoffs
+            this.genesisRunoffs,
         );
         const appHash = await builder.publishInitialBlockchainState(issuerPrivateKey, request);
 
@@ -420,10 +424,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         // we generate and export the genesis state as a snapshot
         const snapshotList = await this.getSnapshot().getList();
-        const snapshotDescription = snapshotList.find((desc) => desc.height == chainHeightAfterGenesis);
+        const snapshotDescription = snapshotList.find(
+            (desc) => desc.height == chainHeightAfterGenesis,
+        );
 
         if (snapshotDescription == undefined) {
-            throw new Error(`Unable to find the genesis snapshot (height = ${chainHeightAfterGenesis})`);
+            throw new Error(
+                `Unable to find the genesis snapshot (height = ${chainHeightAfterGenesis})`,
+            );
         }
 
         const numberOfChunksToExport = snapshotDescription.chunks;
@@ -451,7 +459,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private createInitChainResponse(appHash: Uint8Array) {
-
         const consensusParams: ConsensusParams = ConsensusParams.fromPartial({
             validator: {
                 pub_key_types: ['ed25519'], // ['tendermint/PubKeyEd25519']
@@ -523,39 +530,41 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
     }
 
-
-
-
-
     /**
      * Incoming transaction
      */
-    async CheckTx(request: RequestCheckTx, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<ResponseCheckTx> {
+    async CheckTx(
+        request: RequestCheckTx,
+        referenceTimestamp = Utils.getTimestampInSeconds(),
+    ): Promise<ResponseCheckTx> {
         const perfMeasure = this.perf.start('CheckTx');
         this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
-        this.logger.info(`Size of transaction: ${request.tx.length} bytes / request type: ${request.type} (${typeof request.type})`);
-
-        // for performance, we reject already-checked microblock
-        // TODO: figure out why request.type is not an integer
-        // if (request.type === CheckTxType.CHECK_TX_TYPE_RECHECK) {
-        if (request.type.toString() === 'CHECK_TX_TYPE_RECHECK') {
-            this.logger.info("Microblock already checked but rechecked again, possibly due to rejection in prepareProposal: aborting")
-            return {
-                code: CheckTxResponseCode.KO,
-                log: '',
-                data: new Uint8Array(),
-                gas_wanted: 0,
-                gas_used: 0,
-                info: 'Microblock already checked and checkTx executed twice: aborting',
-                events: [],
-                codespace: 'app',
-            };
-        }
+        this.logger.info(
+            `Size of transaction: ${request.tx.length} bytes / request type: ${request.type} (${typeof request.type})`,
+        );
 
         // we first attempt to parse the microblock
         try {
             const serializedMicroblock = request.tx;
             const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+
+            // perform early rejection of the microblock
+            const shouldBeEarlyRejected = this.earlyMicroblockRejectionService.shouldBeRejected(parsedMicroblock);
+            if (shouldBeEarlyRejected) {
+                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected early`);
+                return {
+                    code: CheckTxResponseCode.KO,
+                    log: '',
+                    data: new Uint8Array(),
+                    gas_wanted: 0,
+                    gas_used: 0,
+                    info: 'Microblock rejected early',
+                    events: [],
+                    codespace: 'app',
+                }
+            }
+
+
             this.logger.info(`Checking microblock ${parsedMicroblock.getHash().encode()}`);
 
             // we create working state to check the transaction
@@ -563,7 +572,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const checkResult = await this.checkMicroblockLocalStateConsistency(
                 workingState,
                 parsedMicroblock,
-                referenceTimestamp
+                referenceTimestamp,
             );
             if (checkResult.checked) {
                 const vb = checkResult.vb;
@@ -589,7 +598,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     codespace: 'app',
                 };
             } else {
-                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected: not checked: ${checkResult.error}`)
+                this.logger.info(
+                    `Microblock ${parsedMicroblock.getHash().encode()} rejected: not checked: ${checkResult.error}`,
+                );
                 return {
                     code: CheckTxResponseCode.KO,
                     log: '',
@@ -633,12 +644,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         request: RequestPrepareProposal | RequestProcessProposal | RequestFinalizeBlock,
     ): GlobalStateUpdateCometParameters {
         const defaultTimestamp = 0;
-        const timeInRequest = CometBFTUtils.convertDateInTimestamp(request.time)//request.time?.seconds;
+        const timeInRequest = CometBFTUtils.convertDateInTimestamp(request.time); //request.time?.seconds;
         if (timeInRequest === undefined) {
-            this.logger.warn(`No block timestamp provided in request: using timestamp ${defaultTimestamp}`);
+            this.logger.warn(
+                `No block timestamp provided in request: using timestamp ${defaultTimestamp}`,
+            );
         }
         const blockHeight = Number(request.height);
-        const blockTimestamp = CometBFTUtils.convertDateInTimestamp(request.time)//Number(request.time?.seconds ?? defaultTimestamp);
+        const blockTimestamp = CometBFTUtils.convertDateInTimestamp(request.time); //Number(request.time?.seconds ?? defaultTimestamp);
         const blockMisbehaviors: Misbehavior[] = request.misbehavior;
 
         return { blockHeight, blockTimestamp, blockMisbehaviors };
@@ -665,23 +678,74 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
-            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
+            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp})`,
         );
 
+        // Step 1: transaction decoding (and early rejection)
+        const txs = request.txs;
+        const microblocks: { mb: Microblock, tx: Uint8Array, gasInAtomics: number }[] = [];
+        for (const tx of txs) {
+            try {
+                // decoding
+                const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
+
+                // early rejection
+                const shouldBeEarlyRejected = this.earlyMicroblockRejectionService.shouldBeRejected(parsedMicroblock);
+                if (shouldBeEarlyRejected) {
+                    this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected early`);
+                    continue;
+                }
+
+                // this microblock can proceed to the next steps
+                microblocks.push({ mb: parsedMicroblock, tx, gasInAtomics: parsedMicroblock.getGas().getAmountAsAtomic() });
+            } catch (e) {
+                if (e instanceof Error) {
+                    this.logger.error(
+                        `Microblock rejected due to the following error: ${e.message}`,
+                    );
+                } else {
+                    this.logger.error(
+                        `Microblock rejected due to the following error: ${e}`,
+                    );
+                }
+            }
+        }
+
+        // Step 2: microblock ordering based on gas
+        const sortedMicroblocks = microblocks.sort((a, b) => {
+            return b.gasInAtomics - a.gasInAtomics
+        });
+
+
+        // Step 3: check and verify microblocks until max size is reached
         const proposedTxs: Uint8Array[] = [];
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
-        //const cache = this.getCacheInstance(request.txs);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+        const maxBlockSize = this.nodeConfig.getMaxBlockSizeInBytes();
+        let currentBlockSize = 0;
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
+        for (const entry of sortedMicroblocks) {
+            // recover the parsed microblock
+            const parsedMicroblock = entry.mb;
+            const tx = entry.tx;
 
-        for (const tx of request.txs) {
+            // we break the proposal creation early if this transaction would make the block exceeding
+            // the max block size.
+            if ( currentBlockSize + tx.length > maxBlockSize ) {
+                this.logger.info(`Block size limit reached. Stopping proposal creation with ${proposedTxs.length} transactions.`);
+                break;
+            }
+
             try {
-                // we attempt to parse the received microblock and check its consistency
+                // check its consistency
                 // with the local state of the virtual blockchain where it is attached
-                const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
                 const localStateConsistentWithMicroblock =
-                    await this.checkMicroblockLocalStateConsistency(workingState, parsedMicroblock, cometParameters.blockTimestamp);
+                    await this.checkMicroblockLocalStateConsistency(
+                        workingState,
+                        parsedMicroblock,
+                        cometParameters.blockTimestamp,
+                    );
 
                 if (localStateConsistentWithMicroblock.checked) {
                     // we now check the consistency of the working state with the global state
@@ -693,10 +757,16 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         cometParameters,
                         tx,
                     );
+
+                    // the transaction is valid and respects the block, accept it in the block
                     proposedTxs.push(tx);
+                    currentBlockSize += tx.length;
                 } else {
                     // we rejected, the microblock goes back to the mempool
-                    this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`)
+                    this.logger.info(
+                        `Microblock ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`,
+                    );
+                    this.earlyMicroblockRejectionService.markMicroblockAsRejected(parsedMicroblock);
                 }
             } catch (e) {
                 // TODO: reject case
@@ -704,15 +774,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     this.logger.error(
                         `Microblock rejected due to the following error: ${e.message}`,
                     );
-                    this.logger.debug(
-                        `Details of the error: ${e.stack}`,
-                    );
+                    this.logger.debug(`Details of the error: ${e.stack}`);
                 }
+                this.earlyMicroblockRejectionService.markMicroblockAsRejected(parsedMicroblock);
             }
         }
 
         this.logger.info(
-            `included ${proposedTxs.length} transaction(s) out of ${request.txs.length}`,
+            `Included ${proposedTxs.length} transaction(s) out of ${txs.length}`,
         );
 
         return ResponsePrepareProposal.create({
@@ -751,7 +820,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 // with the local state of the virtual blockchain where it is attached
                 const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
                 const localStateConsistentWithMicroblock =
-                    await this.checkMicroblockLocalStateConsistency(workingState, parsedMicroblock, cometParameters.blockTimestamp);
+                    await this.checkMicroblockLocalStateConsistency(
+                        workingState,
+                        parsedMicroblock,
+                        cometParameters.blockTimestamp,
+                    );
 
                 // we now check the consistency of the working state with the global state
                 if (localStateConsistentWithMicroblock.checked) {
@@ -765,11 +838,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     );
                 } else {
                     // TODO: reject case
-                    this.logger.error(`Microblock  ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`)
+                    this.logger.error(
+                        `Microblock  ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`,
+                    );
                 }
             } catch (e) {
                 // TODO: reject case
-                this.logger.error(`Microblock rejected due to the following raised error: ${e}`)
+                this.logger.error(`Microblock rejected due to the following raised error: ${e}`);
             }
         }
 
@@ -818,7 +893,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 // with the local state of the virtual blockchain where it is attached
                 const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
                 const localStateConsistentWithMicroblock =
-                    await this.checkMicroblockLocalStateConsistency(workingState, parsedMicroblock, cometParameters.blockTimestamp);
+                    await this.checkMicroblockLocalStateConsistency(
+                        workingState,
+                        parsedMicroblock,
+                        cometParameters.blockTimestamp,
+                    );
 
                 if (localStateConsistentWithMicroblock.checked) {
                     // we now check the consistency of the working state with the global state
@@ -852,7 +931,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger.fatal(`A transaction has been rejected during FinalizeBlock: ${errorMessage}`);
+                this.logger.fatal(
+                    `A transaction has been rejected during FinalizeBlock: ${errorMessage}`,
+                );
             }
         }
         await globalStateUpdater.finalizeBlockApproval(workingState, request);
@@ -940,32 +1021,30 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         const snapshots: Snapshot[] = list.map((object) => {
-                // FIXME: use serialized version of object.metadata?
-                const metadata = new Uint8Array();
+            // FIXME: use serialized version of object.metadata?
+            const metadata = new Uint8Array();
 
-                return {
-                    height: object.height,
-                    format: object.format,
-                    chunks: object.chunks,
-                    hash: Utils.binaryFromHexa(object.hash),
-                    metadata,
-                };
-            });
+            return {
+                height: object.height,
+                format: object.format,
+                chunks: object.chunks,
+                hash: Utils.binaryFromHexa(object.hash),
+                metadata,
+            };
+        });
 
         return ResponseListSnapshots.create({
-            snapshots
+            snapshots,
         });
     }
 
     async LoadSnapshotChunk(request: RequestLoadSnapshotChunk) {
-        this.logger.info(`EVENT: loadSnapshotChunk height=${request.height} (typeof height: ${typeof request.height})`);
+        this.logger.info(
+            `EVENT: loadSnapshotChunk height=${request.height} (typeof height: ${typeof request.height})`,
+        );
 
         const height: number = Number(request.height); // TODO: ensure conversion
-        const chunk = await this.getSnapshot().getChunk(
-            this.getStorage(),
-            height,
-            request.chunk,
-        );
+        const chunk = await this.getSnapshot().getChunk(this.getStorage(), height, request.chunk);
 
         return ResponseLoadSnapshotChunk.create({
             chunk,
@@ -978,7 +1057,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.importedSnapshot = request.snapshot;
 
         return ResponseOfferSnapshot.create({
-            result: ResponseOfferSnapshot_Result.ACCEPT
+            result: ResponseOfferSnapshot_Result.ACCEPT,
             //result: ResponseOfferSnapshotResult.OFFER_SNAPSHOT_RESULT_ACCEPT,
         });
     }
@@ -990,7 +1069,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         if (this.importedSnapshot === undefined) {
             this.logger.error(`Cannot apply snapshot chunk: imported snapshot undefined`);
             return ResponseApplySnapshotChunk.create({
-                result: ResponseApplySnapshotChunk_Result.ABORT
+                result: ResponseApplySnapshotChunk_Result.ABORT,
                 //result: ResponseApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT,
             });
         }
@@ -1043,11 +1122,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private async checkMicroblockLocalStateConsistency(
         workingState: GlobalState,
         checkedMicroblock: Microblock,
-        referenceTimestamp = Utils.getTimestampInSeconds()
+        referenceTimestamp = Utils.getTimestampInSeconds(),
     ): Promise<MicroblockCheckResult> {
-        this.logger.debug(
-            `Checking microblock local state consistency`,
-        );
+        this.logger.debug(`Checking microblock local state consistency`);
         const microblockCheckTimer = this.perf.start('checking microblock');
         try {
             const checker = new MicroblockConsistencyChecker(workingState, checkedMicroblock);

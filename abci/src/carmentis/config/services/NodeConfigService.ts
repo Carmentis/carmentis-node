@@ -113,6 +113,10 @@ export class NodeConfigService implements OnModuleInit {
         return this.cometbftConfig.exposed_rpc_endpoint;
     }
 
+    getMaxBlockSizeInBytes(): number {
+        return this.abciConfig.max_block_size_in_bytes;
+    }
+
     /**
      * Retrieves various storage paths configured for the application.
      *
@@ -233,6 +237,13 @@ export class NodeConfigService implements OnModuleInit {
         return cometbftConfig;
     }
 
+    private get abciConfig() {
+        const abciConfig = this.config.abci;
+        if (abciConfig === undefined)
+            throw new Error('ABCI config is not initialized yet.');
+        return abciConfig;
+    }
+
     private get config() {
         if (this.nodeConfig === undefined) throw new Error('Node config is not initialized yet.');
         return this.nodeConfig;
@@ -245,6 +256,8 @@ export class NodeConfigService implements OnModuleInit {
     }
 
     isGenesisRunoffFilePathSpecified() {
-        return this.config.genesis !== undefined && this.config.genesis.runoffFilePath !== undefined;
+        return (
+            this.config.genesis !== undefined && this.config.genesis.runoffFilePath !== undefined
+        );
     }
 }
