@@ -44,7 +44,7 @@ export interface WALMessage {
 
 /** TimedWALMessage wraps WALMessage and adds Time for debugging purposes. */
 export interface TimedWALMessage {
-  time: Date | undefined;
+  time: Timestamp | undefined;
   msg: WALMessage | undefined;
 }
 
@@ -417,7 +417,7 @@ function createBaseTimedWALMessage(): TimedWALMessage {
 export const TimedWALMessage: MessageFns<TimedWALMessage> = {
   encode(message: TimedWALMessage, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.time !== undefined) {
-      Timestamp.encode(toTimestamp(message.time), writer.uint32(10).fork()).join();
+      Timestamp.encode(message.time, writer.uint32(10).fork()).join();
     }
     if (message.msg !== undefined) {
       WALMessage.encode(message.msg, writer.uint32(18).fork()).join();
@@ -437,7 +437,7 @@ export const TimedWALMessage: MessageFns<TimedWALMessage> = {
             break;
           }
 
-          message.time = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.time = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -467,7 +467,7 @@ export const TimedWALMessage: MessageFns<TimedWALMessage> = {
   toJSON(message: TimedWALMessage): unknown {
     const obj: any = {};
     if (message.time !== undefined) {
-      obj.time = message.time.toISOString();
+      obj.time = fromTimestamp(message.time).toISOString();
     }
     if (message.msg !== undefined) {
       obj.msg = WALMessage.toJSON(message.msg);
@@ -480,7 +480,7 @@ export const TimedWALMessage: MessageFns<TimedWALMessage> = {
   },
   fromPartial<I extends Exact<DeepPartial<TimedWALMessage>, I>>(object: I): TimedWALMessage {
     const message = createBaseTimedWALMessage();
-    message.time = object.time ?? undefined;
+    message.time = (object.time !== undefined && object.time !== null) ? Timestamp.fromPartial(object.time) : undefined;
     message.msg = (object.msg !== undefined && object.msg !== null) ? WALMessage.fromPartial(object.msg) : undefined;
     return message;
   },
@@ -510,13 +510,13 @@ function fromTimestamp(t: Timestamp): Date {
   return new globalThis.Date(millis);
 }
 
-function fromJsonTimestamp(o: any): Date {
+function fromJsonTimestamp(o: any): Timestamp {
   if (o instanceof globalThis.Date) {
-    return o;
+    return toTimestamp(o);
   } else if (typeof o === "string") {
-    return new globalThis.Date(o);
+    return toTimestamp(new globalThis.Date(o));
   } else {
-    return fromTimestamp(Timestamp.fromJSON(o));
+    return Timestamp.fromJSON(o);
   }
 }
 

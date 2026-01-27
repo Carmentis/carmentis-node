@@ -73,7 +73,7 @@ export interface State {
   lastBlockHeight: number;
   lastBlockId: BlockID | undefined;
   lastBlockTime:
-    | Date
+    | Timestamp
     | undefined;
   /**
    * LastValidators is used to validate block.LastCommit.
@@ -726,7 +726,7 @@ export const State: MessageFns<State> = {
       BlockID.encode(message.lastBlockId, writer.uint32(34).fork()).join();
     }
     if (message.lastBlockTime !== undefined) {
-      Timestamp.encode(toTimestamp(message.lastBlockTime), writer.uint32(42).fork()).join();
+      Timestamp.encode(message.lastBlockTime, writer.uint32(42).fork()).join();
     }
     if (message.nextValidators !== undefined) {
       ValidatorSet.encode(message.nextValidators, writer.uint32(50).fork()).join();
@@ -807,7 +807,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastBlockTime = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.lastBlockTime = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 6: {
@@ -924,7 +924,7 @@ export const State: MessageFns<State> = {
       obj.lastBlockId = BlockID.toJSON(message.lastBlockId);
     }
     if (message.lastBlockTime !== undefined) {
-      obj.lastBlockTime = message.lastBlockTime.toISOString();
+      obj.lastBlockTime = fromTimestamp(message.lastBlockTime).toISOString();
     }
     if (message.nextValidators !== undefined) {
       obj.nextValidators = ValidatorSet.toJSON(message.nextValidators);
@@ -967,7 +967,9 @@ export const State: MessageFns<State> = {
     message.lastBlockId = (object.lastBlockId !== undefined && object.lastBlockId !== null)
       ? BlockID.fromPartial(object.lastBlockId)
       : undefined;
-    message.lastBlockTime = object.lastBlockTime ?? undefined;
+    message.lastBlockTime = (object.lastBlockTime !== undefined && object.lastBlockTime !== null)
+      ? Timestamp.fromPartial(object.lastBlockTime)
+      : undefined;
     message.nextValidators = (object.nextValidators !== undefined && object.nextValidators !== null)
       ? ValidatorSet.fromPartial(object.nextValidators)
       : undefined;
@@ -1037,13 +1039,13 @@ function fromTimestamp(t: Timestamp): Date {
   return new globalThis.Date(millis);
 }
 
-function fromJsonTimestamp(o: any): Date {
+function fromJsonTimestamp(o: any): Timestamp {
   if (o instanceof globalThis.Date) {
-    return o;
+    return toTimestamp(o);
   } else if (typeof o === "string") {
-    return new globalThis.Date(o);
+    return toTimestamp(new globalThis.Date(o));
   } else {
-    return fromTimestamp(Timestamp.fromJSON(o));
+    return Timestamp.fromJSON(o);
   }
 }
 

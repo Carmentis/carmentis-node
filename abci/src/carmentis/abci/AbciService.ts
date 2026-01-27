@@ -451,14 +451,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private createInitChainResponse(appHash: Uint8Array) {
+
         const consensusParams: ConsensusParams = ConsensusParams.fromPartial({
             validator: {
-               pubKeyTypes: ['ed25519'], // ['tendermint/PubKeyEd25519']
+                pubKeyTypes: ['ed25519'], // ['tendermint/PubKeyEd25519']
             },
-            block: {
-                maxBytes: -1, // -1 lets ABCI decides (and hence prioritize txs).
-                maxGas: 10000000,
-            }
         });
         /*
           consensus_params: {
