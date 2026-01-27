@@ -90,6 +90,7 @@ export const ConfigSchema = v.object({
             }),
         ),
         max_block_size_in_bytes: v.fallback(v.number(), DEFAULT_MAX_BLOCK_SIZE_IN_BYTES),
+        min_microblock_gas_in_atomic_accepted: v.fallback(v.number(), 0),
     }),
     paths: v.object({
         cometbft_home: v.string(),

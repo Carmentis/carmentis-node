@@ -564,6 +564,25 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 }
             }
 
+            // We reject the microblock if it declares a gas below the minimum gas accepted by the node.
+            // The minimum accepted gas can be different for every node.
+            const declaredGas = parsedMicroblock.getGas().getAmountAsAtomic();
+            const minAcceptedGas = this.nodeConfig.getMinMicroblockGasInAtomicAccepted();
+            if (declaredGas < minAcceptedGas) {
+                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected due to insufficient gas`);
+                return {
+                    code: CheckTxResponseCode.KO,
+                    log: '',
+                    data: new Uint8Array(),
+                    gas_wanted: 0,
+                    gas_used: 0,
+                    info: `Microblock rejected due to insufficient gas. Minimum accepted gas: ${minAcceptedGas}`,
+                    events: [],
+                    codespace: 'app',
+                }
+            }
+
+
 
             this.logger.info(`Checking microblock ${parsedMicroblock.getHash().encode()}`);
 
