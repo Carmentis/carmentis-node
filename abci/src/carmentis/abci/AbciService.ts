@@ -1,44 +1,45 @@
 import {
-    ApplySnapshotChunkRequest,
-    ApplySnapshotChunkResponse,
-    ApplySnapshotChunkResult,
-    CheckTxRequest,
-    CheckTxResponse,
+    RequestApplySnapshotChunk,
+    ResponseApplySnapshotChunk,
+    RequestCheckTx,
+    ResponseCheckTx,
     CheckTxType,
-    CommitRequest,
-    CommitResponse,
-    EchoRequest,
-    EchoResponse,
+    RequestCommit,
+    ResponseCommit,
+    RequestEcho,
+    ResponseEcho,
     ExecTxResult,
-    ExtendVoteRequest,
-    ExtendVoteResponse,
-    FinalizeBlockRequest,
-    FinalizeBlockResponse,
-    FlushRequest,
-    FlushResponse,
-    InfoRequest,
-    InfoResponse,
-    InitChainRequest,
-    InitChainResponse,
-    ListSnapshotsRequest,
-    ListSnapshotsResponse,
-    LoadSnapshotChunkRequest,
-    LoadSnapshotChunkResponse,
+    RequestExtendVote,
+    ResponseExtendVote,
+    RequestFinalizeBlock,
+    ResponseFinalizeBlock,
+    RequestFlush,
+    ResponseFlush,
+    RequestInfo,
+    ResponseInfo,
+    RequestInitChain,
+    ResponseInitChain,
+    RequestListSnapshots,
+    ResponseListSnapshots,
+    RequestLoadSnapshotChunk,
+    ResponseLoadSnapshotChunk,
     Misbehavior,
-    OfferSnapshotRequest,
-    OfferSnapshotResponse,
-    OfferSnapshotResult,
-    PrepareProposalRequest,
-    PrepareProposalResponse,
-    ProcessProposalRequest,
-    ProcessProposalResponse,
-    ProcessProposalStatus,
-    QueryRequest,
-    QueryResponse,
-    Snapshot as SnapshotProto,
-    VerifyVoteExtensionRequest,
-    VerifyVoteExtensionResponse
-} from '../../proto-ts/cometbft/abci/v1/types';
+    RequestOfferSnapshot,
+    ResponseOfferSnapshot,
+    RequestPrepareProposal,
+    ResponsePrepareProposal,
+    RequestProcessProposal,
+    ResponseProcessProposal,
+    RequestQuery,
+    ResponseQuery,
+    Snapshot,
+    RequestVerifyVoteExtension,
+    ResponseVerifyVoteExtension,
+    ResponseProcessProposal_ProposalStatus,
+    ResponseApplySnapshotChunk_Result,
+    ResponseOfferSnapshot_Result,
+    ValidatorUpdate,
+} from '../../proto/tendermint/abci/types';
 
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { KeyManagementService } from './services/KeyManagementService';
@@ -78,6 +79,8 @@ import { GenesisRunoff } from './GenesisRunoff';
 import { getLogger } from '@logtape/logtape';
 import { GlobalStateUpdateCometParameters } from './types/GlobalStateUpdateCometParameters';
 import { CheckTxResponseCode } from './CheckTxResponseCode';
+import { ConsensusParams } from '../../proto/tendermint/types/params';
+import { CometBFTUtils } from './CometBFTUtils';
 
 const APP_VERSION = 1;
 
@@ -100,7 +103,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     private state?: GlobalState;
     private snapshot?: SnapshotsManager;
-    private importedSnapshot?: SnapshotProto;
+    private importedSnapshot?: Snapshot;
     private genesisRunoffs: GenesisRunoff;
 
     constructor(
@@ -191,19 +194,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      *
      * @param serializedQuery
      */
-    async Query(request: QueryRequest): Promise<QueryResponse> {
+    async Query(request: RequestQuery): Promise<ResponseQuery> {
         const response = await this.forwardAbciQueryToHandler(new Uint8Array(request.data));
-        return {
+        return ResponseQuery.fromPartial({
             code: 2,
             log: '',
             info: '',
             index: 0,
             key: new Uint8Array(),
             value: response,
-            proof_ops: undefined,
+            proofOps: undefined,
             height: 0,
             codespace: 'Carmentis',
-        };
+        });
     }
 
     private async forwardAbciQueryToHandler(serializedQuery: Uint8Array) {
@@ -240,18 +243,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
     }
 
-    async Info(request: InfoRequest) {
+    async Info(request: RequestInfo) {
         this.logger.info(`info`);
         this.isCatchingUp = false;
         const chainInformation = await this.getLevelDb().getChainInformation();
         const last_block_height = chainInformation?.height || 0;
         if (last_block_height === 0) {
             this.logger.info(`(Info) Aborting info request because the chain is empty.`);
-            return InfoResponse.create({
+            return ResponseInfo.create({
                 version: '1',
                 data: 'Carmentis ABCI application',
-                app_version: APP_VERSION,
-                last_block_height,
+                //app_version: APP_VERSION,
+                //last_block_height,
+                lastBlockHeight: last_block_height
             });
         } else {
             const { appHash } = await this.getGlobalState().getApplicationHash();
@@ -260,17 +264,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             this.logger.info(`(Info) last_block_height: ${last_block_height}`);
             this.logger.info(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
 
-            return InfoResponse.create({
+            return ResponseInfo.create({
                 version: '1',
                 data: 'Carmentis ABCI application',
-                app_version: APP_VERSION,
-                last_block_height,
-                last_block_app_hash: appHash,
+                //app_version: APP_VERSION,
+                lastBlockHeight: last_block_height,
+                lastBlockAppHash: appHash,
             });
         }
     }
 
-    async InitChain(request: InitChainRequest) {
+    async InitChain(request: RequestInitChain) {
         this.logger.info(`[ InitChain ] --------------------------------------------------------`);
 
         // we start by cleaning database, snapshots and storage
@@ -298,19 +302,33 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      * A node is considered a genesis node if it belongs to the initial validator set (assumed to contain exactly one validator).
      * @private
      */
-    private isGenesisNode(request: InitChainRequest) {
+    private isGenesisNode(request: RequestInitChain) {
         // NOTE: I have identified a difference between the public key type provided by the InitChainRequest and the one
         // inside the cometbft config. For this reason, I ignore the public key type for the moment.
         // Hence, I assume that the types of both keys are identical.
         const currentNodePublicKey = this.cometConfig.getPublicKey();
         const initialValidatorSet = request.validators;
+        console.debug(request)
         this.logger.debug(`Current node public key: ${currentNodePublicKey.value}`);
         for (const validator of initialValidatorSet) {
+            const validatorPublicKey = validator.pubKey;
+            console.log(validator, validatorPublicKey)
+            /*
+            const { pubKey: validatorPublicKey } =
+                CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
+            if (!validatorPublicKey) throw new Error('Validator public key is undefined');
+            if (validatorPublicKey.sum.oneofKind == 'ed25519') {
+                const t = validatorPublicKey.sum.ed25519;
+            }
+
+             */
             const base64 = EncoderFactory.bytesToBase64Encoder();
-            const validatorPublicKeyValue = base64.encode(validator.pub_key_bytes);
-            const validatorPublicKeyType = validator.pub_key_type;
-            this.logger.debug(`Validator node public key: ${validatorPublicKeyValue}`);
-            const isPublicKeyValueMatching = validatorPublicKeyValue === currentNodePublicKey.value;
+            const {pubKeyType: validatorPublicKeyType, pubKey: validatorPublicKeyValue} = CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
+            const b64EncodedNodePublicKey = base64.encode(validatorPublicKeyValue);
+            //const validatorPublicKeyValue = base64.encode(validator.pubKey);
+            //const validatorPublicKeyType = validator.pub_key_type;
+            this.logger.debug(`Validator node public key: ${b64EncodedNodePublicKey}`);
+            const isPublicKeyValueMatching = b64EncodedNodePublicKey === currentNodePublicKey.value;
             const isPublicKeyTypeMatching = validatorPublicKeyType === currentNodePublicKey.type;
 
             const isGenesisNode = isPublicKeyValueMatching;
@@ -321,7 +339,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         return false;
     }
 
-    private async initChainAsNode(request: InitChainRequest) {
+    private async initChainAsNode(request: RequestInitChain) {
         const genesisSnapshot = await this.searchGenesisSnapshotChunksFromGenesisNode();
         await this.loadReceivedGenesisSnapshotChunks(genesisSnapshot);
         await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
@@ -347,14 +365,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async initChainAsGenesis(
-        request: InitChainRequest,
+        request: RequestInitChain,
         issuerPrivateKey: PrivateSignatureKey,
     ) {
         // initialize the database
         await this.getLevelDb().initializeTable();
 
         await this.storeInitialValidatorSet(request);
-        this.logger.info(`Creating initial state for initial height ${request.initial_height}`);
+        this.logger.info(`Creating initial state`);
 
         const builder = new GenesisInitialTransactionsBuilder(
             this.nodeConfig,
@@ -433,11 +451,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private createInitChainResponse(appHash: Uint8Array) {
-        const consensusParams = {
+        const consensusParams: ConsensusParams = ConsensusParams.fromPartial({
             validator: {
-                pub_key_types: ['ed25519'], // ['tendermint/PubKeyEd25519']
+               pubKeyTypes: ['ed25519'], // ['tendermint/PubKeyEd25519']
             },
-        };
+            block: {
+                maxBytes: -1, // -1 lets ABCI decides (and hence prioritize txs).
+                maxGas: 10000000,
+            }
+        });
         /*
           consensus_params: {
               feature: {
@@ -476,19 +498,23 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
           },
         */
         //      const consensusParams = {};
-        return InitChainResponse.create({
-            consensus_params: consensusParams,
+        return ResponseInitChain.create({
+            consensusParams: consensusParams,
             validators: [],
-            app_hash: appHash,
+            appHash: appHash,
         });
     }
 
-    private async storeInitialValidatorSet(request: InitChainRequest) {
+    private async storeInitialValidatorSet(request: RequestInitChain) {
         const db = this.getLevelDb();
         for (const validator of request.validators) {
+            const address = CometBFTUtils.extractNodeAddressFromValidatorUpdate(validator);
+            /*
             const address = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(
                 Utils.bufferToUint8Array(validator.pub_key_bytes),
             );
+
+             */
             const record = await db.getValidatorNodeByAddress(address);
 
             if (!record) {
@@ -500,13 +526,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
     }
 
+
+
+
+
     /**
      * Incoming transaction
      */
-    async CheckTx(request: CheckTxRequest, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<CheckTxResponse> {
+    async CheckTx(request: RequestCheckTx, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<ResponseCheckTx> {
         const perfMeasure = this.perf.start('CheckTx');
         this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
-        this.logger.info(`Size of transaction: ${request.tx.length} bytes / request type: ${request.type}`);
+        this.logger.info(`Size of transaction: ${request.tx.length} bytes / request type: ${request.type} (${typeof request.type})`);
 
         // for performance, we reject already-checked microblock
         // TODO: figure out why request.type is not an integer
@@ -517,8 +547,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 code: CheckTxResponseCode.KO,
                 log: '',
                 data: new Uint8Array(),
-                gas_wanted: 0,
-                gas_used: 0,
+                gasWanted: 0,
+                gasUsed: 0,
                 info: 'Microblock already checked and checkTx executed twice: aborting',
                 events: [],
                 codespace: 'app',
@@ -555,8 +585,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     code: CheckTxResponseCode.OK,
                     log: '',
                     data: new Uint8Array(),
-                    gas_wanted: 0,
-                    gas_used: 0,
+                    gasWanted: 0,
+                    gasUsed: 0,
                     info: '',
                     events: [],
                     codespace: 'app',
@@ -567,8 +597,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     code: CheckTxResponseCode.KO,
                     log: '',
                     data: new Uint8Array(),
-                    gas_wanted: 0,
-                    gas_used: 0,
+                    gasWanted: 0,
+                    gasUsed: 0,
                     info: checkResult.error,
                     events: [],
                     codespace: 'app',
@@ -587,8 +617,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 code: CheckTxResponseCode.KO,
                 log: '',
                 data: new Uint8Array(),
-                gas_wanted: 0,
-                gas_used: 0,
+                gasWanted: 0,
+                gasUsed: 0,
                 info: e instanceof Error ? e.message : typeof e === 'string' ? e : 'CheckTx error',
                 events: [],
                 codespace: 'app',
@@ -603,15 +633,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      * This supports PrepareProposalRequest, ProcessProposalRequest and FinalizeBlockRequest
      */
     extractCometParameters(
-        request: PrepareProposalRequest | ProcessProposalRequest | FinalizeBlockRequest,
+        request: RequestPrepareProposal | RequestProcessProposal | RequestFinalizeBlock,
     ): GlobalStateUpdateCometParameters {
         const defaultTimestamp = 0;
-        const timeInRequest = request.time?.seconds;
+        const timeInRequest = CometBFTUtils.convertDateInTimestamp(request.time)//request.time?.seconds;
         if (timeInRequest === undefined) {
             this.logger.warn(`No block timestamp provided in request: using timestamp ${defaultTimestamp}`);
         }
         const blockHeight = Number(request.height);
-        const blockTimestamp = Number(request.time?.seconds ?? defaultTimestamp);
+        const blockTimestamp = CometBFTUtils.convertDateInTimestamp(request.time)//Number(request.time?.seconds ?? defaultTimestamp);
         const blockMisbehaviors: Misbehavior[] = request.misbehavior;
 
         return { blockHeight, blockTimestamp, blockMisbehaviors };
@@ -631,7 +661,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      * @return {Promise<PrepareProposalResponse>} A promise resolving to the proposal response
      * object containing the filtered list of valid transactions.
      */
-    async PrepareProposal(request: PrepareProposalRequest) {
+    async PrepareProposal(request: RequestPrepareProposal) {
         const cometParameters = this.extractCometParameters(request);
 
         this.logger.info(
@@ -688,7 +718,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             `included ${proposedTxs.length} transaction(s) out of ${request.txs.length}`,
         );
 
-        return PrepareProposalResponse.create({
+        return ResponsePrepareProposal.create({
             txs: proposedTxs,
         });
     }
@@ -702,7 +732,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      * @param request
      * @constructor
      */
-    async ProcessProposal(request: ProcessProposalRequest) {
+    async ProcessProposal(request: RequestProcessProposal) {
         const perfMeasure = this.perf.start('ProcessProposal');
         const cometParameters = this.extractCometParameters(request);
 
@@ -755,20 +785,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         perfMeasure.end();
 
-        return ProcessProposalResponse.create({
-            status: ProcessProposalStatus.PROCESS_PROPOSAL_STATUS_ACCEPT,
+        return ResponseProcessProposal.create({
+            status: 1, // TODO: use enum
         });
     }
 
-    ExtendVote(request: ExtendVoteRequest) {
-        return ExtendVoteResponse.create({});
+    ExtendVote(request: RequestExtendVote) {
+        return ResponseExtendVote.create({});
     }
 
-    VerifyVoteExtension(request: VerifyVoteExtensionRequest) {
-        return Promise.resolve(VerifyVoteExtensionResponse.create({}));
+    VerifyVoteExtension(request: RequestVerifyVoteExtension) {
+        return Promise.resolve(ResponseVerifyVoteExtension.create({}));
     }
 
-    async FinalizeBlock(request: FinalizeBlockRequest) {
+    async FinalizeBlock(request: RequestFinalizeBlock) {
         const perfMeasure = this.perf.start('FinalizeBlock');
         const cometParameters = this.extractCometParameters(request);
 
@@ -812,8 +842,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                             data: new Uint8Array(),
                             log: '',
                             info: '',
-                            gas_wanted: 0,
-                            gas_used: 0,
+                            gasWanted: 0,
+                            gasUsed: 0,
                             events: [],
                             codespace: 'app',
                         }),
@@ -840,25 +870,32 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         perfMeasure.end();
 
+        // obtain the validator set update and map it to the CometBFT' internal type
         const validatorSetUpdates = globalStateUpdater.getCometValidatorSetUpdates();
+        const validatorUpdate: ValidatorUpdate[] = validatorSetUpdates.map((update) => ({
+            power: update.power,
+            pubKey: {
+                ed25519: update.pub_key_bytes,
+            },
+        }));
 
-        return FinalizeBlockResponse.create({
-            tx_results: txResults,
-            app_hash: appHash,
+        return ResponseFinalizeBlock.create({
+            txResults: txResults,
+            appHash: appHash,
             events: [],
-            validator_updates: validatorSetUpdates,
-            consensus_param_updates: undefined,
+            validatorUpdates: validatorUpdate,
+            consensusParamUpdates: undefined,
         });
     }
 
-    async Commit(request: CommitRequest) {
+    async Commit(request: RequestCommit) {
         this.logger.info(`[ Commit ] --------------------------------------------------------`);
         const state = this.getGlobalState();
         const db = this.getLevelDb();
         const snapshot = this.getSnapshot();
         if (!state.hasSomethingToCommit()) {
             this.logger.warn(`nothing to commit`);
-            return CommitResponse.create({});
+            return ResponseCommit.create({});
         }
 
         await state.commit();
@@ -885,12 +922,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         }
 
-        return CommitResponse.create({
-            retain_height: retainedHeight,
+        return ResponseCommit.create({
+            retainHeight: retainedHeight,
         });
     }
 
-    async ListSnapshots(request: ListSnapshotsRequest) {
+    async ListSnapshots(request: RequestListSnapshots) {
         this.logger.info(`EVENT: listSnapshots`);
 
         const list = await this.getSnapshot().getList();
@@ -905,8 +942,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }),
         );
 
-        return ListSnapshotsResponse.create({
-            snapshots: list.map((object) => {
+        const snapshots: Snapshot[] = list.map((object) => {
                 // FIXME: use serialized version of object.metadata?
                 const metadata = new Uint8Array();
 
@@ -917,42 +953,48 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     hash: Utils.binaryFromHexa(object.hash),
                     metadata,
                 };
-            }),
+            });
+
+        return ResponseListSnapshots.create({
+            snapshots
         });
     }
 
-    async LoadSnapshotChunk(request: LoadSnapshotChunkRequest) {
-        this.logger.info(`EVENT: loadSnapshotChunk height=${request.height}`);
+    async LoadSnapshotChunk(request: RequestLoadSnapshotChunk) {
+        this.logger.info(`EVENT: loadSnapshotChunk height=${request.height} (typeof height: ${typeof request.height})`);
 
+        const height: number = Number(request.height); // TODO: ensure conversion
         const chunk = await this.getSnapshot().getChunk(
             this.getStorage(),
-            request.height,
+            height,
             request.chunk,
         );
 
-        return LoadSnapshotChunkResponse.create({
+        return ResponseLoadSnapshotChunk.create({
             chunk,
         });
     }
 
-    async OfferSnapshot(request: OfferSnapshotRequest) {
+    async OfferSnapshot(request: RequestOfferSnapshot) {
         this.logger.info(`EVENT: offerSnapshot`);
 
         this.importedSnapshot = request.snapshot;
 
-        return OfferSnapshotResponse.create({
-            result: OfferSnapshotResult.OFFER_SNAPSHOT_RESULT_ACCEPT,
+        return ResponseOfferSnapshot.create({
+            result: ResponseOfferSnapshot_Result.ACCEPT
+            //result: ResponseOfferSnapshotResult.OFFER_SNAPSHOT_RESULT_ACCEPT,
         });
     }
 
-    async ApplySnapshotChunk(request: ApplySnapshotChunkRequest) {
+    async ApplySnapshotChunk(request: RequestApplySnapshotChunk) {
         this.logger.info(`EVENT: applySnapshotChunk index=${request.index}`);
 
         // reject if the provided snapshot is not defined
         if (this.importedSnapshot === undefined) {
             this.logger.error(`Cannot apply snapshot chunk: imported snapshot undefined`);
-            return ApplySnapshotChunkResponse.create({
-                result: ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT,
+            return ResponseApplySnapshotChunk.create({
+                result: ResponseApplySnapshotChunk_Result.ABORT
+                //result: ResponseApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT,
             });
         }
 
@@ -963,12 +1005,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             request.chunk,
             isLast,
         );
-        const result = ApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
+        const result = ResponseApplySnapshotChunk_Result.ACCEPT;
+        //const result = ResponseApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 
-        return ApplySnapshotChunkResponse.create({
+        return ResponseApplySnapshotChunk.create({
             result,
-            refetch_chunks: [],
-            reject_senders: [],
+            refetchChunks: [],
+            rejectSenders: [],
         });
     }
 
@@ -987,13 +1030,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await this.getSnapshot().clear(0);
     }
 
-    Echo(request: EchoRequest): Promise<EchoResponse> {
+    Echo(request: RequestEcho): Promise<ResponseEcho> {
         return Promise.resolve({
             message: `Echo: ${request.message}`,
         });
     }
 
-    Flush(request: FlushRequest): Promise<FlushResponse> {
+    Flush(request: RequestFlush): Promise<ResponseFlush> {
         return Promise.resolve({});
     }
 

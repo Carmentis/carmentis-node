@@ -1,43 +1,41 @@
 import { GrpcMethod } from '@nestjs/microservices';
 import { Controller, Logger } from '@nestjs/common';
-import {
-    ApplySnapshotChunkRequest,
-    ApplySnapshotChunkResponse,
-    CheckTxRequest,
-    CheckTxResponse,
-    CommitRequest,
-    CommitResponse,
-    EchoRequest,
-    EchoResponse,
-    ExtendVoteRequest,
-    ExtendVoteResponse,
-    FinalizeBlockRequest,
-    FinalizeBlockResponse,
-    FlushRequest,
-    FlushResponse,
-    InfoRequest,
-    InfoResponse,
-    InitChainRequest,
-    InitChainResponse,
-    ListSnapshotsRequest,
-    ListSnapshotsResponse,
-    LoadSnapshotChunkRequest,
-    LoadSnapshotChunkResponse,
-    OfferSnapshotRequest,
-    OfferSnapshotResponse,
-    PrepareProposalRequest,
-    PrepareProposalResponse,
-    ProcessProposalRequest,
-    ProcessProposalResponse,
-    ProcessProposalStatus,
-    QueryRequest,
-    QueryResponse,
-    VerifyVoteExtensionRequest,
-    VerifyVoteExtensionResponse,
-    VerifyVoteExtensionStatus,
-} from '../../../proto-ts/cometbft/abci/v1/types';
 import { Utils } from '@cmts-dev/carmentis-sdk/server';
 import { AbciService } from '../AbciService';
+import {
+    RequestEcho,
+    RequestInfo,
+    RequestLoadSnapshotChunk,
+    RequestOfferSnapshot,
+    RequestVerifyVoteExtension,
+    ResponseEcho,
+    ResponseInfo,
+    ResponseLoadSnapshotChunk,
+    ResponseOfferSnapshot,
+    ResponseVerifyVoteExtension,
+    RequestInitChain,
+    ResponseInitChain,
+    RequestPrepareProposal,
+    ResponsePrepareProposal,
+    RequestProcessProposal,
+    ResponseProcessProposal,
+    RequestCommit,
+    ResponseCommit,
+    RequestCheckTx,
+    ResponseCheckTx,
+    RequestApplySnapshotChunk,
+    ResponseApplySnapshotChunk,
+    RequestListSnapshots,
+    ResponseListSnapshots,
+    RequestExtendVote,
+    ResponseExtendVote,
+    RequestFinalizeBlock,
+    ResponseFinalizeBlock,
+    RequestFlush,
+    ResponseFlush,
+    RequestQuery,
+    ResponseQuery,
+} from '../../../proto/tendermint/abci/types';
 
 @Controller()
 export class GrpcAbciController {
@@ -45,101 +43,97 @@ export class GrpcAbciController {
 
     constructor(private readonly abciService: AbciService) {}
 
-    @GrpcMethod('ABCIService', 'Echo')
-    async Echo(request: EchoRequest): Promise<EchoResponse> {
+    @GrpcMethod('ABCI', 'Echo')
+    async Echo(request: RequestEcho): Promise<ResponseEcho> {
         this.logger.debug('Called Echo');
         return await this.abciService.Echo(request);
     }
 
-    @GrpcMethod('ABCIService', 'Info')
-    async Info(request: InfoRequest): Promise<InfoResponse> {
+    @GrpcMethod('ABCI', 'Info')
+    async Info(request: RequestInfo): Promise<ResponseInfo> {
         this.logger.debug('Called Info');
         return await this.abciService.Info(request);
     }
 
-    @GrpcMethod('ABCIService', 'InitChain')
-    async InitChain(request: InitChainRequest): Promise<InitChainResponse> {
+    @GrpcMethod('ABCI', 'InitChain')
+    async InitChain(request: RequestInitChain): Promise<ResponseInitChain> {
         this.logger.debug('Called InitChain');
         return await this.abciService.InitChain(request);
     }
 
-    @GrpcMethod('ABCIService', 'PrepareProposal')
-    async PrepareProposal(request: PrepareProposalRequest): Promise<PrepareProposalResponse> {
+    @GrpcMethod('ABCI', 'PrepareProposal')
+    async PrepareProposal(request: RequestPrepareProposal): Promise<ResponsePrepareProposal> {
         this.logger.debug('Called PrepareProposal');
         return await this.abciService.PrepareProposal(request);
     }
 
-    @GrpcMethod('ABCIService', 'ProcessProposal')
-    async ProcessProposal(request: ProcessProposalRequest): Promise<ProcessProposalResponse> {
+    @GrpcMethod('ABCI', 'ProcessProposal')
+    async ProcessProposal(request: RequestProcessProposal): Promise<ResponseProcessProposal> {
         this.logger.debug('Called ProcessProposal');
         return await this.abciService.ProcessProposal(request);
     }
 
-    @GrpcMethod('ABCIService', 'Commit')
-    async Commit(request: CommitRequest): Promise<CommitResponse> {
+    @GrpcMethod('ABCI', 'Commit')
+    async Commit(request: RequestCommit): Promise<ResponseCommit> {
         return await this.abciService.Commit(request);
     }
 
-    @GrpcMethod('ABCIService', 'CheckTx')
-    async CheckTx(request: CheckTxRequest, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<CheckTxResponse> {
+    @GrpcMethod('ABCI', 'CheckTx')
+    async CheckTx(request: RequestCheckTx, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<ResponseCheckTx> {
         this.logger.debug('Called CheckTx');
         return await this.abciService.CheckTx(request, referenceTimestamp);
     }
 
-    @GrpcMethod('ABCIService', 'ApplySnapshotChunk')
-    async ApplySnapshotChunk(request: ApplySnapshotChunkRequest): Promise<ApplySnapshotChunkResponse> {
+    @GrpcMethod('ABCI', 'ApplySnapshotChunk')
+    async ApplySnapshotChunk(request: RequestApplySnapshotChunk): Promise<ResponseApplySnapshotChunk> {
         this.logger.debug('Called ApplySnapshotChunk');
         return await this.abciService.ApplySnapshotChunk(request);
     }
 
-    @GrpcMethod('ABCIService', 'ListSnapshots')
-    async ListSnapshots(request: ListSnapshotsRequest): Promise<ListSnapshotsResponse> {
+    @GrpcMethod('ABCI', 'ListSnapshots')
+    async ListSnapshots(request: RequestListSnapshots): Promise<ResponseListSnapshots> {
         this.logger.debug('Called ListSnapshots');
         return await this.abciService.ListSnapshots(request);
     }
 
-    @GrpcMethod('ABCIService', 'LoadSnapshotChunk')
-    async LoadSnapshotChunk(request: LoadSnapshotChunkRequest): Promise<LoadSnapshotChunkResponse> {
+    @GrpcMethod('ABCI', 'LoadSnapshotChunk')
+    async LoadSnapshotChunk(request: RequestLoadSnapshotChunk): Promise<ResponseLoadSnapshotChunk> {
         this.logger.debug('Called LoadSnapshotChunk');
         return await this.abciService.LoadSnapshotChunk(request);
     }
 
-    @GrpcMethod('ABCIService', 'OfferSnapshot')
-    async OfferSnapshot(request: OfferSnapshotRequest): Promise<OfferSnapshotResponse> {
+    @GrpcMethod('ABCI', 'OfferSnapshot')
+    async OfferSnapshot(request: RequestOfferSnapshot): Promise<ResponseOfferSnapshot> {
         this.logger.debug('Called OfferSnapshot');
         return await this.abciService.OfferSnapshot(request);
     }
 
-    @GrpcMethod('ABCIService', 'ExtendVote')
-    ExtendVote(request: ExtendVoteRequest): Promise<ExtendVoteResponse> {
+    @GrpcMethod('ABCI', 'ExtendVote')
+    async ExtendVote(request: RequestExtendVote): Promise<ResponseExtendVote> {
         this.logger.debug('Called ExtendVote');
-        return Promise.resolve({
-            vote_extension: new Uint8Array([]),
-        });
+        return this.abciService.ExtendVote(request);
     }
 
-    @GrpcMethod('ABCIService', 'FinalizeBlock')
-    async FinalizeBlock(request: FinalizeBlockRequest): Promise<FinalizeBlockResponse> {
+    @GrpcMethod('ABCI', 'FinalizeBlock')
+    async FinalizeBlock(request: RequestFinalizeBlock): Promise<ResponseFinalizeBlock> {
         this.logger.debug('Called FinalizeBlock');
         return await this.abciService.FinalizeBlock(request);
     }
 
-    @GrpcMethod('ABCIService', 'Flush')
-    async Flush(request: FlushRequest): Promise<FlushResponse> {
-        return FlushResponse.create();
+    @GrpcMethod('ABCI', 'Flush')
+    async Flush(request: RequestFlush): Promise<ResponseFlush> {
+        return this.abciService.Flush(request);
     }
 
-    @GrpcMethod('ABCIService', 'Query')
-    async Query(request: QueryRequest): Promise<QueryResponse> {
+    @GrpcMethod('ABCI', 'Query')
+    async Query(request: RequestQuery): Promise<ResponseQuery> {
         this.logger.debug('Called Query');
         return await this.abciService.Query(request);
     }
 
-    @GrpcMethod('ABCIService', 'VerifyVoteExtension')
-    VerifyVoteExtension(request: VerifyVoteExtensionRequest): Promise<VerifyVoteExtensionResponse> {
+    @GrpcMethod('ABCI', 'VerifyVoteExtension')
+    VerifyVoteExtension(request: RequestVerifyVoteExtension): Promise<ResponseVerifyVoteExtension> {
         this.logger.debug('Called VerifyVoteExtension');
-        return Promise.resolve({
-            status: VerifyVoteExtensionStatus.VERIFY_VOTE_EXTENSION_STATUS_ACCEPT,
-        });
+        return this.abciService.VerifyVoteExtension(request);
     }
 }

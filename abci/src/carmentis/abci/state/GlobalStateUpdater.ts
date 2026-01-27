@@ -23,14 +23,15 @@ import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
 import { AccountManager, Transfer } from '../accounts/AccountManager';
 import { GlobalState } from './GlobalState';
-import { FinalizeBlockRequest } from '../../../proto-ts/cometbft/abci/v1/types';
+import { RequestFinalizeBlock } from '../../../proto/tendermint/abci/types';
 import { GlobalStateUpdateCometParameters } from '../types/GlobalStateUpdateCometParameters';
 import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { LevelDb } from '../database/LevelDb';
 import { CometValidatorSetUpdate, ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
-import { BlockIDFlag } from '../../../proto-ts/cometbft/types/v1/validator';
+import { BlockIDFlag } from '../../../proto/tendermint/types/validator';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { FeesDispatcher } from '../accounts/FeesDispatcher';
+import { CometBFTUtils } from '../CometBFTUtils';
 
 const KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',
@@ -398,9 +399,9 @@ export class GlobalStateUpdater {
         await globalState.indexVirtualBlockchain(virtualBlockchain);
     }
 
-    async finalizeBlockApproval(state: GlobalState, request: FinalizeBlockRequest) {
+    async finalizeBlockApproval(state: GlobalState, request: RequestFinalizeBlock) {
         const blockHeight: number = Number(request.height);
-        const blockTimestamp: number = Number(request.time?.seconds ?? 0);
+        const blockTimestamp: number = CometBFTUtils.convertDateInTimestamp(request.time);//Number(request.time?.seconds ?? 0);
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
@@ -410,7 +411,7 @@ export class GlobalStateUpdater {
             blockHeight,
             request.hash,
             blockTimestamp,
-            request.proposer_address,
+            request.proposerAddress,
             this.blockSizeInBytes,
             request.txs.length,
         );
@@ -538,7 +539,7 @@ export class GlobalStateUpdater {
         return LevelDb.convertHeightToTableKey(height);
     }
 
-    private async dispatchFeesAmongValidators(state: GlobalState, request: FinalizeBlockRequest) {
+    private async dispatchFeesAmongValidators(state: GlobalState, request: RequestFinalizeBlock) {
         this.logger.info(`dispatchFeesAmongValidators`);
         const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
             ECO.ACCOUNT_BLOCK_FEES,
@@ -553,7 +554,7 @@ export class GlobalStateUpdater {
 
         const validatorAccounts: Uint8Array[] = [];
         const validatorStakes : number[] = [];
-        const votes = request.decided_last_commit?.votes || [];
+        const votes = request.decidedLastCommit?.votes || [];
         const stateDb = state.getCachedDatabase();
 
         this.logger.debug(`${votes.length} vote(s)`);
@@ -561,7 +562,7 @@ export class GlobalStateUpdater {
         for (const vote of votes) {
             // TODO: figure out why vote.block_id_flag is not an integer
             // if (vote.block_id_flag === BlockIDFlag.BLOCK_ID_FLAG_COMMIT ) {
-            if ((vote.block_id_flag).toString() == 'BLOCK_ID_FLAG_COMMIT') {
+            if ((vote.blockIdFlag).toString() == 'BLOCK_ID_FLAG_COMMIT') {
                 // skip if validator field not set in the vote
                 if (vote.validator == null) {
                     this.logger.warn(`Received undefined validator in commit vote: skipping vote`);
@@ -617,7 +618,7 @@ export class GlobalStateUpdater {
         );
         const feesDispatcher = new FeesDispatcher(pendingFees, validatorStakes, blockHeight);
         const defaultTimestamp = 0;
-        const timeInRequest: number = Number(request.time?.seconds ?? defaultTimestamp);
+        const timeInRequest: number = CometBFTUtils.convertDateInTimestamp(request.time);//Number(request.time?.seconds ?? defaultTimestamp);
         const feesInAtomisToDispatchForEachValidator = feesDispatcher.dispatch();
         for (let index = 0; index < nValidators; index++) {
             // get the fees to pay to this validator

@@ -1,4 +1,4 @@
-import { Misbehavior } from '../../../proto-ts/cometbft/abci/v1/types';
+import { Misbehavior } from '../../../proto/tendermint/abci/types';
 
 export interface GlobalStateUpdateCometParameters {
     blockHeight: number,

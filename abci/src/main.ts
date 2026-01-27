@@ -124,12 +124,14 @@ async function bootstrap() {
     const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
         transport: Transport.GRPC,
         options: {
-            package: 'cometbft.abci.v1',
-            protoPath: 'cometbft/abci/v1/service.proto',
+            //package: 'cometbft.abci.v1',
+            //protoPath: 'cometbft/abci/v1/service.proto',
+            package: 'tendermint.abci',
+            protoPath: join(__dirname, '../proto/tendermint/abci/types.proto'),
             loader: {
                 includeDirs: [join(__dirname, '../proto')],
-                keepCase: true,
-                longs: String,
+                //keepCase: true,
+                longs: String, // TODO: check this because it might explains why CometBFT returns string
                 enums: String,
                 defaults: true,
                 oneofs: true,

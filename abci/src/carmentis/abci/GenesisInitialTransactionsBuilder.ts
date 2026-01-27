@@ -1,6 +1,7 @@
 import {
-    InitChainRequest,
-} from '../../proto-ts/cometbft/abci/v1/types';
+    RequestFinalizeBlock,
+    RequestInitChain,
+} from '../../proto/tendermint/abci/types';
 
 import {
     Microblock,
@@ -18,6 +19,7 @@ import { GlobalState } from './state/GlobalState';
 import { GlobalStateUpdaterFactory } from './state/GlobalStateUpdaterFactory';
 import { GenesisRunoff } from './GenesisRunoff';
 import { GenesisRunoffTransactionsBuilder } from './GenesisRunoffTransactionsBuilder';
+import { CometBFTUtils } from './CometBFTUtils';
 
 export class GenesisInitialTransactionsBuilder {
     private logger = getLogger(['node', 'genesis', GenesisInitialTransactionsBuilder.name]);
@@ -33,11 +35,13 @@ export class GenesisInitialTransactionsBuilder {
 
     async publishInitialBlockchainState(
         issuerPrivateKey: PrivateSignatureKey,
-        request: InitChainRequest,
+        request: RequestInitChain,
     ) {
         const issuerPublicKey = await issuerPrivateKey.getPublicKey();
         const genesisValidator = request.validators[0];
-        const genesisNodePubKey = genesisValidator.pub_key_bytes;
+        const { pubKey: genesisNodePubKey } =
+            CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(genesisValidator);
+        //const genesisNodePubKey = genesisValidator.pub_key_bytes;
         const genesisNodeRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
         const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
 
@@ -116,15 +120,15 @@ export class GenesisInitialTransactionsBuilder {
         this.logger.info(
             `Finalizing publication of ${transactions.length} transactions at height ${publishedBlockHeight}`,
         );
-        await globalStateUpdater.finalizeBlockApproval(workingState, {
+        await globalStateUpdater.finalizeBlockApproval(workingState, RequestFinalizeBlock.fromPartial({
             hash: Utils.getNullHash(),
             height: publishedBlockHeight,
             misbehavior: [],
-            next_validators_hash: Utils.getNullHash(),
-            proposer_address: Utils.getNullHash(),
-            syncing_to_height: publishedBlockHeight,
+            nextValidatorsHash: Utils.getNullHash(),
+            proposerAddress: Utils.getNullHash(),
+            //syncing_to_height: publishedBlockHeight,
             txs: transactions,
-        });
+        }));
 
         // commit the state
         this.logger.info(`Committing state at height ${publishedBlockHeight}`);
