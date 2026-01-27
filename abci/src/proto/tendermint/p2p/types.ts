@@ -22,9 +22,9 @@ export interface ProtocolVersion {
 }
 
 export interface DefaultNodeInfo {
-  protocolVersion: ProtocolVersion | undefined;
-  defaultNodeId: string;
-  listenAddr: string;
+  protocol_version: ProtocolVersion | undefined;
+  default_node_id: string;
+  listen_addr: string;
   network: string;
   version: string;
   channels: Uint8Array;
@@ -33,8 +33,8 @@ export interface DefaultNodeInfo {
 }
 
 export interface DefaultNodeInfoOther {
-  txIndex: string;
-  rpcAddress: string;
+  tx_index: string;
+  rpc_address: string;
 }
 
 function createBaseNetAddress(): NetAddress {
@@ -223,9 +223,9 @@ export const ProtocolVersion: MessageFns<ProtocolVersion> = {
 
 function createBaseDefaultNodeInfo(): DefaultNodeInfo {
   return {
-    protocolVersion: undefined,
-    defaultNodeId: "",
-    listenAddr: "",
+    protocol_version: undefined,
+    default_node_id: "",
+    listen_addr: "",
     network: "",
     version: "",
     channels: new Uint8Array(0),
@@ -236,14 +236,14 @@ function createBaseDefaultNodeInfo(): DefaultNodeInfo {
 
 export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
   encode(message: DefaultNodeInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.protocolVersion !== undefined) {
-      ProtocolVersion.encode(message.protocolVersion, writer.uint32(10).fork()).join();
+    if (message.protocol_version !== undefined) {
+      ProtocolVersion.encode(message.protocol_version, writer.uint32(10).fork()).join();
     }
-    if (message.defaultNodeId !== "") {
-      writer.uint32(18).string(message.defaultNodeId);
+    if (message.default_node_id !== "") {
+      writer.uint32(18).string(message.default_node_id);
     }
-    if (message.listenAddr !== "") {
-      writer.uint32(26).string(message.listenAddr);
+    if (message.listen_addr !== "") {
+      writer.uint32(26).string(message.listen_addr);
     }
     if (message.network !== "") {
       writer.uint32(34).string(message.network);
@@ -275,7 +275,7 @@ export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
             break;
           }
 
-          message.protocolVersion = ProtocolVersion.decode(reader, reader.uint32());
+          message.protocol_version = ProtocolVersion.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -283,7 +283,7 @@ export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
             break;
           }
 
-          message.defaultNodeId = reader.string();
+          message.default_node_id = reader.string();
           continue;
         }
         case 3: {
@@ -291,7 +291,7 @@ export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
             break;
           }
 
-          message.listenAddr = reader.string();
+          message.listen_addr = reader.string();
           continue;
         }
         case 4: {
@@ -345,9 +345,9 @@ export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
 
   fromJSON(object: any): DefaultNodeInfo {
     return {
-      protocolVersion: isSet(object.protocolVersion) ? ProtocolVersion.fromJSON(object.protocolVersion) : undefined,
-      defaultNodeId: isSet(object.defaultNodeId) ? globalThis.String(object.defaultNodeId) : "",
-      listenAddr: isSet(object.listenAddr) ? globalThis.String(object.listenAddr) : "",
+      protocol_version: isSet(object.protocol_version) ? ProtocolVersion.fromJSON(object.protocol_version) : undefined,
+      default_node_id: isSet(object.default_node_id) ? globalThis.String(object.default_node_id) : "",
+      listen_addr: isSet(object.listen_addr) ? globalThis.String(object.listen_addr) : "",
       network: isSet(object.network) ? globalThis.String(object.network) : "",
       version: isSet(object.version) ? globalThis.String(object.version) : "",
       channels: isSet(object.channels) ? bytesFromBase64(object.channels) : new Uint8Array(0),
@@ -358,14 +358,14 @@ export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
 
   toJSON(message: DefaultNodeInfo): unknown {
     const obj: any = {};
-    if (message.protocolVersion !== undefined) {
-      obj.protocolVersion = ProtocolVersion.toJSON(message.protocolVersion);
+    if (message.protocol_version !== undefined) {
+      obj.protocol_version = ProtocolVersion.toJSON(message.protocol_version);
     }
-    if (message.defaultNodeId !== "") {
-      obj.defaultNodeId = message.defaultNodeId;
+    if (message.default_node_id !== "") {
+      obj.default_node_id = message.default_node_id;
     }
-    if (message.listenAddr !== "") {
-      obj.listenAddr = message.listenAddr;
+    if (message.listen_addr !== "") {
+      obj.listen_addr = message.listen_addr;
     }
     if (message.network !== "") {
       obj.network = message.network;
@@ -390,11 +390,11 @@ export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
   },
   fromPartial<I extends Exact<DeepPartial<DefaultNodeInfo>, I>>(object: I): DefaultNodeInfo {
     const message = createBaseDefaultNodeInfo();
-    message.protocolVersion = (object.protocolVersion !== undefined && object.protocolVersion !== null)
-      ? ProtocolVersion.fromPartial(object.protocolVersion)
+    message.protocol_version = (object.protocol_version !== undefined && object.protocol_version !== null)
+      ? ProtocolVersion.fromPartial(object.protocol_version)
       : undefined;
-    message.defaultNodeId = object.defaultNodeId ?? "";
-    message.listenAddr = object.listenAddr ?? "";
+    message.default_node_id = object.default_node_id ?? "";
+    message.listen_addr = object.listen_addr ?? "";
     message.network = object.network ?? "";
     message.version = object.version ?? "";
     message.channels = object.channels ?? new Uint8Array(0);
@@ -407,16 +407,16 @@ export const DefaultNodeInfo: MessageFns<DefaultNodeInfo> = {
 };
 
 function createBaseDefaultNodeInfoOther(): DefaultNodeInfoOther {
-  return { txIndex: "", rpcAddress: "" };
+  return { tx_index: "", rpc_address: "" };
 }
 
 export const DefaultNodeInfoOther: MessageFns<DefaultNodeInfoOther> = {
   encode(message: DefaultNodeInfoOther, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.txIndex !== "") {
-      writer.uint32(10).string(message.txIndex);
+    if (message.tx_index !== "") {
+      writer.uint32(10).string(message.tx_index);
     }
-    if (message.rpcAddress !== "") {
-      writer.uint32(18).string(message.rpcAddress);
+    if (message.rpc_address !== "") {
+      writer.uint32(18).string(message.rpc_address);
     }
     return writer;
   },
@@ -433,7 +433,7 @@ export const DefaultNodeInfoOther: MessageFns<DefaultNodeInfoOther> = {
             break;
           }
 
-          message.txIndex = reader.string();
+          message.tx_index = reader.string();
           continue;
         }
         case 2: {
@@ -441,7 +441,7 @@ export const DefaultNodeInfoOther: MessageFns<DefaultNodeInfoOther> = {
             break;
           }
 
-          message.rpcAddress = reader.string();
+          message.rpc_address = reader.string();
           continue;
         }
       }
@@ -455,18 +455,18 @@ export const DefaultNodeInfoOther: MessageFns<DefaultNodeInfoOther> = {
 
   fromJSON(object: any): DefaultNodeInfoOther {
     return {
-      txIndex: isSet(object.txIndex) ? globalThis.String(object.txIndex) : "",
-      rpcAddress: isSet(object.rpcAddress) ? globalThis.String(object.rpcAddress) : "",
+      tx_index: isSet(object.tx_index) ? globalThis.String(object.tx_index) : "",
+      rpc_address: isSet(object.rpc_address) ? globalThis.String(object.rpc_address) : "",
     };
   },
 
   toJSON(message: DefaultNodeInfoOther): unknown {
     const obj: any = {};
-    if (message.txIndex !== "") {
-      obj.txIndex = message.txIndex;
+    if (message.tx_index !== "") {
+      obj.tx_index = message.tx_index;
     }
-    if (message.rpcAddress !== "") {
-      obj.rpcAddress = message.rpcAddress;
+    if (message.rpc_address !== "") {
+      obj.rpc_address = message.rpc_address;
     }
     return obj;
   },
@@ -476,8 +476,8 @@ export const DefaultNodeInfoOther: MessageFns<DefaultNodeInfoOther> = {
   },
   fromPartial<I extends Exact<DeepPartial<DefaultNodeInfoOther>, I>>(object: I): DefaultNodeInfoOther {
     const message = createBaseDefaultNodeInfoOther();
-    message.txIndex = object.txIndex ?? "";
-    message.rpcAddress = object.rpcAddress ?? "";
+    message.tx_index = object.tx_index ?? "";
+    message.rpc_address = object.rpc_address ?? "";
     return message;
   },
 };

@@ -130,7 +130,7 @@ async function bootstrap() {
             protoPath: join(__dirname, '../proto/tendermint/abci/types.proto'),
             loader: {
                 includeDirs: [join(__dirname, '../proto')],
-                //keepCase: true,
+                keepCase: true,
                 longs: String, // TODO: check this because it might explains why CometBFT returns string
                 enums: String,
                 defaults: true,

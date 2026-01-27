@@ -31,7 +31,7 @@ export interface CodeGeneratorRequest {
    * code generator should generate code only for these files.  Each file's
    * descriptor will be included in proto_file, below.
    */
-  fileToGenerate: string[];
+  file_to_generate: string[];
   /** The generator parameter passed on the command-line. */
   parameter?:
     | string
@@ -57,15 +57,15 @@ export interface CodeGeneratorRequest {
    * Type names of fields and extensions in the FileDescriptorProto are always
    * fully qualified.
    */
-  protoFile: FileDescriptorProto[];
+  proto_file: FileDescriptorProto[];
   /**
    * File descriptors with all options, including source-retention options.
    * These descriptors are only provided for the files listed in
    * files_to_generate.
    */
-  sourceFileDescriptors: FileDescriptorProto[];
+  source_file_descriptors: FileDescriptorProto[];
   /** The version number of protocol compiler. */
-  compilerVersion?: Version | undefined;
+  compiler_version?: Version | undefined;
 }
 
 /** The plugin writes an encoded CodeGeneratorResponse to stdout. */
@@ -87,7 +87,7 @@ export interface CodeGeneratorResponse {
    * A bitmask of supported features that the code generator supports.
    * This is a bitwise "or" of values from the Feature enum.
    */
-  supportedFeatures?:
+  supported_features?:
     | number
     | undefined;
   /**
@@ -96,7 +96,7 @@ export interface CodeGeneratorResponse {
    * according the edition enum value, *not* the edition number.  Only takes
    * effect for plugins that have FEATURE_SUPPORTS_EDITIONS set.
    */
-  minimumEdition?:
+  minimum_edition?:
     | number
     | undefined;
   /**
@@ -105,7 +105,7 @@ export interface CodeGeneratorResponse {
    * according the edition enum value, *not* the edition number.  Only takes
    * effect for plugins that have FEATURE_SUPPORTS_EDITIONS set.
    */
-  maximumEdition?: number | undefined;
+  maximum_edition?: number | undefined;
   file: CodeGeneratorResponse_File[];
 }
 
@@ -206,7 +206,7 @@ export interface CodeGeneratorResponse_File {
    *
    * If |insertion_point| is present, |name| must also be present.
    */
-  insertionPoint?:
+  insertion_point?:
     | string
     | undefined;
   /** The file contents. */
@@ -218,7 +218,7 @@ export interface CodeGeneratorResponse_File {
    * point is used, this information will be appropriately offset and inserted
    * into the code generation metadata for the generated files.
    */
-  generatedCodeInfo?: GeneratedCodeInfo | undefined;
+  generated_code_info?: GeneratedCodeInfo | undefined;
 }
 
 function createBaseVersion(): Version {
@@ -330,25 +330,31 @@ export const Version: MessageFns<Version> = {
 };
 
 function createBaseCodeGeneratorRequest(): CodeGeneratorRequest {
-  return { fileToGenerate: [], parameter: "", protoFile: [], sourceFileDescriptors: [], compilerVersion: undefined };
+  return {
+    file_to_generate: [],
+    parameter: "",
+    proto_file: [],
+    source_file_descriptors: [],
+    compiler_version: undefined,
+  };
 }
 
 export const CodeGeneratorRequest: MessageFns<CodeGeneratorRequest> = {
   encode(message: CodeGeneratorRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.fileToGenerate) {
+    for (const v of message.file_to_generate) {
       writer.uint32(10).string(v!);
     }
     if (message.parameter !== undefined && message.parameter !== "") {
       writer.uint32(18).string(message.parameter);
     }
-    for (const v of message.protoFile) {
+    for (const v of message.proto_file) {
       FileDescriptorProto.encode(v!, writer.uint32(122).fork()).join();
     }
-    for (const v of message.sourceFileDescriptors) {
+    for (const v of message.source_file_descriptors) {
       FileDescriptorProto.encode(v!, writer.uint32(138).fork()).join();
     }
-    if (message.compilerVersion !== undefined) {
-      Version.encode(message.compilerVersion, writer.uint32(26).fork()).join();
+    if (message.compiler_version !== undefined) {
+      Version.encode(message.compiler_version, writer.uint32(26).fork()).join();
     }
     return writer;
   },
@@ -365,7 +371,7 @@ export const CodeGeneratorRequest: MessageFns<CodeGeneratorRequest> = {
             break;
           }
 
-          message.fileToGenerate.push(reader.string());
+          message.file_to_generate.push(reader.string());
           continue;
         }
         case 2: {
@@ -381,7 +387,7 @@ export const CodeGeneratorRequest: MessageFns<CodeGeneratorRequest> = {
             break;
           }
 
-          message.protoFile.push(FileDescriptorProto.decode(reader, reader.uint32()));
+          message.proto_file.push(FileDescriptorProto.decode(reader, reader.uint32()));
           continue;
         }
         case 17: {
@@ -389,7 +395,7 @@ export const CodeGeneratorRequest: MessageFns<CodeGeneratorRequest> = {
             break;
           }
 
-          message.sourceFileDescriptors.push(FileDescriptorProto.decode(reader, reader.uint32()));
+          message.source_file_descriptors.push(FileDescriptorProto.decode(reader, reader.uint32()));
           continue;
         }
         case 3: {
@@ -397,7 +403,7 @@ export const CodeGeneratorRequest: MessageFns<CodeGeneratorRequest> = {
             break;
           }
 
-          message.compilerVersion = Version.decode(reader, reader.uint32());
+          message.compiler_version = Version.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -411,36 +417,36 @@ export const CodeGeneratorRequest: MessageFns<CodeGeneratorRequest> = {
 
   fromJSON(object: any): CodeGeneratorRequest {
     return {
-      fileToGenerate: globalThis.Array.isArray(object?.fileToGenerate)
-        ? object.fileToGenerate.map((e: any) => globalThis.String(e))
+      file_to_generate: globalThis.Array.isArray(object?.file_to_generate)
+        ? object.file_to_generate.map((e: any) => globalThis.String(e))
         : [],
       parameter: isSet(object.parameter) ? globalThis.String(object.parameter) : "",
-      protoFile: globalThis.Array.isArray(object?.protoFile)
-        ? object.protoFile.map((e: any) => FileDescriptorProto.fromJSON(e))
+      proto_file: globalThis.Array.isArray(object?.proto_file)
+        ? object.proto_file.map((e: any) => FileDescriptorProto.fromJSON(e))
         : [],
-      sourceFileDescriptors: globalThis.Array.isArray(object?.sourceFileDescriptors)
-        ? object.sourceFileDescriptors.map((e: any) => FileDescriptorProto.fromJSON(e))
+      source_file_descriptors: globalThis.Array.isArray(object?.source_file_descriptors)
+        ? object.source_file_descriptors.map((e: any) => FileDescriptorProto.fromJSON(e))
         : [],
-      compilerVersion: isSet(object.compilerVersion) ? Version.fromJSON(object.compilerVersion) : undefined,
+      compiler_version: isSet(object.compiler_version) ? Version.fromJSON(object.compiler_version) : undefined,
     };
   },
 
   toJSON(message: CodeGeneratorRequest): unknown {
     const obj: any = {};
-    if (message.fileToGenerate?.length) {
-      obj.fileToGenerate = message.fileToGenerate;
+    if (message.file_to_generate?.length) {
+      obj.file_to_generate = message.file_to_generate;
     }
     if (message.parameter !== undefined && message.parameter !== "") {
       obj.parameter = message.parameter;
     }
-    if (message.protoFile?.length) {
-      obj.protoFile = message.protoFile.map((e) => FileDescriptorProto.toJSON(e));
+    if (message.proto_file?.length) {
+      obj.proto_file = message.proto_file.map((e) => FileDescriptorProto.toJSON(e));
     }
-    if (message.sourceFileDescriptors?.length) {
-      obj.sourceFileDescriptors = message.sourceFileDescriptors.map((e) => FileDescriptorProto.toJSON(e));
+    if (message.source_file_descriptors?.length) {
+      obj.source_file_descriptors = message.source_file_descriptors.map((e) => FileDescriptorProto.toJSON(e));
     }
-    if (message.compilerVersion !== undefined) {
-      obj.compilerVersion = Version.toJSON(message.compilerVersion);
+    if (message.compiler_version !== undefined) {
+      obj.compiler_version = Version.toJSON(message.compiler_version);
     }
     return obj;
   },
@@ -450,19 +456,20 @@ export const CodeGeneratorRequest: MessageFns<CodeGeneratorRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<CodeGeneratorRequest>, I>>(object: I): CodeGeneratorRequest {
     const message = createBaseCodeGeneratorRequest();
-    message.fileToGenerate = object.fileToGenerate?.map((e) => e) || [];
+    message.file_to_generate = object.file_to_generate?.map((e) => e) || [];
     message.parameter = object.parameter ?? "";
-    message.protoFile = object.protoFile?.map((e) => FileDescriptorProto.fromPartial(e)) || [];
-    message.sourceFileDescriptors = object.sourceFileDescriptors?.map((e) => FileDescriptorProto.fromPartial(e)) || [];
-    message.compilerVersion = (object.compilerVersion !== undefined && object.compilerVersion !== null)
-      ? Version.fromPartial(object.compilerVersion)
+    message.proto_file = object.proto_file?.map((e) => FileDescriptorProto.fromPartial(e)) || [];
+    message.source_file_descriptors = object.source_file_descriptors?.map((e) => FileDescriptorProto.fromPartial(e)) ||
+      [];
+    message.compiler_version = (object.compiler_version !== undefined && object.compiler_version !== null)
+      ? Version.fromPartial(object.compiler_version)
       : undefined;
     return message;
   },
 };
 
 function createBaseCodeGeneratorResponse(): CodeGeneratorResponse {
-  return { error: "", supportedFeatures: 0, minimumEdition: 0, maximumEdition: 0, file: [] };
+  return { error: "", supported_features: 0, minimum_edition: 0, maximum_edition: 0, file: [] };
 }
 
 export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
@@ -470,14 +477,14 @@ export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
     if (message.error !== undefined && message.error !== "") {
       writer.uint32(10).string(message.error);
     }
-    if (message.supportedFeatures !== undefined && message.supportedFeatures !== 0) {
-      writer.uint32(16).uint64(message.supportedFeatures);
+    if (message.supported_features !== undefined && message.supported_features !== 0) {
+      writer.uint32(16).uint64(message.supported_features);
     }
-    if (message.minimumEdition !== undefined && message.minimumEdition !== 0) {
-      writer.uint32(24).int32(message.minimumEdition);
+    if (message.minimum_edition !== undefined && message.minimum_edition !== 0) {
+      writer.uint32(24).int32(message.minimum_edition);
     }
-    if (message.maximumEdition !== undefined && message.maximumEdition !== 0) {
-      writer.uint32(32).int32(message.maximumEdition);
+    if (message.maximum_edition !== undefined && message.maximum_edition !== 0) {
+      writer.uint32(32).int32(message.maximum_edition);
     }
     for (const v of message.file) {
       CodeGeneratorResponse_File.encode(v!, writer.uint32(122).fork()).join();
@@ -505,7 +512,7 @@ export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
             break;
           }
 
-          message.supportedFeatures = longToNumber(reader.uint64());
+          message.supported_features = longToNumber(reader.uint64());
           continue;
         }
         case 3: {
@@ -513,7 +520,7 @@ export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
             break;
           }
 
-          message.minimumEdition = reader.int32();
+          message.minimum_edition = reader.int32();
           continue;
         }
         case 4: {
@@ -521,7 +528,7 @@ export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
             break;
           }
 
-          message.maximumEdition = reader.int32();
+          message.maximum_edition = reader.int32();
           continue;
         }
         case 15: {
@@ -544,9 +551,9 @@ export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
   fromJSON(object: any): CodeGeneratorResponse {
     return {
       error: isSet(object.error) ? globalThis.String(object.error) : "",
-      supportedFeatures: isSet(object.supportedFeatures) ? globalThis.Number(object.supportedFeatures) : 0,
-      minimumEdition: isSet(object.minimumEdition) ? globalThis.Number(object.minimumEdition) : 0,
-      maximumEdition: isSet(object.maximumEdition) ? globalThis.Number(object.maximumEdition) : 0,
+      supported_features: isSet(object.supported_features) ? globalThis.Number(object.supported_features) : 0,
+      minimum_edition: isSet(object.minimum_edition) ? globalThis.Number(object.minimum_edition) : 0,
+      maximum_edition: isSet(object.maximum_edition) ? globalThis.Number(object.maximum_edition) : 0,
       file: globalThis.Array.isArray(object?.file)
         ? object.file.map((e: any) => CodeGeneratorResponse_File.fromJSON(e))
         : [],
@@ -558,14 +565,14 @@ export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
     if (message.error !== undefined && message.error !== "") {
       obj.error = message.error;
     }
-    if (message.supportedFeatures !== undefined && message.supportedFeatures !== 0) {
-      obj.supportedFeatures = Math.round(message.supportedFeatures);
+    if (message.supported_features !== undefined && message.supported_features !== 0) {
+      obj.supported_features = Math.round(message.supported_features);
     }
-    if (message.minimumEdition !== undefined && message.minimumEdition !== 0) {
-      obj.minimumEdition = Math.round(message.minimumEdition);
+    if (message.minimum_edition !== undefined && message.minimum_edition !== 0) {
+      obj.minimum_edition = Math.round(message.minimum_edition);
     }
-    if (message.maximumEdition !== undefined && message.maximumEdition !== 0) {
-      obj.maximumEdition = Math.round(message.maximumEdition);
+    if (message.maximum_edition !== undefined && message.maximum_edition !== 0) {
+      obj.maximum_edition = Math.round(message.maximum_edition);
     }
     if (message.file?.length) {
       obj.file = message.file.map((e) => CodeGeneratorResponse_File.toJSON(e));
@@ -579,16 +586,16 @@ export const CodeGeneratorResponse: MessageFns<CodeGeneratorResponse> = {
   fromPartial<I extends Exact<DeepPartial<CodeGeneratorResponse>, I>>(object: I): CodeGeneratorResponse {
     const message = createBaseCodeGeneratorResponse();
     message.error = object.error ?? "";
-    message.supportedFeatures = object.supportedFeatures ?? 0;
-    message.minimumEdition = object.minimumEdition ?? 0;
-    message.maximumEdition = object.maximumEdition ?? 0;
+    message.supported_features = object.supported_features ?? 0;
+    message.minimum_edition = object.minimum_edition ?? 0;
+    message.maximum_edition = object.maximum_edition ?? 0;
     message.file = object.file?.map((e) => CodeGeneratorResponse_File.fromPartial(e)) || [];
     return message;
   },
 };
 
 function createBaseCodeGeneratorResponse_File(): CodeGeneratorResponse_File {
-  return { name: "", insertionPoint: "", content: "", generatedCodeInfo: undefined };
+  return { name: "", insertion_point: "", content: "", generated_code_info: undefined };
 }
 
 export const CodeGeneratorResponse_File: MessageFns<CodeGeneratorResponse_File> = {
@@ -596,14 +603,14 @@ export const CodeGeneratorResponse_File: MessageFns<CodeGeneratorResponse_File> 
     if (message.name !== undefined && message.name !== "") {
       writer.uint32(10).string(message.name);
     }
-    if (message.insertionPoint !== undefined && message.insertionPoint !== "") {
-      writer.uint32(18).string(message.insertionPoint);
+    if (message.insertion_point !== undefined && message.insertion_point !== "") {
+      writer.uint32(18).string(message.insertion_point);
     }
     if (message.content !== undefined && message.content !== "") {
       writer.uint32(122).string(message.content);
     }
-    if (message.generatedCodeInfo !== undefined) {
-      GeneratedCodeInfo.encode(message.generatedCodeInfo, writer.uint32(130).fork()).join();
+    if (message.generated_code_info !== undefined) {
+      GeneratedCodeInfo.encode(message.generated_code_info, writer.uint32(130).fork()).join();
     }
     return writer;
   },
@@ -628,7 +635,7 @@ export const CodeGeneratorResponse_File: MessageFns<CodeGeneratorResponse_File> 
             break;
           }
 
-          message.insertionPoint = reader.string();
+          message.insertion_point = reader.string();
           continue;
         }
         case 15: {
@@ -644,7 +651,7 @@ export const CodeGeneratorResponse_File: MessageFns<CodeGeneratorResponse_File> 
             break;
           }
 
-          message.generatedCodeInfo = GeneratedCodeInfo.decode(reader, reader.uint32());
+          message.generated_code_info = GeneratedCodeInfo.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -659,10 +666,10 @@ export const CodeGeneratorResponse_File: MessageFns<CodeGeneratorResponse_File> 
   fromJSON(object: any): CodeGeneratorResponse_File {
     return {
       name: isSet(object.name) ? globalThis.String(object.name) : "",
-      insertionPoint: isSet(object.insertionPoint) ? globalThis.String(object.insertionPoint) : "",
+      insertion_point: isSet(object.insertion_point) ? globalThis.String(object.insertion_point) : "",
       content: isSet(object.content) ? globalThis.String(object.content) : "",
-      generatedCodeInfo: isSet(object.generatedCodeInfo)
-        ? GeneratedCodeInfo.fromJSON(object.generatedCodeInfo)
+      generated_code_info: isSet(object.generated_code_info)
+        ? GeneratedCodeInfo.fromJSON(object.generated_code_info)
         : undefined,
     };
   },
@@ -672,14 +679,14 @@ export const CodeGeneratorResponse_File: MessageFns<CodeGeneratorResponse_File> 
     if (message.name !== undefined && message.name !== "") {
       obj.name = message.name;
     }
-    if (message.insertionPoint !== undefined && message.insertionPoint !== "") {
-      obj.insertionPoint = message.insertionPoint;
+    if (message.insertion_point !== undefined && message.insertion_point !== "") {
+      obj.insertion_point = message.insertion_point;
     }
     if (message.content !== undefined && message.content !== "") {
       obj.content = message.content;
     }
-    if (message.generatedCodeInfo !== undefined) {
-      obj.generatedCodeInfo = GeneratedCodeInfo.toJSON(message.generatedCodeInfo);
+    if (message.generated_code_info !== undefined) {
+      obj.generated_code_info = GeneratedCodeInfo.toJSON(message.generated_code_info);
     }
     return obj;
   },
@@ -690,10 +697,10 @@ export const CodeGeneratorResponse_File: MessageFns<CodeGeneratorResponse_File> 
   fromPartial<I extends Exact<DeepPartial<CodeGeneratorResponse_File>, I>>(object: I): CodeGeneratorResponse_File {
     const message = createBaseCodeGeneratorResponse_File();
     message.name = object.name ?? "";
-    message.insertionPoint = object.insertionPoint ?? "";
+    message.insertion_point = object.insertion_point ?? "";
     message.content = object.content ?? "";
-    message.generatedCodeInfo = (object.generatedCodeInfo !== undefined && object.generatedCodeInfo !== null)
-      ? GeneratedCodeInfo.fromPartial(object.generatedCodeInfo)
+    message.generated_code_info = (object.generated_code_info !== undefined && object.generated_code_info !== null)
+      ? GeneratedCodeInfo.fromPartial(object.generated_code_info)
       : undefined;
     return message;
   },

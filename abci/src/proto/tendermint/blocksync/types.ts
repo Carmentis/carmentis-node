@@ -24,7 +24,7 @@ export interface NoBlockResponse {
 /** BlockResponse returns block to the requested */
 export interface BlockResponse {
   block: Block | undefined;
-  extCommit: ExtendedCommit | undefined;
+  ext_commit: ExtendedCommit | undefined;
 }
 
 /** StatusRequest requests the status of a peer. */
@@ -38,11 +38,11 @@ export interface StatusResponse {
 }
 
 export interface Message {
-  blockRequest?: BlockRequest | undefined;
-  noBlockResponse?: NoBlockResponse | undefined;
-  blockResponse?: BlockResponse | undefined;
-  statusRequest?: StatusRequest | undefined;
-  statusResponse?: StatusResponse | undefined;
+  block_request?: BlockRequest | undefined;
+  no_block_response?: NoBlockResponse | undefined;
+  block_response?: BlockResponse | undefined;
+  status_request?: StatusRequest | undefined;
+  status_response?: StatusResponse | undefined;
 }
 
 function createBaseBlockRequest(): BlockRequest {
@@ -162,7 +162,7 @@ export const NoBlockResponse: MessageFns<NoBlockResponse> = {
 };
 
 function createBaseBlockResponse(): BlockResponse {
-  return { block: undefined, extCommit: undefined };
+  return { block: undefined, ext_commit: undefined };
 }
 
 export const BlockResponse: MessageFns<BlockResponse> = {
@@ -170,8 +170,8 @@ export const BlockResponse: MessageFns<BlockResponse> = {
     if (message.block !== undefined) {
       Block.encode(message.block, writer.uint32(10).fork()).join();
     }
-    if (message.extCommit !== undefined) {
-      ExtendedCommit.encode(message.extCommit, writer.uint32(18).fork()).join();
+    if (message.ext_commit !== undefined) {
+      ExtendedCommit.encode(message.ext_commit, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -196,7 +196,7 @@ export const BlockResponse: MessageFns<BlockResponse> = {
             break;
           }
 
-          message.extCommit = ExtendedCommit.decode(reader, reader.uint32());
+          message.ext_commit = ExtendedCommit.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -211,7 +211,7 @@ export const BlockResponse: MessageFns<BlockResponse> = {
   fromJSON(object: any): BlockResponse {
     return {
       block: isSet(object.block) ? Block.fromJSON(object.block) : undefined,
-      extCommit: isSet(object.extCommit) ? ExtendedCommit.fromJSON(object.extCommit) : undefined,
+      ext_commit: isSet(object.ext_commit) ? ExtendedCommit.fromJSON(object.ext_commit) : undefined,
     };
   },
 
@@ -220,8 +220,8 @@ export const BlockResponse: MessageFns<BlockResponse> = {
     if (message.block !== undefined) {
       obj.block = Block.toJSON(message.block);
     }
-    if (message.extCommit !== undefined) {
-      obj.extCommit = ExtendedCommit.toJSON(message.extCommit);
+    if (message.ext_commit !== undefined) {
+      obj.ext_commit = ExtendedCommit.toJSON(message.ext_commit);
     }
     return obj;
   },
@@ -232,8 +232,8 @@ export const BlockResponse: MessageFns<BlockResponse> = {
   fromPartial<I extends Exact<DeepPartial<BlockResponse>, I>>(object: I): BlockResponse {
     const message = createBaseBlockResponse();
     message.block = (object.block !== undefined && object.block !== null) ? Block.fromPartial(object.block) : undefined;
-    message.extCommit = (object.extCommit !== undefined && object.extCommit !== null)
-      ? ExtendedCommit.fromPartial(object.extCommit)
+    message.ext_commit = (object.ext_commit !== undefined && object.ext_commit !== null)
+      ? ExtendedCommit.fromPartial(object.ext_commit)
       : undefined;
     return message;
   },
@@ -360,30 +360,30 @@ export const StatusResponse: MessageFns<StatusResponse> = {
 
 function createBaseMessage(): Message {
   return {
-    blockRequest: undefined,
-    noBlockResponse: undefined,
-    blockResponse: undefined,
-    statusRequest: undefined,
-    statusResponse: undefined,
+    block_request: undefined,
+    no_block_response: undefined,
+    block_response: undefined,
+    status_request: undefined,
+    status_response: undefined,
   };
 }
 
 export const Message: MessageFns<Message> = {
   encode(message: Message, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.blockRequest !== undefined) {
-      BlockRequest.encode(message.blockRequest, writer.uint32(10).fork()).join();
+    if (message.block_request !== undefined) {
+      BlockRequest.encode(message.block_request, writer.uint32(10).fork()).join();
     }
-    if (message.noBlockResponse !== undefined) {
-      NoBlockResponse.encode(message.noBlockResponse, writer.uint32(18).fork()).join();
+    if (message.no_block_response !== undefined) {
+      NoBlockResponse.encode(message.no_block_response, writer.uint32(18).fork()).join();
     }
-    if (message.blockResponse !== undefined) {
-      BlockResponse.encode(message.blockResponse, writer.uint32(26).fork()).join();
+    if (message.block_response !== undefined) {
+      BlockResponse.encode(message.block_response, writer.uint32(26).fork()).join();
     }
-    if (message.statusRequest !== undefined) {
-      StatusRequest.encode(message.statusRequest, writer.uint32(34).fork()).join();
+    if (message.status_request !== undefined) {
+      StatusRequest.encode(message.status_request, writer.uint32(34).fork()).join();
     }
-    if (message.statusResponse !== undefined) {
-      StatusResponse.encode(message.statusResponse, writer.uint32(42).fork()).join();
+    if (message.status_response !== undefined) {
+      StatusResponse.encode(message.status_response, writer.uint32(42).fork()).join();
     }
     return writer;
   },
@@ -400,7 +400,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.blockRequest = BlockRequest.decode(reader, reader.uint32());
+          message.block_request = BlockRequest.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -408,7 +408,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.noBlockResponse = NoBlockResponse.decode(reader, reader.uint32());
+          message.no_block_response = NoBlockResponse.decode(reader, reader.uint32());
           continue;
         }
         case 3: {
@@ -416,7 +416,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.blockResponse = BlockResponse.decode(reader, reader.uint32());
+          message.block_response = BlockResponse.decode(reader, reader.uint32());
           continue;
         }
         case 4: {
@@ -424,7 +424,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.statusRequest = StatusRequest.decode(reader, reader.uint32());
+          message.status_request = StatusRequest.decode(reader, reader.uint32());
           continue;
         }
         case 5: {
@@ -432,7 +432,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.statusResponse = StatusResponse.decode(reader, reader.uint32());
+          message.status_response = StatusResponse.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -446,30 +446,32 @@ export const Message: MessageFns<Message> = {
 
   fromJSON(object: any): Message {
     return {
-      blockRequest: isSet(object.blockRequest) ? BlockRequest.fromJSON(object.blockRequest) : undefined,
-      noBlockResponse: isSet(object.noBlockResponse) ? NoBlockResponse.fromJSON(object.noBlockResponse) : undefined,
-      blockResponse: isSet(object.blockResponse) ? BlockResponse.fromJSON(object.blockResponse) : undefined,
-      statusRequest: isSet(object.statusRequest) ? StatusRequest.fromJSON(object.statusRequest) : undefined,
-      statusResponse: isSet(object.statusResponse) ? StatusResponse.fromJSON(object.statusResponse) : undefined,
+      block_request: isSet(object.block_request) ? BlockRequest.fromJSON(object.block_request) : undefined,
+      no_block_response: isSet(object.no_block_response)
+        ? NoBlockResponse.fromJSON(object.no_block_response)
+        : undefined,
+      block_response: isSet(object.block_response) ? BlockResponse.fromJSON(object.block_response) : undefined,
+      status_request: isSet(object.status_request) ? StatusRequest.fromJSON(object.status_request) : undefined,
+      status_response: isSet(object.status_response) ? StatusResponse.fromJSON(object.status_response) : undefined,
     };
   },
 
   toJSON(message: Message): unknown {
     const obj: any = {};
-    if (message.blockRequest !== undefined) {
-      obj.blockRequest = BlockRequest.toJSON(message.blockRequest);
+    if (message.block_request !== undefined) {
+      obj.block_request = BlockRequest.toJSON(message.block_request);
     }
-    if (message.noBlockResponse !== undefined) {
-      obj.noBlockResponse = NoBlockResponse.toJSON(message.noBlockResponse);
+    if (message.no_block_response !== undefined) {
+      obj.no_block_response = NoBlockResponse.toJSON(message.no_block_response);
     }
-    if (message.blockResponse !== undefined) {
-      obj.blockResponse = BlockResponse.toJSON(message.blockResponse);
+    if (message.block_response !== undefined) {
+      obj.block_response = BlockResponse.toJSON(message.block_response);
     }
-    if (message.statusRequest !== undefined) {
-      obj.statusRequest = StatusRequest.toJSON(message.statusRequest);
+    if (message.status_request !== undefined) {
+      obj.status_request = StatusRequest.toJSON(message.status_request);
     }
-    if (message.statusResponse !== undefined) {
-      obj.statusResponse = StatusResponse.toJSON(message.statusResponse);
+    if (message.status_response !== undefined) {
+      obj.status_response = StatusResponse.toJSON(message.status_response);
     }
     return obj;
   },
@@ -479,20 +481,20 @@ export const Message: MessageFns<Message> = {
   },
   fromPartial<I extends Exact<DeepPartial<Message>, I>>(object: I): Message {
     const message = createBaseMessage();
-    message.blockRequest = (object.blockRequest !== undefined && object.blockRequest !== null)
-      ? BlockRequest.fromPartial(object.blockRequest)
+    message.block_request = (object.block_request !== undefined && object.block_request !== null)
+      ? BlockRequest.fromPartial(object.block_request)
       : undefined;
-    message.noBlockResponse = (object.noBlockResponse !== undefined && object.noBlockResponse !== null)
-      ? NoBlockResponse.fromPartial(object.noBlockResponse)
+    message.no_block_response = (object.no_block_response !== undefined && object.no_block_response !== null)
+      ? NoBlockResponse.fromPartial(object.no_block_response)
       : undefined;
-    message.blockResponse = (object.blockResponse !== undefined && object.blockResponse !== null)
-      ? BlockResponse.fromPartial(object.blockResponse)
+    message.block_response = (object.block_response !== undefined && object.block_response !== null)
+      ? BlockResponse.fromPartial(object.block_response)
       : undefined;
-    message.statusRequest = (object.statusRequest !== undefined && object.statusRequest !== null)
-      ? StatusRequest.fromPartial(object.statusRequest)
+    message.status_request = (object.status_request !== undefined && object.status_request !== null)
+      ? StatusRequest.fromPartial(object.status_request)
       : undefined;
-    message.statusResponse = (object.statusResponse !== undefined && object.statusResponse !== null)
-      ? StatusResponse.fromPartial(object.statusResponse)
+    message.status_response = (object.status_response !== undefined && object.status_response !== null)
+      ? StatusResponse.fromPartial(object.status_response)
       : undefined;
     return message;
   },

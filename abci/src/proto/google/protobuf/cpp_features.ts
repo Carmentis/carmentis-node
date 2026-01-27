@@ -16,9 +16,9 @@ export interface CppFeatures {
    * consistent with the legacy behavior of using proto3 enum types for proto2
    * fields.
    */
-  legacyClosedEnum?: boolean | undefined;
-  stringType?: CppFeatures_StringType | undefined;
-  enumNameUsesStringView?: boolean | undefined;
+  legacy_closed_enum?: boolean | undefined;
+  string_type?: CppFeatures_StringType | undefined;
+  enum_name_uses_string_view?: boolean | undefined;
 }
 
 export enum CppFeatures_StringType {
@@ -67,19 +67,19 @@ export function cppFeatures_StringTypeToJSON(object: CppFeatures_StringType): st
 }
 
 function createBaseCppFeatures(): CppFeatures {
-  return { legacyClosedEnum: false, stringType: 0, enumNameUsesStringView: false };
+  return { legacy_closed_enum: false, string_type: 0, enum_name_uses_string_view: false };
 }
 
 export const CppFeatures: MessageFns<CppFeatures> = {
   encode(message: CppFeatures, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.legacyClosedEnum !== undefined && message.legacyClosedEnum !== false) {
-      writer.uint32(8).bool(message.legacyClosedEnum);
+    if (message.legacy_closed_enum !== undefined && message.legacy_closed_enum !== false) {
+      writer.uint32(8).bool(message.legacy_closed_enum);
     }
-    if (message.stringType !== undefined && message.stringType !== 0) {
-      writer.uint32(16).int32(message.stringType);
+    if (message.string_type !== undefined && message.string_type !== 0) {
+      writer.uint32(16).int32(message.string_type);
     }
-    if (message.enumNameUsesStringView !== undefined && message.enumNameUsesStringView !== false) {
-      writer.uint32(24).bool(message.enumNameUsesStringView);
+    if (message.enum_name_uses_string_view !== undefined && message.enum_name_uses_string_view !== false) {
+      writer.uint32(24).bool(message.enum_name_uses_string_view);
     }
     return writer;
   },
@@ -96,7 +96,7 @@ export const CppFeatures: MessageFns<CppFeatures> = {
             break;
           }
 
-          message.legacyClosedEnum = reader.bool();
+          message.legacy_closed_enum = reader.bool();
           continue;
         }
         case 2: {
@@ -104,7 +104,7 @@ export const CppFeatures: MessageFns<CppFeatures> = {
             break;
           }
 
-          message.stringType = reader.int32() as any;
+          message.string_type = reader.int32() as any;
           continue;
         }
         case 3: {
@@ -112,7 +112,7 @@ export const CppFeatures: MessageFns<CppFeatures> = {
             break;
           }
 
-          message.enumNameUsesStringView = reader.bool();
+          message.enum_name_uses_string_view = reader.bool();
           continue;
         }
       }
@@ -126,24 +126,24 @@ export const CppFeatures: MessageFns<CppFeatures> = {
 
   fromJSON(object: any): CppFeatures {
     return {
-      legacyClosedEnum: isSet(object.legacyClosedEnum) ? globalThis.Boolean(object.legacyClosedEnum) : false,
-      stringType: isSet(object.stringType) ? cppFeatures_StringTypeFromJSON(object.stringType) : 0,
-      enumNameUsesStringView: isSet(object.enumNameUsesStringView)
-        ? globalThis.Boolean(object.enumNameUsesStringView)
+      legacy_closed_enum: isSet(object.legacy_closed_enum) ? globalThis.Boolean(object.legacy_closed_enum) : false,
+      string_type: isSet(object.string_type) ? cppFeatures_StringTypeFromJSON(object.string_type) : 0,
+      enum_name_uses_string_view: isSet(object.enum_name_uses_string_view)
+        ? globalThis.Boolean(object.enum_name_uses_string_view)
         : false,
     };
   },
 
   toJSON(message: CppFeatures): unknown {
     const obj: any = {};
-    if (message.legacyClosedEnum !== undefined && message.legacyClosedEnum !== false) {
-      obj.legacyClosedEnum = message.legacyClosedEnum;
+    if (message.legacy_closed_enum !== undefined && message.legacy_closed_enum !== false) {
+      obj.legacy_closed_enum = message.legacy_closed_enum;
     }
-    if (message.stringType !== undefined && message.stringType !== 0) {
-      obj.stringType = cppFeatures_StringTypeToJSON(message.stringType);
+    if (message.string_type !== undefined && message.string_type !== 0) {
+      obj.string_type = cppFeatures_StringTypeToJSON(message.string_type);
     }
-    if (message.enumNameUsesStringView !== undefined && message.enumNameUsesStringView !== false) {
-      obj.enumNameUsesStringView = message.enumNameUsesStringView;
+    if (message.enum_name_uses_string_view !== undefined && message.enum_name_uses_string_view !== false) {
+      obj.enum_name_uses_string_view = message.enum_name_uses_string_view;
     }
     return obj;
   },
@@ -153,9 +153,9 @@ export const CppFeatures: MessageFns<CppFeatures> = {
   },
   fromPartial<I extends Exact<DeepPartial<CppFeatures>, I>>(object: I): CppFeatures {
     const message = createBaseCppFeatures();
-    message.legacyClosedEnum = object.legacyClosedEnum ?? false;
-    message.stringType = object.stringType ?? 0;
-    message.enumNameUsesStringView = object.enumNameUsesStringView ?? false;
+    message.legacy_closed_enum = object.legacy_closed_enum ?? false;
+    message.string_type = object.string_type ?? 0;
+    message.enum_name_uses_string_view = object.enum_name_uses_string_view ?? false;
     return message;
   },
 };

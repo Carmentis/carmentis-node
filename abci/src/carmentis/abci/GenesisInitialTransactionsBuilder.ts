@@ -39,7 +39,7 @@ export class GenesisInitialTransactionsBuilder {
     ) {
         const issuerPublicKey = await issuerPrivateKey.getPublicKey();
         const genesisValidator = request.validators[0];
-        const { pubKey: genesisNodePubKey } =
+        const { pub_key: genesisNodePubKey } =
             CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(genesisValidator);
         //const genesisNodePubKey = genesisValidator.pub_key_bytes;
         const genesisNodeRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
@@ -124,8 +124,8 @@ export class GenesisInitialTransactionsBuilder {
             hash: Utils.getNullHash(),
             height: publishedBlockHeight,
             misbehavior: [],
-            nextValidatorsHash: Utils.getNullHash(),
-            proposerAddress: Utils.getNullHash(),
+            next_validators_hash: Utils.getNullHash(),
+            proposer_address: Utils.getNullHash(),
             //syncing_to_height: publishedBlockHeight,
             txs: transactions,
         }));
