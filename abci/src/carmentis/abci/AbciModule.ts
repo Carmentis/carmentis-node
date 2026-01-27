@@ -9,7 +9,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { EarlyMicroblockRejectionService } from './services/EarlyMicroblockRejectionService';
 
 @Module({
-    imports: [NodeConfigModule, ScheduleModule.forRoot()],
+    imports: [NodeConfigModule],
     controllers: [GrpcAbciController],
     providers: [
         GenesisSnapshotStorageService,
