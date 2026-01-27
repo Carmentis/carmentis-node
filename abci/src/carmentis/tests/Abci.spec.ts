@@ -36,7 +36,7 @@ import {
     FeesCalculationFormulaFactory,
     AbciRequest,
 } from '@cmts-dev/carmentis-sdk/server';
-import { CheckTxResponse, CheckTxType, QueryRequest } from '../../proto-ts/cometbft/abci/v1/types';
+//import { CheckTxResponse, CheckTxType, QueryRequest } from '../../proto-ts/cometbft/abci/v1/types';
 import {
     AccountByPublicKeyHashAbciResponseSchema,
     AccountStateAbciResponseSchema,

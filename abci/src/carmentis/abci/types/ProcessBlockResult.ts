@@ -1,4 +1,4 @@
-import { ExecTxResult } from '../../../proto-ts/cometbft/abci/v1/types';
+import { ExecTxResult } from '../../../proto/tendermint/abci/types';
 
 /**
  * Information about a processed microblock.
