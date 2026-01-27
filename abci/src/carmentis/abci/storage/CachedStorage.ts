@@ -229,7 +229,7 @@ export class CachedStorage implements IStorage {
     }
 
     async flush() {
-        this.logger.debug(`flushing data: ${JSON.stringify(this.contentToBeWritten.entries())}`);
+        this.logger.debug(`flushing ${this.contentToBeWritten.size} entries to disk`);
 
         // write transactions
         for (const [fileIdentifier, cacheObject] of this.contentToBeWritten) {

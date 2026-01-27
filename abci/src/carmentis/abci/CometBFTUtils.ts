@@ -6,6 +6,7 @@ import {
 import { CheckTxResponseCode } from './CheckTxResponseCode';
 import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
+import { Timestamp } from '../../proto/google/protobuf/timestamp';
 
 export class CometBFTUtils {
     private static logger = getLogger(["node", "cometbft", "utils"])
@@ -30,13 +31,11 @@ export class CometBFTUtils {
         throw new Error(`Unsupported node public key type`);
     }
 
-    public static convertDateInTimestamp(date: Date | undefined) {
-        this.logger.info(`Converting date to timestamp:`)
-        console.log(date);
+    public static convertDateInTimestamp(date: Timestamp | undefined) {
         if (date === undefined) {
             this.logger.warn("Date is undefined, returning 0")
             return 0;
         }
-        return date.getUTCSeconds()
+        return Number(date.seconds);
     }
 }

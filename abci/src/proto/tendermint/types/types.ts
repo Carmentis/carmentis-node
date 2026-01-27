@@ -86,7 +86,7 @@ export interface Header {
   chainId: string;
   height: number;
   time:
-    | Date
+    | Timestamp
     | undefined;
   /** prev block info */
   lastBlockId:
@@ -132,7 +132,7 @@ export interface Vote {
   round: number;
   /** zero if vote is nil. */
   blockId: BlockID | undefined;
-  timestamp: Date | undefined;
+  timestamp: Timestamp | undefined;
   validatorAddress: Uint8Array;
   validatorIndex: number;
   /**
@@ -165,7 +165,7 @@ export interface Commit {
 export interface CommitSig {
   blockIdFlag: BlockIDFlag;
   validatorAddress: Uint8Array;
-  timestamp: Date | undefined;
+  timestamp: Timestamp | undefined;
   signature: Uint8Array;
 }
 
@@ -184,7 +184,7 @@ export interface ExtendedCommit {
 export interface ExtendedCommitSig {
   blockIdFlag: BlockIDFlag;
   validatorAddress: Uint8Array;
-  timestamp: Date | undefined;
+  timestamp: Timestamp | undefined;
   signature: Uint8Array;
   /** Vote extension data */
   extension: Uint8Array;
@@ -198,7 +198,7 @@ export interface Proposal {
   round: number;
   polRound: number;
   blockId: BlockID | undefined;
-  timestamp: Date | undefined;
+  timestamp: Timestamp | undefined;
   signature: Uint8Array;
 }
 
@@ -503,7 +503,7 @@ export const Header: MessageFns<Header> = {
       writer.uint32(24).int64(message.height);
     }
     if (message.time !== undefined) {
-      Timestamp.encode(toTimestamp(message.time), writer.uint32(34).fork()).join();
+      Timestamp.encode(message.time, writer.uint32(34).fork()).join();
     }
     if (message.lastBlockId !== undefined) {
       BlockID.encode(message.lastBlockId, writer.uint32(42).fork()).join();
@@ -574,7 +574,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.time = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.time = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 5: {
@@ -699,7 +699,7 @@ export const Header: MessageFns<Header> = {
       obj.height = Math.round(message.height);
     }
     if (message.time !== undefined) {
-      obj.time = message.time.toISOString();
+      obj.time = fromTimestamp(message.time).toISOString();
     }
     if (message.lastBlockId !== undefined) {
       obj.lastBlockId = BlockID.toJSON(message.lastBlockId);
@@ -744,7 +744,7 @@ export const Header: MessageFns<Header> = {
       : undefined;
     message.chainId = object.chainId ?? "";
     message.height = object.height ?? 0;
-    message.time = object.time ?? undefined;
+    message.time = (object.time !== undefined && object.time !== null) ? Timestamp.fromPartial(object.time) : undefined;
     message.lastBlockId = (object.lastBlockId !== undefined && object.lastBlockId !== null)
       ? BlockID.fromPartial(object.lastBlockId)
       : undefined;
@@ -849,7 +849,7 @@ export const Vote: MessageFns<Vote> = {
       BlockID.encode(message.blockId, writer.uint32(34).fork()).join();
     }
     if (message.timestamp !== undefined) {
-      Timestamp.encode(toTimestamp(message.timestamp), writer.uint32(42).fork()).join();
+      Timestamp.encode(message.timestamp, writer.uint32(42).fork()).join();
     }
     if (message.validatorAddress.length !== 0) {
       writer.uint32(50).bytes(message.validatorAddress);
@@ -913,7 +913,7 @@ export const Vote: MessageFns<Vote> = {
             break;
           }
 
-          message.timestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.timestamp = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 6: {
@@ -997,7 +997,7 @@ export const Vote: MessageFns<Vote> = {
       obj.blockId = BlockID.toJSON(message.blockId);
     }
     if (message.timestamp !== undefined) {
-      obj.timestamp = message.timestamp.toISOString();
+      obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
     if (message.validatorAddress.length !== 0) {
       obj.validatorAddress = base64FromBytes(message.validatorAddress);
@@ -1028,7 +1028,9 @@ export const Vote: MessageFns<Vote> = {
     message.blockId = (object.blockId !== undefined && object.blockId !== null)
       ? BlockID.fromPartial(object.blockId)
       : undefined;
-    message.timestamp = object.timestamp ?? undefined;
+    message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
+      ? Timestamp.fromPartial(object.timestamp)
+      : undefined;
     message.validatorAddress = object.validatorAddress ?? new Uint8Array(0);
     message.validatorIndex = object.validatorIndex ?? 0;
     message.signature = object.signature ?? new Uint8Array(0);
@@ -1163,7 +1165,7 @@ export const CommitSig: MessageFns<CommitSig> = {
       writer.uint32(18).bytes(message.validatorAddress);
     }
     if (message.timestamp !== undefined) {
-      Timestamp.encode(toTimestamp(message.timestamp), writer.uint32(26).fork()).join();
+      Timestamp.encode(message.timestamp, writer.uint32(26).fork()).join();
     }
     if (message.signature.length !== 0) {
       writer.uint32(34).bytes(message.signature);
@@ -1199,7 +1201,7 @@ export const CommitSig: MessageFns<CommitSig> = {
             break;
           }
 
-          message.timestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.timestamp = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 4: {
@@ -1237,7 +1239,7 @@ export const CommitSig: MessageFns<CommitSig> = {
       obj.validatorAddress = base64FromBytes(message.validatorAddress);
     }
     if (message.timestamp !== undefined) {
-      obj.timestamp = message.timestamp.toISOString();
+      obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
     if (message.signature.length !== 0) {
       obj.signature = base64FromBytes(message.signature);
@@ -1252,7 +1254,9 @@ export const CommitSig: MessageFns<CommitSig> = {
     const message = createBaseCommitSig();
     message.blockIdFlag = object.blockIdFlag ?? 0;
     message.validatorAddress = object.validatorAddress ?? new Uint8Array(0);
-    message.timestamp = object.timestamp ?? undefined;
+    message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
+      ? Timestamp.fromPartial(object.timestamp)
+      : undefined;
     message.signature = object.signature ?? new Uint8Array(0);
     return message;
   },
@@ -1390,7 +1394,7 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
       writer.uint32(18).bytes(message.validatorAddress);
     }
     if (message.timestamp !== undefined) {
-      Timestamp.encode(toTimestamp(message.timestamp), writer.uint32(26).fork()).join();
+      Timestamp.encode(message.timestamp, writer.uint32(26).fork()).join();
     }
     if (message.signature.length !== 0) {
       writer.uint32(34).bytes(message.signature);
@@ -1432,7 +1436,7 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
             break;
           }
 
-          message.timestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.timestamp = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 4: {
@@ -1490,7 +1494,7 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
       obj.validatorAddress = base64FromBytes(message.validatorAddress);
     }
     if (message.timestamp !== undefined) {
-      obj.timestamp = message.timestamp.toISOString();
+      obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
     if (message.signature.length !== 0) {
       obj.signature = base64FromBytes(message.signature);
@@ -1511,7 +1515,9 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
     const message = createBaseExtendedCommitSig();
     message.blockIdFlag = object.blockIdFlag ?? 0;
     message.validatorAddress = object.validatorAddress ?? new Uint8Array(0);
-    message.timestamp = object.timestamp ?? undefined;
+    message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
+      ? Timestamp.fromPartial(object.timestamp)
+      : undefined;
     message.signature = object.signature ?? new Uint8Array(0);
     message.extension = object.extension ?? new Uint8Array(0);
     message.extensionSignature = object.extensionSignature ?? new Uint8Array(0);
@@ -1549,7 +1555,7 @@ export const Proposal: MessageFns<Proposal> = {
       BlockID.encode(message.blockId, writer.uint32(42).fork()).join();
     }
     if (message.timestamp !== undefined) {
-      Timestamp.encode(toTimestamp(message.timestamp), writer.uint32(50).fork()).join();
+      Timestamp.encode(message.timestamp, writer.uint32(50).fork()).join();
     }
     if (message.signature.length !== 0) {
       writer.uint32(58).bytes(message.signature);
@@ -1609,7 +1615,7 @@ export const Proposal: MessageFns<Proposal> = {
             break;
           }
 
-          message.timestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.timestamp = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 7: {
@@ -1659,7 +1665,7 @@ export const Proposal: MessageFns<Proposal> = {
       obj.blockId = BlockID.toJSON(message.blockId);
     }
     if (message.timestamp !== undefined) {
-      obj.timestamp = message.timestamp.toISOString();
+      obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
     if (message.signature.length !== 0) {
       obj.signature = base64FromBytes(message.signature);
@@ -1679,7 +1685,9 @@ export const Proposal: MessageFns<Proposal> = {
     message.blockId = (object.blockId !== undefined && object.blockId !== null)
       ? BlockID.fromPartial(object.blockId)
       : undefined;
-    message.timestamp = object.timestamp ?? undefined;
+    message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
+      ? Timestamp.fromPartial(object.timestamp)
+      : undefined;
     message.signature = object.signature ?? new Uint8Array(0);
     return message;
   },
@@ -2098,13 +2106,13 @@ function fromTimestamp(t: Timestamp): Date {
   return new globalThis.Date(millis);
 }
 
-function fromJsonTimestamp(o: any): Date {
+function fromJsonTimestamp(o: any): Timestamp {
   if (o instanceof globalThis.Date) {
-    return o;
+    return toTimestamp(o);
   } else if (typeof o === "string") {
-    return new globalThis.Date(o);
+    return toTimestamp(new globalThis.Date(o));
   } else {
-    return fromTimestamp(Timestamp.fromJSON(o));
+    return Timestamp.fromJSON(o);
   }
 }
 

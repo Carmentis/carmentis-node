@@ -24,6 +24,18 @@ px protoc \
   proto/**/*.proto
 ```
 
+Better?
+
+```shell
+npx protoc \
+--proto_path=proto \
+--ts_proto_opt=esModuleInterop=true \
+--ts_proto_opt=useDate=false \
+--plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto \
+--ts_proto_out=src/proto \
+proto/**/*.proto
+```
+
 - **To install the CometBFT binary:**
 ```shell
 go install github.com/cometbft/cometbft/cmd/cometbft@latest

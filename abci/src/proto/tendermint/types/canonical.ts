@@ -30,7 +30,7 @@ export interface CanonicalProposal {
   round: number;
   polRound: number;
   blockId: CanonicalBlockID | undefined;
-  timestamp: Date | undefined;
+  timestamp: Timestamp | undefined;
   chainId: string;
 }
 
@@ -42,7 +42,7 @@ export interface CanonicalVote {
   /** canonicalization requires fixed size encoding here */
   round: number;
   blockId: CanonicalBlockID | undefined;
-  timestamp: Date | undefined;
+  timestamp: Timestamp | undefined;
   chainId: string;
 }
 
@@ -233,7 +233,7 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
       CanonicalBlockID.encode(message.blockId, writer.uint32(42).fork()).join();
     }
     if (message.timestamp !== undefined) {
-      Timestamp.encode(toTimestamp(message.timestamp), writer.uint32(50).fork()).join();
+      Timestamp.encode(message.timestamp, writer.uint32(50).fork()).join();
     }
     if (message.chainId !== "") {
       writer.uint32(58).string(message.chainId);
@@ -293,7 +293,7 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
             break;
           }
 
-          message.timestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.timestamp = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 7: {
@@ -343,7 +343,7 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
       obj.blockId = CanonicalBlockID.toJSON(message.blockId);
     }
     if (message.timestamp !== undefined) {
-      obj.timestamp = message.timestamp.toISOString();
+      obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
     if (message.chainId !== "") {
       obj.chainId = message.chainId;
@@ -363,7 +363,9 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
     message.blockId = (object.blockId !== undefined && object.blockId !== null)
       ? CanonicalBlockID.fromPartial(object.blockId)
       : undefined;
-    message.timestamp = object.timestamp ?? undefined;
+    message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
+      ? Timestamp.fromPartial(object.timestamp)
+      : undefined;
     message.chainId = object.chainId ?? "";
     return message;
   },
@@ -388,7 +390,7 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
       CanonicalBlockID.encode(message.blockId, writer.uint32(34).fork()).join();
     }
     if (message.timestamp !== undefined) {
-      Timestamp.encode(toTimestamp(message.timestamp), writer.uint32(42).fork()).join();
+      Timestamp.encode(message.timestamp, writer.uint32(42).fork()).join();
     }
     if (message.chainId !== "") {
       writer.uint32(50).string(message.chainId);
@@ -440,7 +442,7 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
             break;
           }
 
-          message.timestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          message.timestamp = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 6: {
@@ -486,7 +488,7 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
       obj.blockId = CanonicalBlockID.toJSON(message.blockId);
     }
     if (message.timestamp !== undefined) {
-      obj.timestamp = message.timestamp.toISOString();
+      obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
     if (message.chainId !== "") {
       obj.chainId = message.chainId;
@@ -505,7 +507,9 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
     message.blockId = (object.blockId !== undefined && object.blockId !== null)
       ? CanonicalBlockID.fromPartial(object.blockId)
       : undefined;
-    message.timestamp = object.timestamp ?? undefined;
+    message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
+      ? Timestamp.fromPartial(object.timestamp)
+      : undefined;
     message.chainId = object.chainId ?? "";
     return message;
   },
@@ -668,13 +672,13 @@ function fromTimestamp(t: Timestamp): Date {
   return new globalThis.Date(millis);
 }
 
-function fromJsonTimestamp(o: any): Date {
+function fromJsonTimestamp(o: any): Timestamp {
   if (o instanceof globalThis.Date) {
-    return o;
+    return toTimestamp(o);
   } else if (typeof o === "string") {
-    return new globalThis.Date(o);
+    return toTimestamp(new globalThis.Date(o));
   } else {
-    return fromTimestamp(Timestamp.fromJSON(o));
+    return Timestamp.fromJSON(o);
   }
 }
 
