@@ -15,11 +15,11 @@ export interface Block {
   header: Header | undefined;
   data: Data | undefined;
   evidence: EvidenceList | undefined;
-  lastCommit: Commit | undefined;
+  last_commit: Commit | undefined;
 }
 
 function createBaseBlock(): Block {
-  return { header: undefined, data: undefined, evidence: undefined, lastCommit: undefined };
+  return { header: undefined, data: undefined, evidence: undefined, last_commit: undefined };
 }
 
 export const Block: MessageFns<Block> = {
@@ -33,8 +33,8 @@ export const Block: MessageFns<Block> = {
     if (message.evidence !== undefined) {
       EvidenceList.encode(message.evidence, writer.uint32(26).fork()).join();
     }
-    if (message.lastCommit !== undefined) {
-      Commit.encode(message.lastCommit, writer.uint32(34).fork()).join();
+    if (message.last_commit !== undefined) {
+      Commit.encode(message.last_commit, writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -75,7 +75,7 @@ export const Block: MessageFns<Block> = {
             break;
           }
 
-          message.lastCommit = Commit.decode(reader, reader.uint32());
+          message.last_commit = Commit.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -92,7 +92,7 @@ export const Block: MessageFns<Block> = {
       header: isSet(object.header) ? Header.fromJSON(object.header) : undefined,
       data: isSet(object.data) ? Data.fromJSON(object.data) : undefined,
       evidence: isSet(object.evidence) ? EvidenceList.fromJSON(object.evidence) : undefined,
-      lastCommit: isSet(object.lastCommit) ? Commit.fromJSON(object.lastCommit) : undefined,
+      last_commit: isSet(object.last_commit) ? Commit.fromJSON(object.last_commit) : undefined,
     };
   },
 
@@ -107,8 +107,8 @@ export const Block: MessageFns<Block> = {
     if (message.evidence !== undefined) {
       obj.evidence = EvidenceList.toJSON(message.evidence);
     }
-    if (message.lastCommit !== undefined) {
-      obj.lastCommit = Commit.toJSON(message.lastCommit);
+    if (message.last_commit !== undefined) {
+      obj.last_commit = Commit.toJSON(message.last_commit);
     }
     return obj;
   },
@@ -125,8 +125,8 @@ export const Block: MessageFns<Block> = {
     message.evidence = (object.evidence !== undefined && object.evidence !== null)
       ? EvidenceList.fromPartial(object.evidence)
       : undefined;
-    message.lastCommit = (object.lastCommit !== undefined && object.lastCommit !== null)
-      ? Commit.fromPartial(object.lastCommit)
+    message.last_commit = (object.last_commit !== undefined && object.last_commit !== null)
+      ? Commit.fromPartial(object.last_commit)
       : undefined;
     return message;
   },

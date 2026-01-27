@@ -22,9 +22,9 @@ export const protobufPackage = "tendermint.state";
  * Kept for backwards compatibility for versions prior to v0.38
  */
 export interface LegacyABCIResponses {
-  deliverTxs: ExecTxResult[];
-  endBlock: ResponseEndBlock | undefined;
-  beginBlock: ResponseBeginBlock | undefined;
+  deliver_txs: ExecTxResult[];
+  end_block: ResponseEndBlock | undefined;
+  begin_block: ResponseBeginBlock | undefined;
 }
 
 /** ResponseBeginBlock is kept for backwards compatibility for versions prior to v0.38 */
@@ -34,27 +34,27 @@ export interface ResponseBeginBlock {
 
 /** ResponseEndBlock is kept for backwards compatibility for versions prior to v0.38 */
 export interface ResponseEndBlock {
-  validatorUpdates: ValidatorUpdate[];
-  consensusParamUpdates: ConsensusParams | undefined;
+  validator_updates: ValidatorUpdate[];
+  consensus_param_updates: ConsensusParams | undefined;
   events: Event[];
 }
 
 /** ValidatorsInfo represents the latest validator set, or the last height it changed */
 export interface ValidatorsInfo {
-  validatorSet: ValidatorSet | undefined;
-  lastHeightChanged: number;
+  validator_set: ValidatorSet | undefined;
+  last_height_changed: number;
 }
 
 /** ConsensusParamsInfo represents the latest consensus params, or the last height it changed */
 export interface ConsensusParamsInfo {
-  consensusParams: ConsensusParams | undefined;
-  lastHeightChanged: number;
+  consensus_params: ConsensusParams | undefined;
+  last_height_changed: number;
 }
 
 export interface ABCIResponsesInfo {
-  legacyAbciResponses: LegacyABCIResponses | undefined;
+  legacy_abci_responses: LegacyABCIResponses | undefined;
   height: number;
-  responseFinalizeBlock: ResponseFinalizeBlock | undefined;
+  response_finalize_block: ResponseFinalizeBlock | undefined;
 }
 
 export interface Version {
@@ -67,12 +67,12 @@ export interface State {
     | Version
     | undefined;
   /** immutable */
-  chainId: string;
-  initialHeight: number;
+  chain_id: string;
+  initial_height: number;
   /** LastBlockHeight=0 at genesis (ie. block(H=0) does not exist) */
-  lastBlockHeight: number;
-  lastBlockId: BlockID | undefined;
-  lastBlockTime:
+  last_block_height: number;
+  last_block_id: BlockID | undefined;
+  last_block_time:
     | Timestamp
     | undefined;
   /**
@@ -83,36 +83,36 @@ export interface State {
    * we set s.LastHeightValidatorsChanged = s.LastBlockHeight + 1 + 1
    * Extra +1 due to nextValSet delay.
    */
-  nextValidators: ValidatorSet | undefined;
+  next_validators: ValidatorSet | undefined;
   validators: ValidatorSet | undefined;
-  lastValidators: ValidatorSet | undefined;
-  lastHeightValidatorsChanged: number;
+  last_validators: ValidatorSet | undefined;
+  last_height_validators_changed: number;
   /**
    * Consensus parameters used for validating blocks.
    * Changes returned by EndBlock and updated after Commit.
    */
-  consensusParams: ConsensusParams | undefined;
-  lastHeightConsensusParamsChanged: number;
+  consensus_params: ConsensusParams | undefined;
+  last_height_consensus_params_changed: number;
   /** Merkle root of the results from executing prev block */
-  lastResultsHash: Uint8Array;
+  last_results_hash: Uint8Array;
   /** the latest AppHash we've received from calling abci.Commit() */
-  appHash: Uint8Array;
+  app_hash: Uint8Array;
 }
 
 function createBaseLegacyABCIResponses(): LegacyABCIResponses {
-  return { deliverTxs: [], endBlock: undefined, beginBlock: undefined };
+  return { deliver_txs: [], end_block: undefined, begin_block: undefined };
 }
 
 export const LegacyABCIResponses: MessageFns<LegacyABCIResponses> = {
   encode(message: LegacyABCIResponses, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.deliverTxs) {
+    for (const v of message.deliver_txs) {
       ExecTxResult.encode(v!, writer.uint32(10).fork()).join();
     }
-    if (message.endBlock !== undefined) {
-      ResponseEndBlock.encode(message.endBlock, writer.uint32(18).fork()).join();
+    if (message.end_block !== undefined) {
+      ResponseEndBlock.encode(message.end_block, writer.uint32(18).fork()).join();
     }
-    if (message.beginBlock !== undefined) {
-      ResponseBeginBlock.encode(message.beginBlock, writer.uint32(26).fork()).join();
+    if (message.begin_block !== undefined) {
+      ResponseBeginBlock.encode(message.begin_block, writer.uint32(26).fork()).join();
     }
     return writer;
   },
@@ -129,7 +129,7 @@ export const LegacyABCIResponses: MessageFns<LegacyABCIResponses> = {
             break;
           }
 
-          message.deliverTxs.push(ExecTxResult.decode(reader, reader.uint32()));
+          message.deliver_txs.push(ExecTxResult.decode(reader, reader.uint32()));
           continue;
         }
         case 2: {
@@ -137,7 +137,7 @@ export const LegacyABCIResponses: MessageFns<LegacyABCIResponses> = {
             break;
           }
 
-          message.endBlock = ResponseEndBlock.decode(reader, reader.uint32());
+          message.end_block = ResponseEndBlock.decode(reader, reader.uint32());
           continue;
         }
         case 3: {
@@ -145,7 +145,7 @@ export const LegacyABCIResponses: MessageFns<LegacyABCIResponses> = {
             break;
           }
 
-          message.beginBlock = ResponseBeginBlock.decode(reader, reader.uint32());
+          message.begin_block = ResponseBeginBlock.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -159,24 +159,24 @@ export const LegacyABCIResponses: MessageFns<LegacyABCIResponses> = {
 
   fromJSON(object: any): LegacyABCIResponses {
     return {
-      deliverTxs: globalThis.Array.isArray(object?.deliverTxs)
-        ? object.deliverTxs.map((e: any) => ExecTxResult.fromJSON(e))
+      deliver_txs: globalThis.Array.isArray(object?.deliver_txs)
+        ? object.deliver_txs.map((e: any) => ExecTxResult.fromJSON(e))
         : [],
-      endBlock: isSet(object.endBlock) ? ResponseEndBlock.fromJSON(object.endBlock) : undefined,
-      beginBlock: isSet(object.beginBlock) ? ResponseBeginBlock.fromJSON(object.beginBlock) : undefined,
+      end_block: isSet(object.end_block) ? ResponseEndBlock.fromJSON(object.end_block) : undefined,
+      begin_block: isSet(object.begin_block) ? ResponseBeginBlock.fromJSON(object.begin_block) : undefined,
     };
   },
 
   toJSON(message: LegacyABCIResponses): unknown {
     const obj: any = {};
-    if (message.deliverTxs?.length) {
-      obj.deliverTxs = message.deliverTxs.map((e) => ExecTxResult.toJSON(e));
+    if (message.deliver_txs?.length) {
+      obj.deliver_txs = message.deliver_txs.map((e) => ExecTxResult.toJSON(e));
     }
-    if (message.endBlock !== undefined) {
-      obj.endBlock = ResponseEndBlock.toJSON(message.endBlock);
+    if (message.end_block !== undefined) {
+      obj.end_block = ResponseEndBlock.toJSON(message.end_block);
     }
-    if (message.beginBlock !== undefined) {
-      obj.beginBlock = ResponseBeginBlock.toJSON(message.beginBlock);
+    if (message.begin_block !== undefined) {
+      obj.begin_block = ResponseBeginBlock.toJSON(message.begin_block);
     }
     return obj;
   },
@@ -186,12 +186,12 @@ export const LegacyABCIResponses: MessageFns<LegacyABCIResponses> = {
   },
   fromPartial<I extends Exact<DeepPartial<LegacyABCIResponses>, I>>(object: I): LegacyABCIResponses {
     const message = createBaseLegacyABCIResponses();
-    message.deliverTxs = object.deliverTxs?.map((e) => ExecTxResult.fromPartial(e)) || [];
-    message.endBlock = (object.endBlock !== undefined && object.endBlock !== null)
-      ? ResponseEndBlock.fromPartial(object.endBlock)
+    message.deliver_txs = object.deliver_txs?.map((e) => ExecTxResult.fromPartial(e)) || [];
+    message.end_block = (object.end_block !== undefined && object.end_block !== null)
+      ? ResponseEndBlock.fromPartial(object.end_block)
       : undefined;
-    message.beginBlock = (object.beginBlock !== undefined && object.beginBlock !== null)
-      ? ResponseBeginBlock.fromPartial(object.beginBlock)
+    message.begin_block = (object.begin_block !== undefined && object.begin_block !== null)
+      ? ResponseBeginBlock.fromPartial(object.begin_block)
       : undefined;
     return message;
   },
@@ -256,16 +256,16 @@ export const ResponseBeginBlock: MessageFns<ResponseBeginBlock> = {
 };
 
 function createBaseResponseEndBlock(): ResponseEndBlock {
-  return { validatorUpdates: [], consensusParamUpdates: undefined, events: [] };
+  return { validator_updates: [], consensus_param_updates: undefined, events: [] };
 }
 
 export const ResponseEndBlock: MessageFns<ResponseEndBlock> = {
   encode(message: ResponseEndBlock, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.validatorUpdates) {
+    for (const v of message.validator_updates) {
       ValidatorUpdate.encode(v!, writer.uint32(10).fork()).join();
     }
-    if (message.consensusParamUpdates !== undefined) {
-      ConsensusParams.encode(message.consensusParamUpdates, writer.uint32(18).fork()).join();
+    if (message.consensus_param_updates !== undefined) {
+      ConsensusParams.encode(message.consensus_param_updates, writer.uint32(18).fork()).join();
     }
     for (const v of message.events) {
       Event.encode(v!, writer.uint32(26).fork()).join();
@@ -285,7 +285,7 @@ export const ResponseEndBlock: MessageFns<ResponseEndBlock> = {
             break;
           }
 
-          message.validatorUpdates.push(ValidatorUpdate.decode(reader, reader.uint32()));
+          message.validator_updates.push(ValidatorUpdate.decode(reader, reader.uint32()));
           continue;
         }
         case 2: {
@@ -293,7 +293,7 @@ export const ResponseEndBlock: MessageFns<ResponseEndBlock> = {
             break;
           }
 
-          message.consensusParamUpdates = ConsensusParams.decode(reader, reader.uint32());
+          message.consensus_param_updates = ConsensusParams.decode(reader, reader.uint32());
           continue;
         }
         case 3: {
@@ -315,11 +315,11 @@ export const ResponseEndBlock: MessageFns<ResponseEndBlock> = {
 
   fromJSON(object: any): ResponseEndBlock {
     return {
-      validatorUpdates: globalThis.Array.isArray(object?.validatorUpdates)
-        ? object.validatorUpdates.map((e: any) => ValidatorUpdate.fromJSON(e))
+      validator_updates: globalThis.Array.isArray(object?.validator_updates)
+        ? object.validator_updates.map((e: any) => ValidatorUpdate.fromJSON(e))
         : [],
-      consensusParamUpdates: isSet(object.consensusParamUpdates)
-        ? ConsensusParams.fromJSON(object.consensusParamUpdates)
+      consensus_param_updates: isSet(object.consensus_param_updates)
+        ? ConsensusParams.fromJSON(object.consensus_param_updates)
         : undefined,
       events: globalThis.Array.isArray(object?.events) ? object.events.map((e: any) => Event.fromJSON(e)) : [],
     };
@@ -327,11 +327,11 @@ export const ResponseEndBlock: MessageFns<ResponseEndBlock> = {
 
   toJSON(message: ResponseEndBlock): unknown {
     const obj: any = {};
-    if (message.validatorUpdates?.length) {
-      obj.validatorUpdates = message.validatorUpdates.map((e) => ValidatorUpdate.toJSON(e));
+    if (message.validator_updates?.length) {
+      obj.validator_updates = message.validator_updates.map((e) => ValidatorUpdate.toJSON(e));
     }
-    if (message.consensusParamUpdates !== undefined) {
-      obj.consensusParamUpdates = ConsensusParams.toJSON(message.consensusParamUpdates);
+    if (message.consensus_param_updates !== undefined) {
+      obj.consensus_param_updates = ConsensusParams.toJSON(message.consensus_param_updates);
     }
     if (message.events?.length) {
       obj.events = message.events.map((e) => Event.toJSON(e));
@@ -344,10 +344,10 @@ export const ResponseEndBlock: MessageFns<ResponseEndBlock> = {
   },
   fromPartial<I extends Exact<DeepPartial<ResponseEndBlock>, I>>(object: I): ResponseEndBlock {
     const message = createBaseResponseEndBlock();
-    message.validatorUpdates = object.validatorUpdates?.map((e) => ValidatorUpdate.fromPartial(e)) || [];
-    message.consensusParamUpdates =
-      (object.consensusParamUpdates !== undefined && object.consensusParamUpdates !== null)
-        ? ConsensusParams.fromPartial(object.consensusParamUpdates)
+    message.validator_updates = object.validator_updates?.map((e) => ValidatorUpdate.fromPartial(e)) || [];
+    message.consensus_param_updates =
+      (object.consensus_param_updates !== undefined && object.consensus_param_updates !== null)
+        ? ConsensusParams.fromPartial(object.consensus_param_updates)
         : undefined;
     message.events = object.events?.map((e) => Event.fromPartial(e)) || [];
     return message;
@@ -355,16 +355,16 @@ export const ResponseEndBlock: MessageFns<ResponseEndBlock> = {
 };
 
 function createBaseValidatorsInfo(): ValidatorsInfo {
-  return { validatorSet: undefined, lastHeightChanged: 0 };
+  return { validator_set: undefined, last_height_changed: 0 };
 }
 
 export const ValidatorsInfo: MessageFns<ValidatorsInfo> = {
   encode(message: ValidatorsInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.validatorSet !== undefined) {
-      ValidatorSet.encode(message.validatorSet, writer.uint32(10).fork()).join();
+    if (message.validator_set !== undefined) {
+      ValidatorSet.encode(message.validator_set, writer.uint32(10).fork()).join();
     }
-    if (message.lastHeightChanged !== 0) {
-      writer.uint32(16).int64(message.lastHeightChanged);
+    if (message.last_height_changed !== 0) {
+      writer.uint32(16).int64(message.last_height_changed);
     }
     return writer;
   },
@@ -381,7 +381,7 @@ export const ValidatorsInfo: MessageFns<ValidatorsInfo> = {
             break;
           }
 
-          message.validatorSet = ValidatorSet.decode(reader, reader.uint32());
+          message.validator_set = ValidatorSet.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -389,7 +389,7 @@ export const ValidatorsInfo: MessageFns<ValidatorsInfo> = {
             break;
           }
 
-          message.lastHeightChanged = longToNumber(reader.int64());
+          message.last_height_changed = longToNumber(reader.int64());
           continue;
         }
       }
@@ -403,18 +403,18 @@ export const ValidatorsInfo: MessageFns<ValidatorsInfo> = {
 
   fromJSON(object: any): ValidatorsInfo {
     return {
-      validatorSet: isSet(object.validatorSet) ? ValidatorSet.fromJSON(object.validatorSet) : undefined,
-      lastHeightChanged: isSet(object.lastHeightChanged) ? globalThis.Number(object.lastHeightChanged) : 0,
+      validator_set: isSet(object.validator_set) ? ValidatorSet.fromJSON(object.validator_set) : undefined,
+      last_height_changed: isSet(object.last_height_changed) ? globalThis.Number(object.last_height_changed) : 0,
     };
   },
 
   toJSON(message: ValidatorsInfo): unknown {
     const obj: any = {};
-    if (message.validatorSet !== undefined) {
-      obj.validatorSet = ValidatorSet.toJSON(message.validatorSet);
+    if (message.validator_set !== undefined) {
+      obj.validator_set = ValidatorSet.toJSON(message.validator_set);
     }
-    if (message.lastHeightChanged !== 0) {
-      obj.lastHeightChanged = Math.round(message.lastHeightChanged);
+    if (message.last_height_changed !== 0) {
+      obj.last_height_changed = Math.round(message.last_height_changed);
     }
     return obj;
   },
@@ -424,25 +424,25 @@ export const ValidatorsInfo: MessageFns<ValidatorsInfo> = {
   },
   fromPartial<I extends Exact<DeepPartial<ValidatorsInfo>, I>>(object: I): ValidatorsInfo {
     const message = createBaseValidatorsInfo();
-    message.validatorSet = (object.validatorSet !== undefined && object.validatorSet !== null)
-      ? ValidatorSet.fromPartial(object.validatorSet)
+    message.validator_set = (object.validator_set !== undefined && object.validator_set !== null)
+      ? ValidatorSet.fromPartial(object.validator_set)
       : undefined;
-    message.lastHeightChanged = object.lastHeightChanged ?? 0;
+    message.last_height_changed = object.last_height_changed ?? 0;
     return message;
   },
 };
 
 function createBaseConsensusParamsInfo(): ConsensusParamsInfo {
-  return { consensusParams: undefined, lastHeightChanged: 0 };
+  return { consensus_params: undefined, last_height_changed: 0 };
 }
 
 export const ConsensusParamsInfo: MessageFns<ConsensusParamsInfo> = {
   encode(message: ConsensusParamsInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.consensusParams !== undefined) {
-      ConsensusParams.encode(message.consensusParams, writer.uint32(10).fork()).join();
+    if (message.consensus_params !== undefined) {
+      ConsensusParams.encode(message.consensus_params, writer.uint32(10).fork()).join();
     }
-    if (message.lastHeightChanged !== 0) {
-      writer.uint32(16).int64(message.lastHeightChanged);
+    if (message.last_height_changed !== 0) {
+      writer.uint32(16).int64(message.last_height_changed);
     }
     return writer;
   },
@@ -459,7 +459,7 @@ export const ConsensusParamsInfo: MessageFns<ConsensusParamsInfo> = {
             break;
           }
 
-          message.consensusParams = ConsensusParams.decode(reader, reader.uint32());
+          message.consensus_params = ConsensusParams.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -467,7 +467,7 @@ export const ConsensusParamsInfo: MessageFns<ConsensusParamsInfo> = {
             break;
           }
 
-          message.lastHeightChanged = longToNumber(reader.int64());
+          message.last_height_changed = longToNumber(reader.int64());
           continue;
         }
       }
@@ -481,18 +481,18 @@ export const ConsensusParamsInfo: MessageFns<ConsensusParamsInfo> = {
 
   fromJSON(object: any): ConsensusParamsInfo {
     return {
-      consensusParams: isSet(object.consensusParams) ? ConsensusParams.fromJSON(object.consensusParams) : undefined,
-      lastHeightChanged: isSet(object.lastHeightChanged) ? globalThis.Number(object.lastHeightChanged) : 0,
+      consensus_params: isSet(object.consensus_params) ? ConsensusParams.fromJSON(object.consensus_params) : undefined,
+      last_height_changed: isSet(object.last_height_changed) ? globalThis.Number(object.last_height_changed) : 0,
     };
   },
 
   toJSON(message: ConsensusParamsInfo): unknown {
     const obj: any = {};
-    if (message.consensusParams !== undefined) {
-      obj.consensusParams = ConsensusParams.toJSON(message.consensusParams);
+    if (message.consensus_params !== undefined) {
+      obj.consensus_params = ConsensusParams.toJSON(message.consensus_params);
     }
-    if (message.lastHeightChanged !== 0) {
-      obj.lastHeightChanged = Math.round(message.lastHeightChanged);
+    if (message.last_height_changed !== 0) {
+      obj.last_height_changed = Math.round(message.last_height_changed);
     }
     return obj;
   },
@@ -502,28 +502,28 @@ export const ConsensusParamsInfo: MessageFns<ConsensusParamsInfo> = {
   },
   fromPartial<I extends Exact<DeepPartial<ConsensusParamsInfo>, I>>(object: I): ConsensusParamsInfo {
     const message = createBaseConsensusParamsInfo();
-    message.consensusParams = (object.consensusParams !== undefined && object.consensusParams !== null)
-      ? ConsensusParams.fromPartial(object.consensusParams)
+    message.consensus_params = (object.consensus_params !== undefined && object.consensus_params !== null)
+      ? ConsensusParams.fromPartial(object.consensus_params)
       : undefined;
-    message.lastHeightChanged = object.lastHeightChanged ?? 0;
+    message.last_height_changed = object.last_height_changed ?? 0;
     return message;
   },
 };
 
 function createBaseABCIResponsesInfo(): ABCIResponsesInfo {
-  return { legacyAbciResponses: undefined, height: 0, responseFinalizeBlock: undefined };
+  return { legacy_abci_responses: undefined, height: 0, response_finalize_block: undefined };
 }
 
 export const ABCIResponsesInfo: MessageFns<ABCIResponsesInfo> = {
   encode(message: ABCIResponsesInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.legacyAbciResponses !== undefined) {
-      LegacyABCIResponses.encode(message.legacyAbciResponses, writer.uint32(10).fork()).join();
+    if (message.legacy_abci_responses !== undefined) {
+      LegacyABCIResponses.encode(message.legacy_abci_responses, writer.uint32(10).fork()).join();
     }
     if (message.height !== 0) {
       writer.uint32(16).int64(message.height);
     }
-    if (message.responseFinalizeBlock !== undefined) {
-      ResponseFinalizeBlock.encode(message.responseFinalizeBlock, writer.uint32(26).fork()).join();
+    if (message.response_finalize_block !== undefined) {
+      ResponseFinalizeBlock.encode(message.response_finalize_block, writer.uint32(26).fork()).join();
     }
     return writer;
   },
@@ -540,7 +540,7 @@ export const ABCIResponsesInfo: MessageFns<ABCIResponsesInfo> = {
             break;
           }
 
-          message.legacyAbciResponses = LegacyABCIResponses.decode(reader, reader.uint32());
+          message.legacy_abci_responses = LegacyABCIResponses.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -556,7 +556,7 @@ export const ABCIResponsesInfo: MessageFns<ABCIResponsesInfo> = {
             break;
           }
 
-          message.responseFinalizeBlock = ResponseFinalizeBlock.decode(reader, reader.uint32());
+          message.response_finalize_block = ResponseFinalizeBlock.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -570,26 +570,26 @@ export const ABCIResponsesInfo: MessageFns<ABCIResponsesInfo> = {
 
   fromJSON(object: any): ABCIResponsesInfo {
     return {
-      legacyAbciResponses: isSet(object.legacyAbciResponses)
-        ? LegacyABCIResponses.fromJSON(object.legacyAbciResponses)
+      legacy_abci_responses: isSet(object.legacy_abci_responses)
+        ? LegacyABCIResponses.fromJSON(object.legacy_abci_responses)
         : undefined,
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
-      responseFinalizeBlock: isSet(object.responseFinalizeBlock)
-        ? ResponseFinalizeBlock.fromJSON(object.responseFinalizeBlock)
+      response_finalize_block: isSet(object.response_finalize_block)
+        ? ResponseFinalizeBlock.fromJSON(object.response_finalize_block)
         : undefined,
     };
   },
 
   toJSON(message: ABCIResponsesInfo): unknown {
     const obj: any = {};
-    if (message.legacyAbciResponses !== undefined) {
-      obj.legacyAbciResponses = LegacyABCIResponses.toJSON(message.legacyAbciResponses);
+    if (message.legacy_abci_responses !== undefined) {
+      obj.legacy_abci_responses = LegacyABCIResponses.toJSON(message.legacy_abci_responses);
     }
     if (message.height !== 0) {
       obj.height = Math.round(message.height);
     }
-    if (message.responseFinalizeBlock !== undefined) {
-      obj.responseFinalizeBlock = ResponseFinalizeBlock.toJSON(message.responseFinalizeBlock);
+    if (message.response_finalize_block !== undefined) {
+      obj.response_finalize_block = ResponseFinalizeBlock.toJSON(message.response_finalize_block);
     }
     return obj;
   },
@@ -599,13 +599,14 @@ export const ABCIResponsesInfo: MessageFns<ABCIResponsesInfo> = {
   },
   fromPartial<I extends Exact<DeepPartial<ABCIResponsesInfo>, I>>(object: I): ABCIResponsesInfo {
     const message = createBaseABCIResponsesInfo();
-    message.legacyAbciResponses = (object.legacyAbciResponses !== undefined && object.legacyAbciResponses !== null)
-      ? LegacyABCIResponses.fromPartial(object.legacyAbciResponses)
-      : undefined;
+    message.legacy_abci_responses =
+      (object.legacy_abci_responses !== undefined && object.legacy_abci_responses !== null)
+        ? LegacyABCIResponses.fromPartial(object.legacy_abci_responses)
+        : undefined;
     message.height = object.height ?? 0;
-    message.responseFinalizeBlock =
-      (object.responseFinalizeBlock !== undefined && object.responseFinalizeBlock !== null)
-        ? ResponseFinalizeBlock.fromPartial(object.responseFinalizeBlock)
+    message.response_finalize_block =
+      (object.response_finalize_block !== undefined && object.response_finalize_block !== null)
+        ? ResponseFinalizeBlock.fromPartial(object.response_finalize_block)
         : undefined;
     return message;
   },
@@ -692,19 +693,19 @@ export const Version: MessageFns<Version> = {
 function createBaseState(): State {
   return {
     version: undefined,
-    chainId: "",
-    initialHeight: 0,
-    lastBlockHeight: 0,
-    lastBlockId: undefined,
-    lastBlockTime: undefined,
-    nextValidators: undefined,
+    chain_id: "",
+    initial_height: 0,
+    last_block_height: 0,
+    last_block_id: undefined,
+    last_block_time: undefined,
+    next_validators: undefined,
     validators: undefined,
-    lastValidators: undefined,
-    lastHeightValidatorsChanged: 0,
-    consensusParams: undefined,
-    lastHeightConsensusParamsChanged: 0,
-    lastResultsHash: new Uint8Array(0),
-    appHash: new Uint8Array(0),
+    last_validators: undefined,
+    last_height_validators_changed: 0,
+    consensus_params: undefined,
+    last_height_consensus_params_changed: 0,
+    last_results_hash: new Uint8Array(0),
+    app_hash: new Uint8Array(0),
   };
 }
 
@@ -713,44 +714,44 @@ export const State: MessageFns<State> = {
     if (message.version !== undefined) {
       Version.encode(message.version, writer.uint32(10).fork()).join();
     }
-    if (message.chainId !== "") {
-      writer.uint32(18).string(message.chainId);
+    if (message.chain_id !== "") {
+      writer.uint32(18).string(message.chain_id);
     }
-    if (message.initialHeight !== 0) {
-      writer.uint32(112).int64(message.initialHeight);
+    if (message.initial_height !== 0) {
+      writer.uint32(112).int64(message.initial_height);
     }
-    if (message.lastBlockHeight !== 0) {
-      writer.uint32(24).int64(message.lastBlockHeight);
+    if (message.last_block_height !== 0) {
+      writer.uint32(24).int64(message.last_block_height);
     }
-    if (message.lastBlockId !== undefined) {
-      BlockID.encode(message.lastBlockId, writer.uint32(34).fork()).join();
+    if (message.last_block_id !== undefined) {
+      BlockID.encode(message.last_block_id, writer.uint32(34).fork()).join();
     }
-    if (message.lastBlockTime !== undefined) {
-      Timestamp.encode(message.lastBlockTime, writer.uint32(42).fork()).join();
+    if (message.last_block_time !== undefined) {
+      Timestamp.encode(message.last_block_time, writer.uint32(42).fork()).join();
     }
-    if (message.nextValidators !== undefined) {
-      ValidatorSet.encode(message.nextValidators, writer.uint32(50).fork()).join();
+    if (message.next_validators !== undefined) {
+      ValidatorSet.encode(message.next_validators, writer.uint32(50).fork()).join();
     }
     if (message.validators !== undefined) {
       ValidatorSet.encode(message.validators, writer.uint32(58).fork()).join();
     }
-    if (message.lastValidators !== undefined) {
-      ValidatorSet.encode(message.lastValidators, writer.uint32(66).fork()).join();
+    if (message.last_validators !== undefined) {
+      ValidatorSet.encode(message.last_validators, writer.uint32(66).fork()).join();
     }
-    if (message.lastHeightValidatorsChanged !== 0) {
-      writer.uint32(72).int64(message.lastHeightValidatorsChanged);
+    if (message.last_height_validators_changed !== 0) {
+      writer.uint32(72).int64(message.last_height_validators_changed);
     }
-    if (message.consensusParams !== undefined) {
-      ConsensusParams.encode(message.consensusParams, writer.uint32(82).fork()).join();
+    if (message.consensus_params !== undefined) {
+      ConsensusParams.encode(message.consensus_params, writer.uint32(82).fork()).join();
     }
-    if (message.lastHeightConsensusParamsChanged !== 0) {
-      writer.uint32(88).int64(message.lastHeightConsensusParamsChanged);
+    if (message.last_height_consensus_params_changed !== 0) {
+      writer.uint32(88).int64(message.last_height_consensus_params_changed);
     }
-    if (message.lastResultsHash.length !== 0) {
-      writer.uint32(98).bytes(message.lastResultsHash);
+    if (message.last_results_hash.length !== 0) {
+      writer.uint32(98).bytes(message.last_results_hash);
     }
-    if (message.appHash.length !== 0) {
-      writer.uint32(106).bytes(message.appHash);
+    if (message.app_hash.length !== 0) {
+      writer.uint32(106).bytes(message.app_hash);
     }
     return writer;
   },
@@ -775,7 +776,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.chainId = reader.string();
+          message.chain_id = reader.string();
           continue;
         }
         case 14: {
@@ -783,7 +784,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.initialHeight = longToNumber(reader.int64());
+          message.initial_height = longToNumber(reader.int64());
           continue;
         }
         case 3: {
@@ -791,7 +792,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastBlockHeight = longToNumber(reader.int64());
+          message.last_block_height = longToNumber(reader.int64());
           continue;
         }
         case 4: {
@@ -799,7 +800,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastBlockId = BlockID.decode(reader, reader.uint32());
+          message.last_block_id = BlockID.decode(reader, reader.uint32());
           continue;
         }
         case 5: {
@@ -807,7 +808,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastBlockTime = Timestamp.decode(reader, reader.uint32());
+          message.last_block_time = Timestamp.decode(reader, reader.uint32());
           continue;
         }
         case 6: {
@@ -815,7 +816,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.nextValidators = ValidatorSet.decode(reader, reader.uint32());
+          message.next_validators = ValidatorSet.decode(reader, reader.uint32());
           continue;
         }
         case 7: {
@@ -831,7 +832,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastValidators = ValidatorSet.decode(reader, reader.uint32());
+          message.last_validators = ValidatorSet.decode(reader, reader.uint32());
           continue;
         }
         case 9: {
@@ -839,7 +840,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastHeightValidatorsChanged = longToNumber(reader.int64());
+          message.last_height_validators_changed = longToNumber(reader.int64());
           continue;
         }
         case 10: {
@@ -847,7 +848,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.consensusParams = ConsensusParams.decode(reader, reader.uint32());
+          message.consensus_params = ConsensusParams.decode(reader, reader.uint32());
           continue;
         }
         case 11: {
@@ -855,7 +856,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastHeightConsensusParamsChanged = longToNumber(reader.int64());
+          message.last_height_consensus_params_changed = longToNumber(reader.int64());
           continue;
         }
         case 12: {
@@ -863,7 +864,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.lastResultsHash = reader.bytes();
+          message.last_results_hash = reader.bytes();
           continue;
         }
         case 13: {
@@ -871,7 +872,7 @@ export const State: MessageFns<State> = {
             break;
           }
 
-          message.appHash = reader.bytes();
+          message.app_hash = reader.bytes();
           continue;
         }
       }
@@ -886,23 +887,25 @@ export const State: MessageFns<State> = {
   fromJSON(object: any): State {
     return {
       version: isSet(object.version) ? Version.fromJSON(object.version) : undefined,
-      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
-      initialHeight: isSet(object.initialHeight) ? globalThis.Number(object.initialHeight) : 0,
-      lastBlockHeight: isSet(object.lastBlockHeight) ? globalThis.Number(object.lastBlockHeight) : 0,
-      lastBlockId: isSet(object.lastBlockId) ? BlockID.fromJSON(object.lastBlockId) : undefined,
-      lastBlockTime: isSet(object.lastBlockTime) ? fromJsonTimestamp(object.lastBlockTime) : undefined,
-      nextValidators: isSet(object.nextValidators) ? ValidatorSet.fromJSON(object.nextValidators) : undefined,
+      chain_id: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
+      initial_height: isSet(object.initial_height) ? globalThis.Number(object.initial_height) : 0,
+      last_block_height: isSet(object.last_block_height) ? globalThis.Number(object.last_block_height) : 0,
+      last_block_id: isSet(object.last_block_id) ? BlockID.fromJSON(object.last_block_id) : undefined,
+      last_block_time: isSet(object.last_block_time) ? fromJsonTimestamp(object.last_block_time) : undefined,
+      next_validators: isSet(object.next_validators) ? ValidatorSet.fromJSON(object.next_validators) : undefined,
       validators: isSet(object.validators) ? ValidatorSet.fromJSON(object.validators) : undefined,
-      lastValidators: isSet(object.lastValidators) ? ValidatorSet.fromJSON(object.lastValidators) : undefined,
-      lastHeightValidatorsChanged: isSet(object.lastHeightValidatorsChanged)
-        ? globalThis.Number(object.lastHeightValidatorsChanged)
+      last_validators: isSet(object.last_validators) ? ValidatorSet.fromJSON(object.last_validators) : undefined,
+      last_height_validators_changed: isSet(object.last_height_validators_changed)
+        ? globalThis.Number(object.last_height_validators_changed)
         : 0,
-      consensusParams: isSet(object.consensusParams) ? ConsensusParams.fromJSON(object.consensusParams) : undefined,
-      lastHeightConsensusParamsChanged: isSet(object.lastHeightConsensusParamsChanged)
-        ? globalThis.Number(object.lastHeightConsensusParamsChanged)
+      consensus_params: isSet(object.consensus_params) ? ConsensusParams.fromJSON(object.consensus_params) : undefined,
+      last_height_consensus_params_changed: isSet(object.last_height_consensus_params_changed)
+        ? globalThis.Number(object.last_height_consensus_params_changed)
         : 0,
-      lastResultsHash: isSet(object.lastResultsHash) ? bytesFromBase64(object.lastResultsHash) : new Uint8Array(0),
-      appHash: isSet(object.appHash) ? bytesFromBase64(object.appHash) : new Uint8Array(0),
+      last_results_hash: isSet(object.last_results_hash)
+        ? bytesFromBase64(object.last_results_hash)
+        : new Uint8Array(0),
+      app_hash: isSet(object.app_hash) ? bytesFromBase64(object.app_hash) : new Uint8Array(0),
     };
   },
 
@@ -911,44 +914,44 @@ export const State: MessageFns<State> = {
     if (message.version !== undefined) {
       obj.version = Version.toJSON(message.version);
     }
-    if (message.chainId !== "") {
-      obj.chainId = message.chainId;
+    if (message.chain_id !== "") {
+      obj.chain_id = message.chain_id;
     }
-    if (message.initialHeight !== 0) {
-      obj.initialHeight = Math.round(message.initialHeight);
+    if (message.initial_height !== 0) {
+      obj.initial_height = Math.round(message.initial_height);
     }
-    if (message.lastBlockHeight !== 0) {
-      obj.lastBlockHeight = Math.round(message.lastBlockHeight);
+    if (message.last_block_height !== 0) {
+      obj.last_block_height = Math.round(message.last_block_height);
     }
-    if (message.lastBlockId !== undefined) {
-      obj.lastBlockId = BlockID.toJSON(message.lastBlockId);
+    if (message.last_block_id !== undefined) {
+      obj.last_block_id = BlockID.toJSON(message.last_block_id);
     }
-    if (message.lastBlockTime !== undefined) {
-      obj.lastBlockTime = fromTimestamp(message.lastBlockTime).toISOString();
+    if (message.last_block_time !== undefined) {
+      obj.last_block_time = fromTimestamp(message.last_block_time).toISOString();
     }
-    if (message.nextValidators !== undefined) {
-      obj.nextValidators = ValidatorSet.toJSON(message.nextValidators);
+    if (message.next_validators !== undefined) {
+      obj.next_validators = ValidatorSet.toJSON(message.next_validators);
     }
     if (message.validators !== undefined) {
       obj.validators = ValidatorSet.toJSON(message.validators);
     }
-    if (message.lastValidators !== undefined) {
-      obj.lastValidators = ValidatorSet.toJSON(message.lastValidators);
+    if (message.last_validators !== undefined) {
+      obj.last_validators = ValidatorSet.toJSON(message.last_validators);
     }
-    if (message.lastHeightValidatorsChanged !== 0) {
-      obj.lastHeightValidatorsChanged = Math.round(message.lastHeightValidatorsChanged);
+    if (message.last_height_validators_changed !== 0) {
+      obj.last_height_validators_changed = Math.round(message.last_height_validators_changed);
     }
-    if (message.consensusParams !== undefined) {
-      obj.consensusParams = ConsensusParams.toJSON(message.consensusParams);
+    if (message.consensus_params !== undefined) {
+      obj.consensus_params = ConsensusParams.toJSON(message.consensus_params);
     }
-    if (message.lastHeightConsensusParamsChanged !== 0) {
-      obj.lastHeightConsensusParamsChanged = Math.round(message.lastHeightConsensusParamsChanged);
+    if (message.last_height_consensus_params_changed !== 0) {
+      obj.last_height_consensus_params_changed = Math.round(message.last_height_consensus_params_changed);
     }
-    if (message.lastResultsHash.length !== 0) {
-      obj.lastResultsHash = base64FromBytes(message.lastResultsHash);
+    if (message.last_results_hash.length !== 0) {
+      obj.last_results_hash = base64FromBytes(message.last_results_hash);
     }
-    if (message.appHash.length !== 0) {
-      obj.appHash = base64FromBytes(message.appHash);
+    if (message.app_hash.length !== 0) {
+      obj.app_hash = base64FromBytes(message.app_hash);
     }
     return obj;
   },
@@ -961,31 +964,31 @@ export const State: MessageFns<State> = {
     message.version = (object.version !== undefined && object.version !== null)
       ? Version.fromPartial(object.version)
       : undefined;
-    message.chainId = object.chainId ?? "";
-    message.initialHeight = object.initialHeight ?? 0;
-    message.lastBlockHeight = object.lastBlockHeight ?? 0;
-    message.lastBlockId = (object.lastBlockId !== undefined && object.lastBlockId !== null)
-      ? BlockID.fromPartial(object.lastBlockId)
+    message.chain_id = object.chain_id ?? "";
+    message.initial_height = object.initial_height ?? 0;
+    message.last_block_height = object.last_block_height ?? 0;
+    message.last_block_id = (object.last_block_id !== undefined && object.last_block_id !== null)
+      ? BlockID.fromPartial(object.last_block_id)
       : undefined;
-    message.lastBlockTime = (object.lastBlockTime !== undefined && object.lastBlockTime !== null)
-      ? Timestamp.fromPartial(object.lastBlockTime)
+    message.last_block_time = (object.last_block_time !== undefined && object.last_block_time !== null)
+      ? Timestamp.fromPartial(object.last_block_time)
       : undefined;
-    message.nextValidators = (object.nextValidators !== undefined && object.nextValidators !== null)
-      ? ValidatorSet.fromPartial(object.nextValidators)
+    message.next_validators = (object.next_validators !== undefined && object.next_validators !== null)
+      ? ValidatorSet.fromPartial(object.next_validators)
       : undefined;
     message.validators = (object.validators !== undefined && object.validators !== null)
       ? ValidatorSet.fromPartial(object.validators)
       : undefined;
-    message.lastValidators = (object.lastValidators !== undefined && object.lastValidators !== null)
-      ? ValidatorSet.fromPartial(object.lastValidators)
+    message.last_validators = (object.last_validators !== undefined && object.last_validators !== null)
+      ? ValidatorSet.fromPartial(object.last_validators)
       : undefined;
-    message.lastHeightValidatorsChanged = object.lastHeightValidatorsChanged ?? 0;
-    message.consensusParams = (object.consensusParams !== undefined && object.consensusParams !== null)
-      ? ConsensusParams.fromPartial(object.consensusParams)
+    message.last_height_validators_changed = object.last_height_validators_changed ?? 0;
+    message.consensus_params = (object.consensus_params !== undefined && object.consensus_params !== null)
+      ? ConsensusParams.fromPartial(object.consensus_params)
       : undefined;
-    message.lastHeightConsensusParamsChanged = object.lastHeightConsensusParamsChanged ?? 0;
-    message.lastResultsHash = object.lastResultsHash ?? new Uint8Array(0);
-    message.appHash = object.appHash ?? new Uint8Array(0);
+    message.last_height_consensus_params_changed = object.last_height_consensus_params_changed ?? 0;
+    message.last_results_hash = object.last_results_hash ?? new Uint8Array(0);
+    message.app_hash = object.app_hash ?? new Uint8Array(0);
     return message;
   },
 };

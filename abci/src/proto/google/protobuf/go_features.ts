@@ -14,12 +14,12 @@ export interface GoFeatures {
    * Whether or not to generate the deprecated UnmarshalJSON method for enums.
    * Can only be true for proto using the Open Struct api.
    */
-  legacyUnmarshalJsonEnum?:
+  legacy_unmarshal_json_enum?:
     | boolean
     | undefined;
   /** One of OPEN, HYBRID or OPAQUE. */
-  apiLevel?: GoFeatures_APILevel | undefined;
-  stripEnumPrefix?: GoFeatures_StripEnumPrefix | undefined;
+  api_level?: GoFeatures_APILevel | undefined;
+  strip_enum_prefix?: GoFeatures_StripEnumPrefix | undefined;
 }
 
 export enum GoFeatures_APILevel {
@@ -118,19 +118,19 @@ export function goFeatures_StripEnumPrefixToJSON(object: GoFeatures_StripEnumPre
 }
 
 function createBaseGoFeatures(): GoFeatures {
-  return { legacyUnmarshalJsonEnum: false, apiLevel: 0, stripEnumPrefix: 0 };
+  return { legacy_unmarshal_json_enum: false, api_level: 0, strip_enum_prefix: 0 };
 }
 
 export const GoFeatures: MessageFns<GoFeatures> = {
   encode(message: GoFeatures, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.legacyUnmarshalJsonEnum !== undefined && message.legacyUnmarshalJsonEnum !== false) {
-      writer.uint32(8).bool(message.legacyUnmarshalJsonEnum);
+    if (message.legacy_unmarshal_json_enum !== undefined && message.legacy_unmarshal_json_enum !== false) {
+      writer.uint32(8).bool(message.legacy_unmarshal_json_enum);
     }
-    if (message.apiLevel !== undefined && message.apiLevel !== 0) {
-      writer.uint32(16).int32(message.apiLevel);
+    if (message.api_level !== undefined && message.api_level !== 0) {
+      writer.uint32(16).int32(message.api_level);
     }
-    if (message.stripEnumPrefix !== undefined && message.stripEnumPrefix !== 0) {
-      writer.uint32(24).int32(message.stripEnumPrefix);
+    if (message.strip_enum_prefix !== undefined && message.strip_enum_prefix !== 0) {
+      writer.uint32(24).int32(message.strip_enum_prefix);
     }
     return writer;
   },
@@ -147,7 +147,7 @@ export const GoFeatures: MessageFns<GoFeatures> = {
             break;
           }
 
-          message.legacyUnmarshalJsonEnum = reader.bool();
+          message.legacy_unmarshal_json_enum = reader.bool();
           continue;
         }
         case 2: {
@@ -155,7 +155,7 @@ export const GoFeatures: MessageFns<GoFeatures> = {
             break;
           }
 
-          message.apiLevel = reader.int32() as any;
+          message.api_level = reader.int32() as any;
           continue;
         }
         case 3: {
@@ -163,7 +163,7 @@ export const GoFeatures: MessageFns<GoFeatures> = {
             break;
           }
 
-          message.stripEnumPrefix = reader.int32() as any;
+          message.strip_enum_prefix = reader.int32() as any;
           continue;
         }
       }
@@ -177,24 +177,26 @@ export const GoFeatures: MessageFns<GoFeatures> = {
 
   fromJSON(object: any): GoFeatures {
     return {
-      legacyUnmarshalJsonEnum: isSet(object.legacyUnmarshalJsonEnum)
-        ? globalThis.Boolean(object.legacyUnmarshalJsonEnum)
+      legacy_unmarshal_json_enum: isSet(object.legacy_unmarshal_json_enum)
+        ? globalThis.Boolean(object.legacy_unmarshal_json_enum)
         : false,
-      apiLevel: isSet(object.apiLevel) ? goFeatures_APILevelFromJSON(object.apiLevel) : 0,
-      stripEnumPrefix: isSet(object.stripEnumPrefix) ? goFeatures_StripEnumPrefixFromJSON(object.stripEnumPrefix) : 0,
+      api_level: isSet(object.api_level) ? goFeatures_APILevelFromJSON(object.api_level) : 0,
+      strip_enum_prefix: isSet(object.strip_enum_prefix)
+        ? goFeatures_StripEnumPrefixFromJSON(object.strip_enum_prefix)
+        : 0,
     };
   },
 
   toJSON(message: GoFeatures): unknown {
     const obj: any = {};
-    if (message.legacyUnmarshalJsonEnum !== undefined && message.legacyUnmarshalJsonEnum !== false) {
-      obj.legacyUnmarshalJsonEnum = message.legacyUnmarshalJsonEnum;
+    if (message.legacy_unmarshal_json_enum !== undefined && message.legacy_unmarshal_json_enum !== false) {
+      obj.legacy_unmarshal_json_enum = message.legacy_unmarshal_json_enum;
     }
-    if (message.apiLevel !== undefined && message.apiLevel !== 0) {
-      obj.apiLevel = goFeatures_APILevelToJSON(message.apiLevel);
+    if (message.api_level !== undefined && message.api_level !== 0) {
+      obj.api_level = goFeatures_APILevelToJSON(message.api_level);
     }
-    if (message.stripEnumPrefix !== undefined && message.stripEnumPrefix !== 0) {
-      obj.stripEnumPrefix = goFeatures_StripEnumPrefixToJSON(message.stripEnumPrefix);
+    if (message.strip_enum_prefix !== undefined && message.strip_enum_prefix !== 0) {
+      obj.strip_enum_prefix = goFeatures_StripEnumPrefixToJSON(message.strip_enum_prefix);
     }
     return obj;
   },
@@ -204,9 +206,9 @@ export const GoFeatures: MessageFns<GoFeatures> = {
   },
   fromPartial<I extends Exact<DeepPartial<GoFeatures>, I>>(object: I): GoFeatures {
     const message = createBaseGoFeatures();
-    message.legacyUnmarshalJsonEnum = object.legacyUnmarshalJsonEnum ?? false;
-    message.apiLevel = object.apiLevel ?? 0;
-    message.stripEnumPrefix = object.stripEnumPrefix ?? 0;
+    message.legacy_unmarshal_json_enum = object.legacy_unmarshal_json_enum ?? false;
+    message.api_level = object.api_level ?? 0;
+    message.strip_enum_prefix = object.strip_enum_prefix ?? 0;
     return message;
   },
 };

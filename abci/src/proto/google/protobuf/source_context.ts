@@ -18,17 +18,17 @@ export interface SourceContext {
    * The path-qualified name of the .proto file that contained the associated
    * protobuf element.  For example: `"google/protobuf/source_context.proto"`.
    */
-  fileName: string;
+  file_name: string;
 }
 
 function createBaseSourceContext(): SourceContext {
-  return { fileName: "" };
+  return { file_name: "" };
 }
 
 export const SourceContext: MessageFns<SourceContext> = {
   encode(message: SourceContext, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.fileName !== "") {
-      writer.uint32(10).string(message.fileName);
+    if (message.file_name !== "") {
+      writer.uint32(10).string(message.file_name);
     }
     return writer;
   },
@@ -45,7 +45,7 @@ export const SourceContext: MessageFns<SourceContext> = {
             break;
           }
 
-          message.fileName = reader.string();
+          message.file_name = reader.string();
           continue;
         }
       }
@@ -58,13 +58,13 @@ export const SourceContext: MessageFns<SourceContext> = {
   },
 
   fromJSON(object: any): SourceContext {
-    return { fileName: isSet(object.fileName) ? globalThis.String(object.fileName) : "" };
+    return { file_name: isSet(object.file_name) ? globalThis.String(object.file_name) : "" };
   },
 
   toJSON(message: SourceContext): unknown {
     const obj: any = {};
-    if (message.fileName !== "") {
-      obj.fileName = message.fileName;
+    if (message.file_name !== "") {
+      obj.file_name = message.file_name;
     }
     return obj;
   },
@@ -74,7 +74,7 @@ export const SourceContext: MessageFns<SourceContext> = {
   },
   fromPartial<I extends Exact<DeepPartial<SourceContext>, I>>(object: I): SourceContext {
     const message = createBaseSourceContext();
-    message.fileName = object.fileName ?? "";
+    message.file_name = object.file_name ?? "";
     return message;
   },
 };

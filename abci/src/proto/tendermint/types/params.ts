@@ -28,12 +28,12 @@ export interface BlockParams {
    * Max block size, in bytes.
    * Note: must be greater than 0
    */
-  maxBytes: number;
+  max_bytes: number;
   /**
    * Max gas per block.
    * Note: must be greater or equal to -1
    */
-  maxGas: number;
+  max_gas: number;
 }
 
 /** EvidenceParams determine how we handle evidence of malfeasance. */
@@ -44,7 +44,7 @@ export interface EvidenceParams {
    * The basic formula for calculating this is: MaxAgeDuration / {average block
    * time}.
    */
-  maxAgeNumBlocks: number;
+  max_age_num_blocks: number;
   /**
    * Max age of evidence, in time.
    *
@@ -52,7 +52,7 @@ export interface EvidenceParams {
    * mechanism for handling [Nothing-At-Stake
    * attacks](https://github.com/ethereum/wiki/wiki/Proof-of-Stake-FAQ#what-is-the-nothing-at-stake-problem-and-how-can-it-be-fixed).
    */
-  maxAgeDuration:
+  max_age_duration:
     | Duration
     | undefined;
   /**
@@ -60,7 +60,7 @@ export interface EvidenceParams {
    * and should fall comfortably under the max block bytes.
    * Default is 1048576 or 1MB
    */
-  maxBytes: number;
+  max_bytes: number;
 }
 
 /**
@@ -68,7 +68,7 @@ export interface EvidenceParams {
  * NOTE: uses ABCI pubkey naming, not Amino names.
  */
 export interface ValidatorParams {
-  pubKeyTypes: string[];
+  pub_key_types: string[];
 }
 
 /** VersionParams contains the ABCI application version. */
@@ -82,8 +82,8 @@ export interface VersionParams {
  * It is hashed into the Header.ConsensusHash.
  */
 export interface HashedParams {
-  blockMaxBytes: number;
-  blockMaxGas: number;
+  block_max_bytes: number;
+  block_max_gas: number;
 }
 
 /** ABCIParams configure functionality specific to the Application Blockchain Interface. */
@@ -99,7 +99,7 @@ export interface ABCIParams {
    * passed to the application for validation in VerifyVoteExtension and given
    * to the application to use when proposing a block during PrepareProposal.
    */
-  voteExtensionsEnableHeight: number;
+  vote_extensions_enable_height: number;
 }
 
 function createBaseConsensusParams(): ConsensusParams {
@@ -237,16 +237,16 @@ export const ConsensusParams: MessageFns<ConsensusParams> = {
 };
 
 function createBaseBlockParams(): BlockParams {
-  return { maxBytes: 0, maxGas: 0 };
+  return { max_bytes: 0, max_gas: 0 };
 }
 
 export const BlockParams: MessageFns<BlockParams> = {
   encode(message: BlockParams, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.maxBytes !== 0) {
-      writer.uint32(8).int64(message.maxBytes);
+    if (message.max_bytes !== 0) {
+      writer.uint32(8).int64(message.max_bytes);
     }
-    if (message.maxGas !== 0) {
-      writer.uint32(16).int64(message.maxGas);
+    if (message.max_gas !== 0) {
+      writer.uint32(16).int64(message.max_gas);
     }
     return writer;
   },
@@ -263,7 +263,7 @@ export const BlockParams: MessageFns<BlockParams> = {
             break;
           }
 
-          message.maxBytes = longToNumber(reader.int64());
+          message.max_bytes = longToNumber(reader.int64());
           continue;
         }
         case 2: {
@@ -271,7 +271,7 @@ export const BlockParams: MessageFns<BlockParams> = {
             break;
           }
 
-          message.maxGas = longToNumber(reader.int64());
+          message.max_gas = longToNumber(reader.int64());
           continue;
         }
       }
@@ -285,18 +285,18 @@ export const BlockParams: MessageFns<BlockParams> = {
 
   fromJSON(object: any): BlockParams {
     return {
-      maxBytes: isSet(object.maxBytes) ? globalThis.Number(object.maxBytes) : 0,
-      maxGas: isSet(object.maxGas) ? globalThis.Number(object.maxGas) : 0,
+      max_bytes: isSet(object.max_bytes) ? globalThis.Number(object.max_bytes) : 0,
+      max_gas: isSet(object.max_gas) ? globalThis.Number(object.max_gas) : 0,
     };
   },
 
   toJSON(message: BlockParams): unknown {
     const obj: any = {};
-    if (message.maxBytes !== 0) {
-      obj.maxBytes = Math.round(message.maxBytes);
+    if (message.max_bytes !== 0) {
+      obj.max_bytes = Math.round(message.max_bytes);
     }
-    if (message.maxGas !== 0) {
-      obj.maxGas = Math.round(message.maxGas);
+    if (message.max_gas !== 0) {
+      obj.max_gas = Math.round(message.max_gas);
     }
     return obj;
   },
@@ -306,26 +306,26 @@ export const BlockParams: MessageFns<BlockParams> = {
   },
   fromPartial<I extends Exact<DeepPartial<BlockParams>, I>>(object: I): BlockParams {
     const message = createBaseBlockParams();
-    message.maxBytes = object.maxBytes ?? 0;
-    message.maxGas = object.maxGas ?? 0;
+    message.max_bytes = object.max_bytes ?? 0;
+    message.max_gas = object.max_gas ?? 0;
     return message;
   },
 };
 
 function createBaseEvidenceParams(): EvidenceParams {
-  return { maxAgeNumBlocks: 0, maxAgeDuration: undefined, maxBytes: 0 };
+  return { max_age_num_blocks: 0, max_age_duration: undefined, max_bytes: 0 };
 }
 
 export const EvidenceParams: MessageFns<EvidenceParams> = {
   encode(message: EvidenceParams, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.maxAgeNumBlocks !== 0) {
-      writer.uint32(8).int64(message.maxAgeNumBlocks);
+    if (message.max_age_num_blocks !== 0) {
+      writer.uint32(8).int64(message.max_age_num_blocks);
     }
-    if (message.maxAgeDuration !== undefined) {
-      Duration.encode(message.maxAgeDuration, writer.uint32(18).fork()).join();
+    if (message.max_age_duration !== undefined) {
+      Duration.encode(message.max_age_duration, writer.uint32(18).fork()).join();
     }
-    if (message.maxBytes !== 0) {
-      writer.uint32(24).int64(message.maxBytes);
+    if (message.max_bytes !== 0) {
+      writer.uint32(24).int64(message.max_bytes);
     }
     return writer;
   },
@@ -342,7 +342,7 @@ export const EvidenceParams: MessageFns<EvidenceParams> = {
             break;
           }
 
-          message.maxAgeNumBlocks = longToNumber(reader.int64());
+          message.max_age_num_blocks = longToNumber(reader.int64());
           continue;
         }
         case 2: {
@@ -350,7 +350,7 @@ export const EvidenceParams: MessageFns<EvidenceParams> = {
             break;
           }
 
-          message.maxAgeDuration = Duration.decode(reader, reader.uint32());
+          message.max_age_duration = Duration.decode(reader, reader.uint32());
           continue;
         }
         case 3: {
@@ -358,7 +358,7 @@ export const EvidenceParams: MessageFns<EvidenceParams> = {
             break;
           }
 
-          message.maxBytes = longToNumber(reader.int64());
+          message.max_bytes = longToNumber(reader.int64());
           continue;
         }
       }
@@ -372,22 +372,22 @@ export const EvidenceParams: MessageFns<EvidenceParams> = {
 
   fromJSON(object: any): EvidenceParams {
     return {
-      maxAgeNumBlocks: isSet(object.maxAgeNumBlocks) ? globalThis.Number(object.maxAgeNumBlocks) : 0,
-      maxAgeDuration: isSet(object.maxAgeDuration) ? Duration.fromJSON(object.maxAgeDuration) : undefined,
-      maxBytes: isSet(object.maxBytes) ? globalThis.Number(object.maxBytes) : 0,
+      max_age_num_blocks: isSet(object.max_age_num_blocks) ? globalThis.Number(object.max_age_num_blocks) : 0,
+      max_age_duration: isSet(object.max_age_duration) ? Duration.fromJSON(object.max_age_duration) : undefined,
+      max_bytes: isSet(object.max_bytes) ? globalThis.Number(object.max_bytes) : 0,
     };
   },
 
   toJSON(message: EvidenceParams): unknown {
     const obj: any = {};
-    if (message.maxAgeNumBlocks !== 0) {
-      obj.maxAgeNumBlocks = Math.round(message.maxAgeNumBlocks);
+    if (message.max_age_num_blocks !== 0) {
+      obj.max_age_num_blocks = Math.round(message.max_age_num_blocks);
     }
-    if (message.maxAgeDuration !== undefined) {
-      obj.maxAgeDuration = Duration.toJSON(message.maxAgeDuration);
+    if (message.max_age_duration !== undefined) {
+      obj.max_age_duration = Duration.toJSON(message.max_age_duration);
     }
-    if (message.maxBytes !== 0) {
-      obj.maxBytes = Math.round(message.maxBytes);
+    if (message.max_bytes !== 0) {
+      obj.max_bytes = Math.round(message.max_bytes);
     }
     return obj;
   },
@@ -397,22 +397,22 @@ export const EvidenceParams: MessageFns<EvidenceParams> = {
   },
   fromPartial<I extends Exact<DeepPartial<EvidenceParams>, I>>(object: I): EvidenceParams {
     const message = createBaseEvidenceParams();
-    message.maxAgeNumBlocks = object.maxAgeNumBlocks ?? 0;
-    message.maxAgeDuration = (object.maxAgeDuration !== undefined && object.maxAgeDuration !== null)
-      ? Duration.fromPartial(object.maxAgeDuration)
+    message.max_age_num_blocks = object.max_age_num_blocks ?? 0;
+    message.max_age_duration = (object.max_age_duration !== undefined && object.max_age_duration !== null)
+      ? Duration.fromPartial(object.max_age_duration)
       : undefined;
-    message.maxBytes = object.maxBytes ?? 0;
+    message.max_bytes = object.max_bytes ?? 0;
     return message;
   },
 };
 
 function createBaseValidatorParams(): ValidatorParams {
-  return { pubKeyTypes: [] };
+  return { pub_key_types: [] };
 }
 
 export const ValidatorParams: MessageFns<ValidatorParams> = {
   encode(message: ValidatorParams, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.pubKeyTypes) {
+    for (const v of message.pub_key_types) {
       writer.uint32(10).string(v!);
     }
     return writer;
@@ -430,7 +430,7 @@ export const ValidatorParams: MessageFns<ValidatorParams> = {
             break;
           }
 
-          message.pubKeyTypes.push(reader.string());
+          message.pub_key_types.push(reader.string());
           continue;
         }
       }
@@ -444,16 +444,16 @@ export const ValidatorParams: MessageFns<ValidatorParams> = {
 
   fromJSON(object: any): ValidatorParams {
     return {
-      pubKeyTypes: globalThis.Array.isArray(object?.pubKeyTypes)
-        ? object.pubKeyTypes.map((e: any) => globalThis.String(e))
+      pub_key_types: globalThis.Array.isArray(object?.pub_key_types)
+        ? object.pub_key_types.map((e: any) => globalThis.String(e))
         : [],
     };
   },
 
   toJSON(message: ValidatorParams): unknown {
     const obj: any = {};
-    if (message.pubKeyTypes?.length) {
-      obj.pubKeyTypes = message.pubKeyTypes;
+    if (message.pub_key_types?.length) {
+      obj.pub_key_types = message.pub_key_types;
     }
     return obj;
   },
@@ -463,7 +463,7 @@ export const ValidatorParams: MessageFns<ValidatorParams> = {
   },
   fromPartial<I extends Exact<DeepPartial<ValidatorParams>, I>>(object: I): ValidatorParams {
     const message = createBaseValidatorParams();
-    message.pubKeyTypes = object.pubKeyTypes?.map((e) => e) || [];
+    message.pub_key_types = object.pub_key_types?.map((e) => e) || [];
     return message;
   },
 };
@@ -527,16 +527,16 @@ export const VersionParams: MessageFns<VersionParams> = {
 };
 
 function createBaseHashedParams(): HashedParams {
-  return { blockMaxBytes: 0, blockMaxGas: 0 };
+  return { block_max_bytes: 0, block_max_gas: 0 };
 }
 
 export const HashedParams: MessageFns<HashedParams> = {
   encode(message: HashedParams, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.blockMaxBytes !== 0) {
-      writer.uint32(8).int64(message.blockMaxBytes);
+    if (message.block_max_bytes !== 0) {
+      writer.uint32(8).int64(message.block_max_bytes);
     }
-    if (message.blockMaxGas !== 0) {
-      writer.uint32(16).int64(message.blockMaxGas);
+    if (message.block_max_gas !== 0) {
+      writer.uint32(16).int64(message.block_max_gas);
     }
     return writer;
   },
@@ -553,7 +553,7 @@ export const HashedParams: MessageFns<HashedParams> = {
             break;
           }
 
-          message.blockMaxBytes = longToNumber(reader.int64());
+          message.block_max_bytes = longToNumber(reader.int64());
           continue;
         }
         case 2: {
@@ -561,7 +561,7 @@ export const HashedParams: MessageFns<HashedParams> = {
             break;
           }
 
-          message.blockMaxGas = longToNumber(reader.int64());
+          message.block_max_gas = longToNumber(reader.int64());
           continue;
         }
       }
@@ -575,18 +575,18 @@ export const HashedParams: MessageFns<HashedParams> = {
 
   fromJSON(object: any): HashedParams {
     return {
-      blockMaxBytes: isSet(object.blockMaxBytes) ? globalThis.Number(object.blockMaxBytes) : 0,
-      blockMaxGas: isSet(object.blockMaxGas) ? globalThis.Number(object.blockMaxGas) : 0,
+      block_max_bytes: isSet(object.block_max_bytes) ? globalThis.Number(object.block_max_bytes) : 0,
+      block_max_gas: isSet(object.block_max_gas) ? globalThis.Number(object.block_max_gas) : 0,
     };
   },
 
   toJSON(message: HashedParams): unknown {
     const obj: any = {};
-    if (message.blockMaxBytes !== 0) {
-      obj.blockMaxBytes = Math.round(message.blockMaxBytes);
+    if (message.block_max_bytes !== 0) {
+      obj.block_max_bytes = Math.round(message.block_max_bytes);
     }
-    if (message.blockMaxGas !== 0) {
-      obj.blockMaxGas = Math.round(message.blockMaxGas);
+    if (message.block_max_gas !== 0) {
+      obj.block_max_gas = Math.round(message.block_max_gas);
     }
     return obj;
   },
@@ -596,20 +596,20 @@ export const HashedParams: MessageFns<HashedParams> = {
   },
   fromPartial<I extends Exact<DeepPartial<HashedParams>, I>>(object: I): HashedParams {
     const message = createBaseHashedParams();
-    message.blockMaxBytes = object.blockMaxBytes ?? 0;
-    message.blockMaxGas = object.blockMaxGas ?? 0;
+    message.block_max_bytes = object.block_max_bytes ?? 0;
+    message.block_max_gas = object.block_max_gas ?? 0;
     return message;
   },
 };
 
 function createBaseABCIParams(): ABCIParams {
-  return { voteExtensionsEnableHeight: 0 };
+  return { vote_extensions_enable_height: 0 };
 }
 
 export const ABCIParams: MessageFns<ABCIParams> = {
   encode(message: ABCIParams, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.voteExtensionsEnableHeight !== 0) {
-      writer.uint32(8).int64(message.voteExtensionsEnableHeight);
+    if (message.vote_extensions_enable_height !== 0) {
+      writer.uint32(8).int64(message.vote_extensions_enable_height);
     }
     return writer;
   },
@@ -626,7 +626,7 @@ export const ABCIParams: MessageFns<ABCIParams> = {
             break;
           }
 
-          message.voteExtensionsEnableHeight = longToNumber(reader.int64());
+          message.vote_extensions_enable_height = longToNumber(reader.int64());
           continue;
         }
       }
@@ -640,16 +640,16 @@ export const ABCIParams: MessageFns<ABCIParams> = {
 
   fromJSON(object: any): ABCIParams {
     return {
-      voteExtensionsEnableHeight: isSet(object.voteExtensionsEnableHeight)
-        ? globalThis.Number(object.voteExtensionsEnableHeight)
+      vote_extensions_enable_height: isSet(object.vote_extensions_enable_height)
+        ? globalThis.Number(object.vote_extensions_enable_height)
         : 0,
     };
   },
 
   toJSON(message: ABCIParams): unknown {
     const obj: any = {};
-    if (message.voteExtensionsEnableHeight !== 0) {
-      obj.voteExtensionsEnableHeight = Math.round(message.voteExtensionsEnableHeight);
+    if (message.vote_extensions_enable_height !== 0) {
+      obj.vote_extensions_enable_height = Math.round(message.vote_extensions_enable_height);
     }
     return obj;
   },
@@ -659,7 +659,7 @@ export const ABCIParams: MessageFns<ABCIParams> = {
   },
   fromPartial<I extends Exact<DeepPartial<ABCIParams>, I>>(object: I): ABCIParams {
     const message = createBaseABCIParams();
-    message.voteExtensionsEnableHeight = object.voteExtensionsEnableHeight ?? 0;
+    message.vote_extensions_enable_height = object.vote_extensions_enable_height ?? 0;
     return message;
   },
 };

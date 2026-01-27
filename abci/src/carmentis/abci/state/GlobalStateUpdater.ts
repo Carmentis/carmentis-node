@@ -411,7 +411,7 @@ export class GlobalStateUpdater {
             blockHeight,
             request.hash,
             blockTimestamp,
-            request.proposerAddress,
+            request.proposer_address,
             this.blockSizeInBytes,
             request.txs.length,
         );
@@ -554,7 +554,7 @@ export class GlobalStateUpdater {
 
         const validatorAccounts: Uint8Array[] = [];
         const validatorStakes : number[] = [];
-        const votes = request.decidedLastCommit?.votes || [];
+        const votes = request.decided_last_commit?.votes || [];
         const stateDb = state.getCachedDatabase();
 
         this.logger.debug(`${votes.length} vote(s)`);
@@ -562,7 +562,7 @@ export class GlobalStateUpdater {
         for (const vote of votes) {
             // TODO: figure out why vote.block_id_flag is not an integer
             // if (vote.block_id_flag === BlockIDFlag.BLOCK_ID_FLAG_COMMIT ) {
-            if ((vote.blockIdFlag).toString() == 'BLOCK_ID_FLAG_COMMIT') {
+            if ((vote.block_id_flag).toString() == 'BLOCK_ID_FLAG_COMMIT') {
                 // skip if validator field not set in the vote
                 if (vote.validator == null) {
                     this.logger.warn(`Received undefined validator in commit vote: skipping vote`);

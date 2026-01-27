@@ -21,8 +21,8 @@ export interface ResponsePing {
 }
 
 export interface ResponseBroadcastTx {
-  checkTx: ResponseCheckTx | undefined;
-  txResult: ExecTxResult | undefined;
+  check_tx: ResponseCheckTx | undefined;
+  tx_result: ExecTxResult | undefined;
 }
 
 function createBaseRequestPing(): RequestPing {
@@ -170,16 +170,16 @@ export const ResponsePing: MessageFns<ResponsePing> = {
 };
 
 function createBaseResponseBroadcastTx(): ResponseBroadcastTx {
-  return { checkTx: undefined, txResult: undefined };
+  return { check_tx: undefined, tx_result: undefined };
 }
 
 export const ResponseBroadcastTx: MessageFns<ResponseBroadcastTx> = {
   encode(message: ResponseBroadcastTx, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.checkTx !== undefined) {
-      ResponseCheckTx.encode(message.checkTx, writer.uint32(10).fork()).join();
+    if (message.check_tx !== undefined) {
+      ResponseCheckTx.encode(message.check_tx, writer.uint32(10).fork()).join();
     }
-    if (message.txResult !== undefined) {
-      ExecTxResult.encode(message.txResult, writer.uint32(18).fork()).join();
+    if (message.tx_result !== undefined) {
+      ExecTxResult.encode(message.tx_result, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -196,7 +196,7 @@ export const ResponseBroadcastTx: MessageFns<ResponseBroadcastTx> = {
             break;
           }
 
-          message.checkTx = ResponseCheckTx.decode(reader, reader.uint32());
+          message.check_tx = ResponseCheckTx.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -204,7 +204,7 @@ export const ResponseBroadcastTx: MessageFns<ResponseBroadcastTx> = {
             break;
           }
 
-          message.txResult = ExecTxResult.decode(reader, reader.uint32());
+          message.tx_result = ExecTxResult.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -218,18 +218,18 @@ export const ResponseBroadcastTx: MessageFns<ResponseBroadcastTx> = {
 
   fromJSON(object: any): ResponseBroadcastTx {
     return {
-      checkTx: isSet(object.checkTx) ? ResponseCheckTx.fromJSON(object.checkTx) : undefined,
-      txResult: isSet(object.txResult) ? ExecTxResult.fromJSON(object.txResult) : undefined,
+      check_tx: isSet(object.check_tx) ? ResponseCheckTx.fromJSON(object.check_tx) : undefined,
+      tx_result: isSet(object.tx_result) ? ExecTxResult.fromJSON(object.tx_result) : undefined,
     };
   },
 
   toJSON(message: ResponseBroadcastTx): unknown {
     const obj: any = {};
-    if (message.checkTx !== undefined) {
-      obj.checkTx = ResponseCheckTx.toJSON(message.checkTx);
+    if (message.check_tx !== undefined) {
+      obj.check_tx = ResponseCheckTx.toJSON(message.check_tx);
     }
-    if (message.txResult !== undefined) {
-      obj.txResult = ExecTxResult.toJSON(message.txResult);
+    if (message.tx_result !== undefined) {
+      obj.tx_result = ExecTxResult.toJSON(message.tx_result);
     }
     return obj;
   },
@@ -239,11 +239,11 @@ export const ResponseBroadcastTx: MessageFns<ResponseBroadcastTx> = {
   },
   fromPartial<I extends Exact<DeepPartial<ResponseBroadcastTx>, I>>(object: I): ResponseBroadcastTx {
     const message = createBaseResponseBroadcastTx();
-    message.checkTx = (object.checkTx !== undefined && object.checkTx !== null)
-      ? ResponseCheckTx.fromPartial(object.checkTx)
+    message.check_tx = (object.check_tx !== undefined && object.check_tx !== null)
+      ? ResponseCheckTx.fromPartial(object.check_tx)
       : undefined;
-    message.txResult = (object.txResult !== undefined && object.txResult !== null)
-      ? ExecTxResult.fromPartial(object.txResult)
+    message.tx_result = (object.tx_result !== undefined && object.tx_result !== null)
+      ? ExecTxResult.fromPartial(object.tx_result)
       : undefined;
     return message;
   },

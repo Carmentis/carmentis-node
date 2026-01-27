@@ -76,40 +76,40 @@ export interface Part {
 /** BlockID */
 export interface BlockID {
   hash: Uint8Array;
-  partSetHeader: PartSetHeader | undefined;
+  part_set_header: PartSetHeader | undefined;
 }
 
 /** Header defines the structure of a block header. */
 export interface Header {
   /** basic block info */
   version: Consensus | undefined;
-  chainId: string;
+  chain_id: string;
   height: number;
   time:
     | Timestamp
     | undefined;
   /** prev block info */
-  lastBlockId:
+  last_block_id:
     | BlockID
     | undefined;
   /** hashes of block data */
-  lastCommitHash: Uint8Array;
+  last_commit_hash: Uint8Array;
   /** transactions */
-  dataHash: Uint8Array;
+  data_hash: Uint8Array;
   /** hashes from the app output from the prev block */
-  validatorsHash: Uint8Array;
+  validators_hash: Uint8Array;
   /** validators for the next block */
-  nextValidatorsHash: Uint8Array;
+  next_validators_hash: Uint8Array;
   /** consensus params for current block */
-  consensusHash: Uint8Array;
+  consensus_hash: Uint8Array;
   /** state after txs from the previous block */
-  appHash: Uint8Array;
+  app_hash: Uint8Array;
   /** root hash of all results from the txs from the previous block */
-  lastResultsHash: Uint8Array;
+  last_results_hash: Uint8Array;
   /** consensus info */
-  evidenceHash: Uint8Array;
+  evidence_hash: Uint8Array;
   /** original proposer of the block */
-  proposerAddress: Uint8Array;
+  proposer_address: Uint8Array;
 }
 
 /** Data contains the set of transactions included in the block */
@@ -131,10 +131,10 @@ export interface Vote {
   height: number;
   round: number;
   /** zero if vote is nil. */
-  blockId: BlockID | undefined;
+  block_id: BlockID | undefined;
   timestamp: Timestamp | undefined;
-  validatorAddress: Uint8Array;
-  validatorIndex: number;
+  validator_address: Uint8Array;
+  validator_index: number;
   /**
    * Vote signature by the validator if they participated in consensus for the
    * associated block.
@@ -150,21 +150,21 @@ export interface Vote {
    * consensus for the associated block.
    * Only valid for precommit messages.
    */
-  extensionSignature: Uint8Array;
+  extension_signature: Uint8Array;
 }
 
 /** Commit contains the evidence that a block was committed by a set of validators. */
 export interface Commit {
   height: number;
   round: number;
-  blockId: BlockID | undefined;
+  block_id: BlockID | undefined;
   signatures: CommitSig[];
 }
 
 /** CommitSig is a part of the Vote included in a Commit. */
 export interface CommitSig {
-  blockIdFlag: BlockIDFlag;
-  validatorAddress: Uint8Array;
+  block_id_flag: BlockIDFlag;
+  validator_address: Uint8Array;
   timestamp: Timestamp | undefined;
   signature: Uint8Array;
 }
@@ -172,8 +172,8 @@ export interface CommitSig {
 export interface ExtendedCommit {
   height: number;
   round: number;
-  blockId: BlockID | undefined;
-  extendedSignatures: ExtendedCommitSig[];
+  block_id: BlockID | undefined;
+  extended_signatures: ExtendedCommitSig[];
 }
 
 /**
@@ -182,22 +182,22 @@ export interface ExtendedCommit {
  * That is the digest of the original signature is still the same in prior versions
  */
 export interface ExtendedCommitSig {
-  blockIdFlag: BlockIDFlag;
-  validatorAddress: Uint8Array;
+  block_id_flag: BlockIDFlag;
+  validator_address: Uint8Array;
   timestamp: Timestamp | undefined;
   signature: Uint8Array;
   /** Vote extension data */
   extension: Uint8Array;
   /** Vote extension signature */
-  extensionSignature: Uint8Array;
+  extension_signature: Uint8Array;
 }
 
 export interface Proposal {
   type: SignedMsgType;
   height: number;
   round: number;
-  polRound: number;
-  blockId: BlockID | undefined;
+  pol_round: number;
+  block_id: BlockID | undefined;
   timestamp: Timestamp | undefined;
   signature: Uint8Array;
 }
@@ -208,20 +208,20 @@ export interface SignedHeader {
 }
 
 export interface LightBlock {
-  signedHeader: SignedHeader | undefined;
-  validatorSet: ValidatorSet | undefined;
+  signed_header: SignedHeader | undefined;
+  validator_set: ValidatorSet | undefined;
 }
 
 export interface BlockMeta {
-  blockId: BlockID | undefined;
-  blockSize: number;
+  block_id: BlockID | undefined;
+  block_size: number;
   header: Header | undefined;
-  numTxs: number;
+  num_txs: number;
 }
 
 /** TxProof represents a Merkle proof of the presence of a transaction in the Merkle tree. */
 export interface TxProof {
-  rootHash: Uint8Array;
+  root_hash: Uint8Array;
   data: Uint8Array;
   proof: Proof | undefined;
 }
@@ -395,7 +395,7 @@ export const Part: MessageFns<Part> = {
 };
 
 function createBaseBlockID(): BlockID {
-  return { hash: new Uint8Array(0), partSetHeader: undefined };
+  return { hash: new Uint8Array(0), part_set_header: undefined };
 }
 
 export const BlockID: MessageFns<BlockID> = {
@@ -403,8 +403,8 @@ export const BlockID: MessageFns<BlockID> = {
     if (message.hash.length !== 0) {
       writer.uint32(10).bytes(message.hash);
     }
-    if (message.partSetHeader !== undefined) {
-      PartSetHeader.encode(message.partSetHeader, writer.uint32(18).fork()).join();
+    if (message.part_set_header !== undefined) {
+      PartSetHeader.encode(message.part_set_header, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -429,7 +429,7 @@ export const BlockID: MessageFns<BlockID> = {
             break;
           }
 
-          message.partSetHeader = PartSetHeader.decode(reader, reader.uint32());
+          message.part_set_header = PartSetHeader.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -444,7 +444,7 @@ export const BlockID: MessageFns<BlockID> = {
   fromJSON(object: any): BlockID {
     return {
       hash: isSet(object.hash) ? bytesFromBase64(object.hash) : new Uint8Array(0),
-      partSetHeader: isSet(object.partSetHeader) ? PartSetHeader.fromJSON(object.partSetHeader) : undefined,
+      part_set_header: isSet(object.part_set_header) ? PartSetHeader.fromJSON(object.part_set_header) : undefined,
     };
   },
 
@@ -453,8 +453,8 @@ export const BlockID: MessageFns<BlockID> = {
     if (message.hash.length !== 0) {
       obj.hash = base64FromBytes(message.hash);
     }
-    if (message.partSetHeader !== undefined) {
-      obj.partSetHeader = PartSetHeader.toJSON(message.partSetHeader);
+    if (message.part_set_header !== undefined) {
+      obj.part_set_header = PartSetHeader.toJSON(message.part_set_header);
     }
     return obj;
   },
@@ -465,8 +465,8 @@ export const BlockID: MessageFns<BlockID> = {
   fromPartial<I extends Exact<DeepPartial<BlockID>, I>>(object: I): BlockID {
     const message = createBaseBlockID();
     message.hash = object.hash ?? new Uint8Array(0);
-    message.partSetHeader = (object.partSetHeader !== undefined && object.partSetHeader !== null)
-      ? PartSetHeader.fromPartial(object.partSetHeader)
+    message.part_set_header = (object.part_set_header !== undefined && object.part_set_header !== null)
+      ? PartSetHeader.fromPartial(object.part_set_header)
       : undefined;
     return message;
   },
@@ -475,19 +475,19 @@ export const BlockID: MessageFns<BlockID> = {
 function createBaseHeader(): Header {
   return {
     version: undefined,
-    chainId: "",
+    chain_id: "",
     height: 0,
     time: undefined,
-    lastBlockId: undefined,
-    lastCommitHash: new Uint8Array(0),
-    dataHash: new Uint8Array(0),
-    validatorsHash: new Uint8Array(0),
-    nextValidatorsHash: new Uint8Array(0),
-    consensusHash: new Uint8Array(0),
-    appHash: new Uint8Array(0),
-    lastResultsHash: new Uint8Array(0),
-    evidenceHash: new Uint8Array(0),
-    proposerAddress: new Uint8Array(0),
+    last_block_id: undefined,
+    last_commit_hash: new Uint8Array(0),
+    data_hash: new Uint8Array(0),
+    validators_hash: new Uint8Array(0),
+    next_validators_hash: new Uint8Array(0),
+    consensus_hash: new Uint8Array(0),
+    app_hash: new Uint8Array(0),
+    last_results_hash: new Uint8Array(0),
+    evidence_hash: new Uint8Array(0),
+    proposer_address: new Uint8Array(0),
   };
 }
 
@@ -496,8 +496,8 @@ export const Header: MessageFns<Header> = {
     if (message.version !== undefined) {
       Consensus.encode(message.version, writer.uint32(10).fork()).join();
     }
-    if (message.chainId !== "") {
-      writer.uint32(18).string(message.chainId);
+    if (message.chain_id !== "") {
+      writer.uint32(18).string(message.chain_id);
     }
     if (message.height !== 0) {
       writer.uint32(24).int64(message.height);
@@ -505,35 +505,35 @@ export const Header: MessageFns<Header> = {
     if (message.time !== undefined) {
       Timestamp.encode(message.time, writer.uint32(34).fork()).join();
     }
-    if (message.lastBlockId !== undefined) {
-      BlockID.encode(message.lastBlockId, writer.uint32(42).fork()).join();
+    if (message.last_block_id !== undefined) {
+      BlockID.encode(message.last_block_id, writer.uint32(42).fork()).join();
     }
-    if (message.lastCommitHash.length !== 0) {
-      writer.uint32(50).bytes(message.lastCommitHash);
+    if (message.last_commit_hash.length !== 0) {
+      writer.uint32(50).bytes(message.last_commit_hash);
     }
-    if (message.dataHash.length !== 0) {
-      writer.uint32(58).bytes(message.dataHash);
+    if (message.data_hash.length !== 0) {
+      writer.uint32(58).bytes(message.data_hash);
     }
-    if (message.validatorsHash.length !== 0) {
-      writer.uint32(66).bytes(message.validatorsHash);
+    if (message.validators_hash.length !== 0) {
+      writer.uint32(66).bytes(message.validators_hash);
     }
-    if (message.nextValidatorsHash.length !== 0) {
-      writer.uint32(74).bytes(message.nextValidatorsHash);
+    if (message.next_validators_hash.length !== 0) {
+      writer.uint32(74).bytes(message.next_validators_hash);
     }
-    if (message.consensusHash.length !== 0) {
-      writer.uint32(82).bytes(message.consensusHash);
+    if (message.consensus_hash.length !== 0) {
+      writer.uint32(82).bytes(message.consensus_hash);
     }
-    if (message.appHash.length !== 0) {
-      writer.uint32(90).bytes(message.appHash);
+    if (message.app_hash.length !== 0) {
+      writer.uint32(90).bytes(message.app_hash);
     }
-    if (message.lastResultsHash.length !== 0) {
-      writer.uint32(98).bytes(message.lastResultsHash);
+    if (message.last_results_hash.length !== 0) {
+      writer.uint32(98).bytes(message.last_results_hash);
     }
-    if (message.evidenceHash.length !== 0) {
-      writer.uint32(106).bytes(message.evidenceHash);
+    if (message.evidence_hash.length !== 0) {
+      writer.uint32(106).bytes(message.evidence_hash);
     }
-    if (message.proposerAddress.length !== 0) {
-      writer.uint32(114).bytes(message.proposerAddress);
+    if (message.proposer_address.length !== 0) {
+      writer.uint32(114).bytes(message.proposer_address);
     }
     return writer;
   },
@@ -558,7 +558,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.chainId = reader.string();
+          message.chain_id = reader.string();
           continue;
         }
         case 3: {
@@ -582,7 +582,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.lastBlockId = BlockID.decode(reader, reader.uint32());
+          message.last_block_id = BlockID.decode(reader, reader.uint32());
           continue;
         }
         case 6: {
@@ -590,7 +590,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.lastCommitHash = reader.bytes();
+          message.last_commit_hash = reader.bytes();
           continue;
         }
         case 7: {
@@ -598,7 +598,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.dataHash = reader.bytes();
+          message.data_hash = reader.bytes();
           continue;
         }
         case 8: {
@@ -606,7 +606,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.validatorsHash = reader.bytes();
+          message.validators_hash = reader.bytes();
           continue;
         }
         case 9: {
@@ -614,7 +614,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.nextValidatorsHash = reader.bytes();
+          message.next_validators_hash = reader.bytes();
           continue;
         }
         case 10: {
@@ -622,7 +622,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.consensusHash = reader.bytes();
+          message.consensus_hash = reader.bytes();
           continue;
         }
         case 11: {
@@ -630,7 +630,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.appHash = reader.bytes();
+          message.app_hash = reader.bytes();
           continue;
         }
         case 12: {
@@ -638,7 +638,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.lastResultsHash = reader.bytes();
+          message.last_results_hash = reader.bytes();
           continue;
         }
         case 13: {
@@ -646,7 +646,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.evidenceHash = reader.bytes();
+          message.evidence_hash = reader.bytes();
           continue;
         }
         case 14: {
@@ -654,7 +654,7 @@ export const Header: MessageFns<Header> = {
             break;
           }
 
-          message.proposerAddress = reader.bytes();
+          message.proposer_address = reader.bytes();
           continue;
         }
       }
@@ -669,21 +669,23 @@ export const Header: MessageFns<Header> = {
   fromJSON(object: any): Header {
     return {
       version: isSet(object.version) ? Consensus.fromJSON(object.version) : undefined,
-      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
+      chain_id: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       time: isSet(object.time) ? fromJsonTimestamp(object.time) : undefined,
-      lastBlockId: isSet(object.lastBlockId) ? BlockID.fromJSON(object.lastBlockId) : undefined,
-      lastCommitHash: isSet(object.lastCommitHash) ? bytesFromBase64(object.lastCommitHash) : new Uint8Array(0),
-      dataHash: isSet(object.dataHash) ? bytesFromBase64(object.dataHash) : new Uint8Array(0),
-      validatorsHash: isSet(object.validatorsHash) ? bytesFromBase64(object.validatorsHash) : new Uint8Array(0),
-      nextValidatorsHash: isSet(object.nextValidatorsHash)
-        ? bytesFromBase64(object.nextValidatorsHash)
+      last_block_id: isSet(object.last_block_id) ? BlockID.fromJSON(object.last_block_id) : undefined,
+      last_commit_hash: isSet(object.last_commit_hash) ? bytesFromBase64(object.last_commit_hash) : new Uint8Array(0),
+      data_hash: isSet(object.data_hash) ? bytesFromBase64(object.data_hash) : new Uint8Array(0),
+      validators_hash: isSet(object.validators_hash) ? bytesFromBase64(object.validators_hash) : new Uint8Array(0),
+      next_validators_hash: isSet(object.next_validators_hash)
+        ? bytesFromBase64(object.next_validators_hash)
         : new Uint8Array(0),
-      consensusHash: isSet(object.consensusHash) ? bytesFromBase64(object.consensusHash) : new Uint8Array(0),
-      appHash: isSet(object.appHash) ? bytesFromBase64(object.appHash) : new Uint8Array(0),
-      lastResultsHash: isSet(object.lastResultsHash) ? bytesFromBase64(object.lastResultsHash) : new Uint8Array(0),
-      evidenceHash: isSet(object.evidenceHash) ? bytesFromBase64(object.evidenceHash) : new Uint8Array(0),
-      proposerAddress: isSet(object.proposerAddress) ? bytesFromBase64(object.proposerAddress) : new Uint8Array(0),
+      consensus_hash: isSet(object.consensus_hash) ? bytesFromBase64(object.consensus_hash) : new Uint8Array(0),
+      app_hash: isSet(object.app_hash) ? bytesFromBase64(object.app_hash) : new Uint8Array(0),
+      last_results_hash: isSet(object.last_results_hash)
+        ? bytesFromBase64(object.last_results_hash)
+        : new Uint8Array(0),
+      evidence_hash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      proposer_address: isSet(object.proposer_address) ? bytesFromBase64(object.proposer_address) : new Uint8Array(0),
     };
   },
 
@@ -692,8 +694,8 @@ export const Header: MessageFns<Header> = {
     if (message.version !== undefined) {
       obj.version = Consensus.toJSON(message.version);
     }
-    if (message.chainId !== "") {
-      obj.chainId = message.chainId;
+    if (message.chain_id !== "") {
+      obj.chain_id = message.chain_id;
     }
     if (message.height !== 0) {
       obj.height = Math.round(message.height);
@@ -701,35 +703,35 @@ export const Header: MessageFns<Header> = {
     if (message.time !== undefined) {
       obj.time = fromTimestamp(message.time).toISOString();
     }
-    if (message.lastBlockId !== undefined) {
-      obj.lastBlockId = BlockID.toJSON(message.lastBlockId);
+    if (message.last_block_id !== undefined) {
+      obj.last_block_id = BlockID.toJSON(message.last_block_id);
     }
-    if (message.lastCommitHash.length !== 0) {
-      obj.lastCommitHash = base64FromBytes(message.lastCommitHash);
+    if (message.last_commit_hash.length !== 0) {
+      obj.last_commit_hash = base64FromBytes(message.last_commit_hash);
     }
-    if (message.dataHash.length !== 0) {
-      obj.dataHash = base64FromBytes(message.dataHash);
+    if (message.data_hash.length !== 0) {
+      obj.data_hash = base64FromBytes(message.data_hash);
     }
-    if (message.validatorsHash.length !== 0) {
-      obj.validatorsHash = base64FromBytes(message.validatorsHash);
+    if (message.validators_hash.length !== 0) {
+      obj.validators_hash = base64FromBytes(message.validators_hash);
     }
-    if (message.nextValidatorsHash.length !== 0) {
-      obj.nextValidatorsHash = base64FromBytes(message.nextValidatorsHash);
+    if (message.next_validators_hash.length !== 0) {
+      obj.next_validators_hash = base64FromBytes(message.next_validators_hash);
     }
-    if (message.consensusHash.length !== 0) {
-      obj.consensusHash = base64FromBytes(message.consensusHash);
+    if (message.consensus_hash.length !== 0) {
+      obj.consensus_hash = base64FromBytes(message.consensus_hash);
     }
-    if (message.appHash.length !== 0) {
-      obj.appHash = base64FromBytes(message.appHash);
+    if (message.app_hash.length !== 0) {
+      obj.app_hash = base64FromBytes(message.app_hash);
     }
-    if (message.lastResultsHash.length !== 0) {
-      obj.lastResultsHash = base64FromBytes(message.lastResultsHash);
+    if (message.last_results_hash.length !== 0) {
+      obj.last_results_hash = base64FromBytes(message.last_results_hash);
     }
-    if (message.evidenceHash.length !== 0) {
-      obj.evidenceHash = base64FromBytes(message.evidenceHash);
+    if (message.evidence_hash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidence_hash);
     }
-    if (message.proposerAddress.length !== 0) {
-      obj.proposerAddress = base64FromBytes(message.proposerAddress);
+    if (message.proposer_address.length !== 0) {
+      obj.proposer_address = base64FromBytes(message.proposer_address);
     }
     return obj;
   },
@@ -742,21 +744,21 @@ export const Header: MessageFns<Header> = {
     message.version = (object.version !== undefined && object.version !== null)
       ? Consensus.fromPartial(object.version)
       : undefined;
-    message.chainId = object.chainId ?? "";
+    message.chain_id = object.chain_id ?? "";
     message.height = object.height ?? 0;
     message.time = (object.time !== undefined && object.time !== null) ? Timestamp.fromPartial(object.time) : undefined;
-    message.lastBlockId = (object.lastBlockId !== undefined && object.lastBlockId !== null)
-      ? BlockID.fromPartial(object.lastBlockId)
+    message.last_block_id = (object.last_block_id !== undefined && object.last_block_id !== null)
+      ? BlockID.fromPartial(object.last_block_id)
       : undefined;
-    message.lastCommitHash = object.lastCommitHash ?? new Uint8Array(0);
-    message.dataHash = object.dataHash ?? new Uint8Array(0);
-    message.validatorsHash = object.validatorsHash ?? new Uint8Array(0);
-    message.nextValidatorsHash = object.nextValidatorsHash ?? new Uint8Array(0);
-    message.consensusHash = object.consensusHash ?? new Uint8Array(0);
-    message.appHash = object.appHash ?? new Uint8Array(0);
-    message.lastResultsHash = object.lastResultsHash ?? new Uint8Array(0);
-    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
-    message.proposerAddress = object.proposerAddress ?? new Uint8Array(0);
+    message.last_commit_hash = object.last_commit_hash ?? new Uint8Array(0);
+    message.data_hash = object.data_hash ?? new Uint8Array(0);
+    message.validators_hash = object.validators_hash ?? new Uint8Array(0);
+    message.next_validators_hash = object.next_validators_hash ?? new Uint8Array(0);
+    message.consensus_hash = object.consensus_hash ?? new Uint8Array(0);
+    message.app_hash = object.app_hash ?? new Uint8Array(0);
+    message.last_results_hash = object.last_results_hash ?? new Uint8Array(0);
+    message.evidence_hash = object.evidence_hash ?? new Uint8Array(0);
+    message.proposer_address = object.proposer_address ?? new Uint8Array(0);
     return message;
   },
 };
@@ -824,13 +826,13 @@ function createBaseVote(): Vote {
     type: 0,
     height: 0,
     round: 0,
-    blockId: undefined,
+    block_id: undefined,
     timestamp: undefined,
-    validatorAddress: new Uint8Array(0),
-    validatorIndex: 0,
+    validator_address: new Uint8Array(0),
+    validator_index: 0,
     signature: new Uint8Array(0),
     extension: new Uint8Array(0),
-    extensionSignature: new Uint8Array(0),
+    extension_signature: new Uint8Array(0),
   };
 }
 
@@ -845,17 +847,17 @@ export const Vote: MessageFns<Vote> = {
     if (message.round !== 0) {
       writer.uint32(24).int32(message.round);
     }
-    if (message.blockId !== undefined) {
-      BlockID.encode(message.blockId, writer.uint32(34).fork()).join();
+    if (message.block_id !== undefined) {
+      BlockID.encode(message.block_id, writer.uint32(34).fork()).join();
     }
     if (message.timestamp !== undefined) {
       Timestamp.encode(message.timestamp, writer.uint32(42).fork()).join();
     }
-    if (message.validatorAddress.length !== 0) {
-      writer.uint32(50).bytes(message.validatorAddress);
+    if (message.validator_address.length !== 0) {
+      writer.uint32(50).bytes(message.validator_address);
     }
-    if (message.validatorIndex !== 0) {
-      writer.uint32(56).int32(message.validatorIndex);
+    if (message.validator_index !== 0) {
+      writer.uint32(56).int32(message.validator_index);
     }
     if (message.signature.length !== 0) {
       writer.uint32(66).bytes(message.signature);
@@ -863,8 +865,8 @@ export const Vote: MessageFns<Vote> = {
     if (message.extension.length !== 0) {
       writer.uint32(74).bytes(message.extension);
     }
-    if (message.extensionSignature.length !== 0) {
-      writer.uint32(82).bytes(message.extensionSignature);
+    if (message.extension_signature.length !== 0) {
+      writer.uint32(82).bytes(message.extension_signature);
     }
     return writer;
   },
@@ -905,7 +907,7 @@ export const Vote: MessageFns<Vote> = {
             break;
           }
 
-          message.blockId = BlockID.decode(reader, reader.uint32());
+          message.block_id = BlockID.decode(reader, reader.uint32());
           continue;
         }
         case 5: {
@@ -921,7 +923,7 @@ export const Vote: MessageFns<Vote> = {
             break;
           }
 
-          message.validatorAddress = reader.bytes();
+          message.validator_address = reader.bytes();
           continue;
         }
         case 7: {
@@ -929,7 +931,7 @@ export const Vote: MessageFns<Vote> = {
             break;
           }
 
-          message.validatorIndex = reader.int32();
+          message.validator_index = reader.int32();
           continue;
         }
         case 8: {
@@ -953,7 +955,7 @@ export const Vote: MessageFns<Vote> = {
             break;
           }
 
-          message.extensionSignature = reader.bytes();
+          message.extension_signature = reader.bytes();
           continue;
         }
       }
@@ -970,14 +972,16 @@ export const Vote: MessageFns<Vote> = {
       type: isSet(object.type) ? signedMsgTypeFromJSON(object.type) : 0,
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       round: isSet(object.round) ? globalThis.Number(object.round) : 0,
-      blockId: isSet(object.blockId) ? BlockID.fromJSON(object.blockId) : undefined,
+      block_id: isSet(object.block_id) ? BlockID.fromJSON(object.block_id) : undefined,
       timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
-      validatorAddress: isSet(object.validatorAddress) ? bytesFromBase64(object.validatorAddress) : new Uint8Array(0),
-      validatorIndex: isSet(object.validatorIndex) ? globalThis.Number(object.validatorIndex) : 0,
+      validator_address: isSet(object.validator_address)
+        ? bytesFromBase64(object.validator_address)
+        : new Uint8Array(0),
+      validator_index: isSet(object.validator_index) ? globalThis.Number(object.validator_index) : 0,
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
       extension: isSet(object.extension) ? bytesFromBase64(object.extension) : new Uint8Array(0),
-      extensionSignature: isSet(object.extensionSignature)
-        ? bytesFromBase64(object.extensionSignature)
+      extension_signature: isSet(object.extension_signature)
+        ? bytesFromBase64(object.extension_signature)
         : new Uint8Array(0),
     };
   },
@@ -993,17 +997,17 @@ export const Vote: MessageFns<Vote> = {
     if (message.round !== 0) {
       obj.round = Math.round(message.round);
     }
-    if (message.blockId !== undefined) {
-      obj.blockId = BlockID.toJSON(message.blockId);
+    if (message.block_id !== undefined) {
+      obj.block_id = BlockID.toJSON(message.block_id);
     }
     if (message.timestamp !== undefined) {
       obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
-    if (message.validatorAddress.length !== 0) {
-      obj.validatorAddress = base64FromBytes(message.validatorAddress);
+    if (message.validator_address.length !== 0) {
+      obj.validator_address = base64FromBytes(message.validator_address);
     }
-    if (message.validatorIndex !== 0) {
-      obj.validatorIndex = Math.round(message.validatorIndex);
+    if (message.validator_index !== 0) {
+      obj.validator_index = Math.round(message.validator_index);
     }
     if (message.signature.length !== 0) {
       obj.signature = base64FromBytes(message.signature);
@@ -1011,8 +1015,8 @@ export const Vote: MessageFns<Vote> = {
     if (message.extension.length !== 0) {
       obj.extension = base64FromBytes(message.extension);
     }
-    if (message.extensionSignature.length !== 0) {
-      obj.extensionSignature = base64FromBytes(message.extensionSignature);
+    if (message.extension_signature.length !== 0) {
+      obj.extension_signature = base64FromBytes(message.extension_signature);
     }
     return obj;
   },
@@ -1025,23 +1029,23 @@ export const Vote: MessageFns<Vote> = {
     message.type = object.type ?? 0;
     message.height = object.height ?? 0;
     message.round = object.round ?? 0;
-    message.blockId = (object.blockId !== undefined && object.blockId !== null)
-      ? BlockID.fromPartial(object.blockId)
+    message.block_id = (object.block_id !== undefined && object.block_id !== null)
+      ? BlockID.fromPartial(object.block_id)
       : undefined;
     message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
       ? Timestamp.fromPartial(object.timestamp)
       : undefined;
-    message.validatorAddress = object.validatorAddress ?? new Uint8Array(0);
-    message.validatorIndex = object.validatorIndex ?? 0;
+    message.validator_address = object.validator_address ?? new Uint8Array(0);
+    message.validator_index = object.validator_index ?? 0;
     message.signature = object.signature ?? new Uint8Array(0);
     message.extension = object.extension ?? new Uint8Array(0);
-    message.extensionSignature = object.extensionSignature ?? new Uint8Array(0);
+    message.extension_signature = object.extension_signature ?? new Uint8Array(0);
     return message;
   },
 };
 
 function createBaseCommit(): Commit {
-  return { height: 0, round: 0, blockId: undefined, signatures: [] };
+  return { height: 0, round: 0, block_id: undefined, signatures: [] };
 }
 
 export const Commit: MessageFns<Commit> = {
@@ -1052,8 +1056,8 @@ export const Commit: MessageFns<Commit> = {
     if (message.round !== 0) {
       writer.uint32(16).int32(message.round);
     }
-    if (message.blockId !== undefined) {
-      BlockID.encode(message.blockId, writer.uint32(26).fork()).join();
+    if (message.block_id !== undefined) {
+      BlockID.encode(message.block_id, writer.uint32(26).fork()).join();
     }
     for (const v of message.signatures) {
       CommitSig.encode(v!, writer.uint32(34).fork()).join();
@@ -1089,7 +1093,7 @@ export const Commit: MessageFns<Commit> = {
             break;
           }
 
-          message.blockId = BlockID.decode(reader, reader.uint32());
+          message.block_id = BlockID.decode(reader, reader.uint32());
           continue;
         }
         case 4: {
@@ -1113,7 +1117,7 @@ export const Commit: MessageFns<Commit> = {
     return {
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       round: isSet(object.round) ? globalThis.Number(object.round) : 0,
-      blockId: isSet(object.blockId) ? BlockID.fromJSON(object.blockId) : undefined,
+      block_id: isSet(object.block_id) ? BlockID.fromJSON(object.block_id) : undefined,
       signatures: globalThis.Array.isArray(object?.signatures)
         ? object.signatures.map((e: any) => CommitSig.fromJSON(e))
         : [],
@@ -1128,8 +1132,8 @@ export const Commit: MessageFns<Commit> = {
     if (message.round !== 0) {
       obj.round = Math.round(message.round);
     }
-    if (message.blockId !== undefined) {
-      obj.blockId = BlockID.toJSON(message.blockId);
+    if (message.block_id !== undefined) {
+      obj.block_id = BlockID.toJSON(message.block_id);
     }
     if (message.signatures?.length) {
       obj.signatures = message.signatures.map((e) => CommitSig.toJSON(e));
@@ -1144,8 +1148,8 @@ export const Commit: MessageFns<Commit> = {
     const message = createBaseCommit();
     message.height = object.height ?? 0;
     message.round = object.round ?? 0;
-    message.blockId = (object.blockId !== undefined && object.blockId !== null)
-      ? BlockID.fromPartial(object.blockId)
+    message.block_id = (object.block_id !== undefined && object.block_id !== null)
+      ? BlockID.fromPartial(object.block_id)
       : undefined;
     message.signatures = object.signatures?.map((e) => CommitSig.fromPartial(e)) || [];
     return message;
@@ -1153,16 +1157,16 @@ export const Commit: MessageFns<Commit> = {
 };
 
 function createBaseCommitSig(): CommitSig {
-  return { blockIdFlag: 0, validatorAddress: new Uint8Array(0), timestamp: undefined, signature: new Uint8Array(0) };
+  return { block_id_flag: 0, validator_address: new Uint8Array(0), timestamp: undefined, signature: new Uint8Array(0) };
 }
 
 export const CommitSig: MessageFns<CommitSig> = {
   encode(message: CommitSig, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.blockIdFlag !== 0) {
-      writer.uint32(8).int32(message.blockIdFlag);
+    if (message.block_id_flag !== 0) {
+      writer.uint32(8).int32(message.block_id_flag);
     }
-    if (message.validatorAddress.length !== 0) {
-      writer.uint32(18).bytes(message.validatorAddress);
+    if (message.validator_address.length !== 0) {
+      writer.uint32(18).bytes(message.validator_address);
     }
     if (message.timestamp !== undefined) {
       Timestamp.encode(message.timestamp, writer.uint32(26).fork()).join();
@@ -1185,7 +1189,7 @@ export const CommitSig: MessageFns<CommitSig> = {
             break;
           }
 
-          message.blockIdFlag = reader.int32() as any;
+          message.block_id_flag = reader.int32() as any;
           continue;
         }
         case 2: {
@@ -1193,7 +1197,7 @@ export const CommitSig: MessageFns<CommitSig> = {
             break;
           }
 
-          message.validatorAddress = reader.bytes();
+          message.validator_address = reader.bytes();
           continue;
         }
         case 3: {
@@ -1223,8 +1227,10 @@ export const CommitSig: MessageFns<CommitSig> = {
 
   fromJSON(object: any): CommitSig {
     return {
-      blockIdFlag: isSet(object.blockIdFlag) ? blockIDFlagFromJSON(object.blockIdFlag) : 0,
-      validatorAddress: isSet(object.validatorAddress) ? bytesFromBase64(object.validatorAddress) : new Uint8Array(0),
+      block_id_flag: isSet(object.block_id_flag) ? blockIDFlagFromJSON(object.block_id_flag) : 0,
+      validator_address: isSet(object.validator_address)
+        ? bytesFromBase64(object.validator_address)
+        : new Uint8Array(0),
       timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
     };
@@ -1232,11 +1238,11 @@ export const CommitSig: MessageFns<CommitSig> = {
 
   toJSON(message: CommitSig): unknown {
     const obj: any = {};
-    if (message.blockIdFlag !== 0) {
-      obj.blockIdFlag = blockIDFlagToJSON(message.blockIdFlag);
+    if (message.block_id_flag !== 0) {
+      obj.block_id_flag = blockIDFlagToJSON(message.block_id_flag);
     }
-    if (message.validatorAddress.length !== 0) {
-      obj.validatorAddress = base64FromBytes(message.validatorAddress);
+    if (message.validator_address.length !== 0) {
+      obj.validator_address = base64FromBytes(message.validator_address);
     }
     if (message.timestamp !== undefined) {
       obj.timestamp = fromTimestamp(message.timestamp).toISOString();
@@ -1252,8 +1258,8 @@ export const CommitSig: MessageFns<CommitSig> = {
   },
   fromPartial<I extends Exact<DeepPartial<CommitSig>, I>>(object: I): CommitSig {
     const message = createBaseCommitSig();
-    message.blockIdFlag = object.blockIdFlag ?? 0;
-    message.validatorAddress = object.validatorAddress ?? new Uint8Array(0);
+    message.block_id_flag = object.block_id_flag ?? 0;
+    message.validator_address = object.validator_address ?? new Uint8Array(0);
     message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
       ? Timestamp.fromPartial(object.timestamp)
       : undefined;
@@ -1263,7 +1269,7 @@ export const CommitSig: MessageFns<CommitSig> = {
 };
 
 function createBaseExtendedCommit(): ExtendedCommit {
-  return { height: 0, round: 0, blockId: undefined, extendedSignatures: [] };
+  return { height: 0, round: 0, block_id: undefined, extended_signatures: [] };
 }
 
 export const ExtendedCommit: MessageFns<ExtendedCommit> = {
@@ -1274,10 +1280,10 @@ export const ExtendedCommit: MessageFns<ExtendedCommit> = {
     if (message.round !== 0) {
       writer.uint32(16).int32(message.round);
     }
-    if (message.blockId !== undefined) {
-      BlockID.encode(message.blockId, writer.uint32(26).fork()).join();
+    if (message.block_id !== undefined) {
+      BlockID.encode(message.block_id, writer.uint32(26).fork()).join();
     }
-    for (const v of message.extendedSignatures) {
+    for (const v of message.extended_signatures) {
       ExtendedCommitSig.encode(v!, writer.uint32(34).fork()).join();
     }
     return writer;
@@ -1311,7 +1317,7 @@ export const ExtendedCommit: MessageFns<ExtendedCommit> = {
             break;
           }
 
-          message.blockId = BlockID.decode(reader, reader.uint32());
+          message.block_id = BlockID.decode(reader, reader.uint32());
           continue;
         }
         case 4: {
@@ -1319,7 +1325,7 @@ export const ExtendedCommit: MessageFns<ExtendedCommit> = {
             break;
           }
 
-          message.extendedSignatures.push(ExtendedCommitSig.decode(reader, reader.uint32()));
+          message.extended_signatures.push(ExtendedCommitSig.decode(reader, reader.uint32()));
           continue;
         }
       }
@@ -1335,9 +1341,9 @@ export const ExtendedCommit: MessageFns<ExtendedCommit> = {
     return {
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       round: isSet(object.round) ? globalThis.Number(object.round) : 0,
-      blockId: isSet(object.blockId) ? BlockID.fromJSON(object.blockId) : undefined,
-      extendedSignatures: globalThis.Array.isArray(object?.extendedSignatures)
-        ? object.extendedSignatures.map((e: any) => ExtendedCommitSig.fromJSON(e))
+      block_id: isSet(object.block_id) ? BlockID.fromJSON(object.block_id) : undefined,
+      extended_signatures: globalThis.Array.isArray(object?.extended_signatures)
+        ? object.extended_signatures.map((e: any) => ExtendedCommitSig.fromJSON(e))
         : [],
     };
   },
@@ -1350,11 +1356,11 @@ export const ExtendedCommit: MessageFns<ExtendedCommit> = {
     if (message.round !== 0) {
       obj.round = Math.round(message.round);
     }
-    if (message.blockId !== undefined) {
-      obj.blockId = BlockID.toJSON(message.blockId);
+    if (message.block_id !== undefined) {
+      obj.block_id = BlockID.toJSON(message.block_id);
     }
-    if (message.extendedSignatures?.length) {
-      obj.extendedSignatures = message.extendedSignatures.map((e) => ExtendedCommitSig.toJSON(e));
+    if (message.extended_signatures?.length) {
+      obj.extended_signatures = message.extended_signatures.map((e) => ExtendedCommitSig.toJSON(e));
     }
     return obj;
   },
@@ -1366,32 +1372,32 @@ export const ExtendedCommit: MessageFns<ExtendedCommit> = {
     const message = createBaseExtendedCommit();
     message.height = object.height ?? 0;
     message.round = object.round ?? 0;
-    message.blockId = (object.blockId !== undefined && object.blockId !== null)
-      ? BlockID.fromPartial(object.blockId)
+    message.block_id = (object.block_id !== undefined && object.block_id !== null)
+      ? BlockID.fromPartial(object.block_id)
       : undefined;
-    message.extendedSignatures = object.extendedSignatures?.map((e) => ExtendedCommitSig.fromPartial(e)) || [];
+    message.extended_signatures = object.extended_signatures?.map((e) => ExtendedCommitSig.fromPartial(e)) || [];
     return message;
   },
 };
 
 function createBaseExtendedCommitSig(): ExtendedCommitSig {
   return {
-    blockIdFlag: 0,
-    validatorAddress: new Uint8Array(0),
+    block_id_flag: 0,
+    validator_address: new Uint8Array(0),
     timestamp: undefined,
     signature: new Uint8Array(0),
     extension: new Uint8Array(0),
-    extensionSignature: new Uint8Array(0),
+    extension_signature: new Uint8Array(0),
   };
 }
 
 export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
   encode(message: ExtendedCommitSig, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.blockIdFlag !== 0) {
-      writer.uint32(8).int32(message.blockIdFlag);
+    if (message.block_id_flag !== 0) {
+      writer.uint32(8).int32(message.block_id_flag);
     }
-    if (message.validatorAddress.length !== 0) {
-      writer.uint32(18).bytes(message.validatorAddress);
+    if (message.validator_address.length !== 0) {
+      writer.uint32(18).bytes(message.validator_address);
     }
     if (message.timestamp !== undefined) {
       Timestamp.encode(message.timestamp, writer.uint32(26).fork()).join();
@@ -1402,8 +1408,8 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
     if (message.extension.length !== 0) {
       writer.uint32(42).bytes(message.extension);
     }
-    if (message.extensionSignature.length !== 0) {
-      writer.uint32(50).bytes(message.extensionSignature);
+    if (message.extension_signature.length !== 0) {
+      writer.uint32(50).bytes(message.extension_signature);
     }
     return writer;
   },
@@ -1420,7 +1426,7 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
             break;
           }
 
-          message.blockIdFlag = reader.int32() as any;
+          message.block_id_flag = reader.int32() as any;
           continue;
         }
         case 2: {
@@ -1428,7 +1434,7 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
             break;
           }
 
-          message.validatorAddress = reader.bytes();
+          message.validator_address = reader.bytes();
           continue;
         }
         case 3: {
@@ -1460,7 +1466,7 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
             break;
           }
 
-          message.extensionSignature = reader.bytes();
+          message.extension_signature = reader.bytes();
           continue;
         }
       }
@@ -1474,24 +1480,26 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
 
   fromJSON(object: any): ExtendedCommitSig {
     return {
-      blockIdFlag: isSet(object.blockIdFlag) ? blockIDFlagFromJSON(object.blockIdFlag) : 0,
-      validatorAddress: isSet(object.validatorAddress) ? bytesFromBase64(object.validatorAddress) : new Uint8Array(0),
+      block_id_flag: isSet(object.block_id_flag) ? blockIDFlagFromJSON(object.block_id_flag) : 0,
+      validator_address: isSet(object.validator_address)
+        ? bytesFromBase64(object.validator_address)
+        : new Uint8Array(0),
       timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
       extension: isSet(object.extension) ? bytesFromBase64(object.extension) : new Uint8Array(0),
-      extensionSignature: isSet(object.extensionSignature)
-        ? bytesFromBase64(object.extensionSignature)
+      extension_signature: isSet(object.extension_signature)
+        ? bytesFromBase64(object.extension_signature)
         : new Uint8Array(0),
     };
   },
 
   toJSON(message: ExtendedCommitSig): unknown {
     const obj: any = {};
-    if (message.blockIdFlag !== 0) {
-      obj.blockIdFlag = blockIDFlagToJSON(message.blockIdFlag);
+    if (message.block_id_flag !== 0) {
+      obj.block_id_flag = blockIDFlagToJSON(message.block_id_flag);
     }
-    if (message.validatorAddress.length !== 0) {
-      obj.validatorAddress = base64FromBytes(message.validatorAddress);
+    if (message.validator_address.length !== 0) {
+      obj.validator_address = base64FromBytes(message.validator_address);
     }
     if (message.timestamp !== undefined) {
       obj.timestamp = fromTimestamp(message.timestamp).toISOString();
@@ -1502,8 +1510,8 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
     if (message.extension.length !== 0) {
       obj.extension = base64FromBytes(message.extension);
     }
-    if (message.extensionSignature.length !== 0) {
-      obj.extensionSignature = base64FromBytes(message.extensionSignature);
+    if (message.extension_signature.length !== 0) {
+      obj.extension_signature = base64FromBytes(message.extension_signature);
     }
     return obj;
   },
@@ -1513,14 +1521,14 @@ export const ExtendedCommitSig: MessageFns<ExtendedCommitSig> = {
   },
   fromPartial<I extends Exact<DeepPartial<ExtendedCommitSig>, I>>(object: I): ExtendedCommitSig {
     const message = createBaseExtendedCommitSig();
-    message.blockIdFlag = object.blockIdFlag ?? 0;
-    message.validatorAddress = object.validatorAddress ?? new Uint8Array(0);
+    message.block_id_flag = object.block_id_flag ?? 0;
+    message.validator_address = object.validator_address ?? new Uint8Array(0);
     message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
       ? Timestamp.fromPartial(object.timestamp)
       : undefined;
     message.signature = object.signature ?? new Uint8Array(0);
     message.extension = object.extension ?? new Uint8Array(0);
-    message.extensionSignature = object.extensionSignature ?? new Uint8Array(0);
+    message.extension_signature = object.extension_signature ?? new Uint8Array(0);
     return message;
   },
 };
@@ -1530,8 +1538,8 @@ function createBaseProposal(): Proposal {
     type: 0,
     height: 0,
     round: 0,
-    polRound: 0,
-    blockId: undefined,
+    pol_round: 0,
+    block_id: undefined,
     timestamp: undefined,
     signature: new Uint8Array(0),
   };
@@ -1548,11 +1556,11 @@ export const Proposal: MessageFns<Proposal> = {
     if (message.round !== 0) {
       writer.uint32(24).int32(message.round);
     }
-    if (message.polRound !== 0) {
-      writer.uint32(32).int32(message.polRound);
+    if (message.pol_round !== 0) {
+      writer.uint32(32).int32(message.pol_round);
     }
-    if (message.blockId !== undefined) {
-      BlockID.encode(message.blockId, writer.uint32(42).fork()).join();
+    if (message.block_id !== undefined) {
+      BlockID.encode(message.block_id, writer.uint32(42).fork()).join();
     }
     if (message.timestamp !== undefined) {
       Timestamp.encode(message.timestamp, writer.uint32(50).fork()).join();
@@ -1599,7 +1607,7 @@ export const Proposal: MessageFns<Proposal> = {
             break;
           }
 
-          message.polRound = reader.int32();
+          message.pol_round = reader.int32();
           continue;
         }
         case 5: {
@@ -1607,7 +1615,7 @@ export const Proposal: MessageFns<Proposal> = {
             break;
           }
 
-          message.blockId = BlockID.decode(reader, reader.uint32());
+          message.block_id = BlockID.decode(reader, reader.uint32());
           continue;
         }
         case 6: {
@@ -1640,8 +1648,8 @@ export const Proposal: MessageFns<Proposal> = {
       type: isSet(object.type) ? signedMsgTypeFromJSON(object.type) : 0,
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       round: isSet(object.round) ? globalThis.Number(object.round) : 0,
-      polRound: isSet(object.polRound) ? globalThis.Number(object.polRound) : 0,
-      blockId: isSet(object.blockId) ? BlockID.fromJSON(object.blockId) : undefined,
+      pol_round: isSet(object.pol_round) ? globalThis.Number(object.pol_round) : 0,
+      block_id: isSet(object.block_id) ? BlockID.fromJSON(object.block_id) : undefined,
       timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
     };
@@ -1658,11 +1666,11 @@ export const Proposal: MessageFns<Proposal> = {
     if (message.round !== 0) {
       obj.round = Math.round(message.round);
     }
-    if (message.polRound !== 0) {
-      obj.polRound = Math.round(message.polRound);
+    if (message.pol_round !== 0) {
+      obj.pol_round = Math.round(message.pol_round);
     }
-    if (message.blockId !== undefined) {
-      obj.blockId = BlockID.toJSON(message.blockId);
+    if (message.block_id !== undefined) {
+      obj.block_id = BlockID.toJSON(message.block_id);
     }
     if (message.timestamp !== undefined) {
       obj.timestamp = fromTimestamp(message.timestamp).toISOString();
@@ -1681,9 +1689,9 @@ export const Proposal: MessageFns<Proposal> = {
     message.type = object.type ?? 0;
     message.height = object.height ?? 0;
     message.round = object.round ?? 0;
-    message.polRound = object.polRound ?? 0;
-    message.blockId = (object.blockId !== undefined && object.blockId !== null)
-      ? BlockID.fromPartial(object.blockId)
+    message.pol_round = object.pol_round ?? 0;
+    message.block_id = (object.block_id !== undefined && object.block_id !== null)
+      ? BlockID.fromPartial(object.block_id)
       : undefined;
     message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
       ? Timestamp.fromPartial(object.timestamp)
@@ -1774,16 +1782,16 @@ export const SignedHeader: MessageFns<SignedHeader> = {
 };
 
 function createBaseLightBlock(): LightBlock {
-  return { signedHeader: undefined, validatorSet: undefined };
+  return { signed_header: undefined, validator_set: undefined };
 }
 
 export const LightBlock: MessageFns<LightBlock> = {
   encode(message: LightBlock, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.signedHeader !== undefined) {
-      SignedHeader.encode(message.signedHeader, writer.uint32(10).fork()).join();
+    if (message.signed_header !== undefined) {
+      SignedHeader.encode(message.signed_header, writer.uint32(10).fork()).join();
     }
-    if (message.validatorSet !== undefined) {
-      ValidatorSet.encode(message.validatorSet, writer.uint32(18).fork()).join();
+    if (message.validator_set !== undefined) {
+      ValidatorSet.encode(message.validator_set, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -1800,7 +1808,7 @@ export const LightBlock: MessageFns<LightBlock> = {
             break;
           }
 
-          message.signedHeader = SignedHeader.decode(reader, reader.uint32());
+          message.signed_header = SignedHeader.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -1808,7 +1816,7 @@ export const LightBlock: MessageFns<LightBlock> = {
             break;
           }
 
-          message.validatorSet = ValidatorSet.decode(reader, reader.uint32());
+          message.validator_set = ValidatorSet.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -1822,18 +1830,18 @@ export const LightBlock: MessageFns<LightBlock> = {
 
   fromJSON(object: any): LightBlock {
     return {
-      signedHeader: isSet(object.signedHeader) ? SignedHeader.fromJSON(object.signedHeader) : undefined,
-      validatorSet: isSet(object.validatorSet) ? ValidatorSet.fromJSON(object.validatorSet) : undefined,
+      signed_header: isSet(object.signed_header) ? SignedHeader.fromJSON(object.signed_header) : undefined,
+      validator_set: isSet(object.validator_set) ? ValidatorSet.fromJSON(object.validator_set) : undefined,
     };
   },
 
   toJSON(message: LightBlock): unknown {
     const obj: any = {};
-    if (message.signedHeader !== undefined) {
-      obj.signedHeader = SignedHeader.toJSON(message.signedHeader);
+    if (message.signed_header !== undefined) {
+      obj.signed_header = SignedHeader.toJSON(message.signed_header);
     }
-    if (message.validatorSet !== undefined) {
-      obj.validatorSet = ValidatorSet.toJSON(message.validatorSet);
+    if (message.validator_set !== undefined) {
+      obj.validator_set = ValidatorSet.toJSON(message.validator_set);
     }
     return obj;
   },
@@ -1843,33 +1851,33 @@ export const LightBlock: MessageFns<LightBlock> = {
   },
   fromPartial<I extends Exact<DeepPartial<LightBlock>, I>>(object: I): LightBlock {
     const message = createBaseLightBlock();
-    message.signedHeader = (object.signedHeader !== undefined && object.signedHeader !== null)
-      ? SignedHeader.fromPartial(object.signedHeader)
+    message.signed_header = (object.signed_header !== undefined && object.signed_header !== null)
+      ? SignedHeader.fromPartial(object.signed_header)
       : undefined;
-    message.validatorSet = (object.validatorSet !== undefined && object.validatorSet !== null)
-      ? ValidatorSet.fromPartial(object.validatorSet)
+    message.validator_set = (object.validator_set !== undefined && object.validator_set !== null)
+      ? ValidatorSet.fromPartial(object.validator_set)
       : undefined;
     return message;
   },
 };
 
 function createBaseBlockMeta(): BlockMeta {
-  return { blockId: undefined, blockSize: 0, header: undefined, numTxs: 0 };
+  return { block_id: undefined, block_size: 0, header: undefined, num_txs: 0 };
 }
 
 export const BlockMeta: MessageFns<BlockMeta> = {
   encode(message: BlockMeta, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.blockId !== undefined) {
-      BlockID.encode(message.blockId, writer.uint32(10).fork()).join();
+    if (message.block_id !== undefined) {
+      BlockID.encode(message.block_id, writer.uint32(10).fork()).join();
     }
-    if (message.blockSize !== 0) {
-      writer.uint32(16).int64(message.blockSize);
+    if (message.block_size !== 0) {
+      writer.uint32(16).int64(message.block_size);
     }
     if (message.header !== undefined) {
       Header.encode(message.header, writer.uint32(26).fork()).join();
     }
-    if (message.numTxs !== 0) {
-      writer.uint32(32).int64(message.numTxs);
+    if (message.num_txs !== 0) {
+      writer.uint32(32).int64(message.num_txs);
     }
     return writer;
   },
@@ -1886,7 +1894,7 @@ export const BlockMeta: MessageFns<BlockMeta> = {
             break;
           }
 
-          message.blockId = BlockID.decode(reader, reader.uint32());
+          message.block_id = BlockID.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -1894,7 +1902,7 @@ export const BlockMeta: MessageFns<BlockMeta> = {
             break;
           }
 
-          message.blockSize = longToNumber(reader.int64());
+          message.block_size = longToNumber(reader.int64());
           continue;
         }
         case 3: {
@@ -1910,7 +1918,7 @@ export const BlockMeta: MessageFns<BlockMeta> = {
             break;
           }
 
-          message.numTxs = longToNumber(reader.int64());
+          message.num_txs = longToNumber(reader.int64());
           continue;
         }
       }
@@ -1924,26 +1932,26 @@ export const BlockMeta: MessageFns<BlockMeta> = {
 
   fromJSON(object: any): BlockMeta {
     return {
-      blockId: isSet(object.blockId) ? BlockID.fromJSON(object.blockId) : undefined,
-      blockSize: isSet(object.blockSize) ? globalThis.Number(object.blockSize) : 0,
+      block_id: isSet(object.block_id) ? BlockID.fromJSON(object.block_id) : undefined,
+      block_size: isSet(object.block_size) ? globalThis.Number(object.block_size) : 0,
       header: isSet(object.header) ? Header.fromJSON(object.header) : undefined,
-      numTxs: isSet(object.numTxs) ? globalThis.Number(object.numTxs) : 0,
+      num_txs: isSet(object.num_txs) ? globalThis.Number(object.num_txs) : 0,
     };
   },
 
   toJSON(message: BlockMeta): unknown {
     const obj: any = {};
-    if (message.blockId !== undefined) {
-      obj.blockId = BlockID.toJSON(message.blockId);
+    if (message.block_id !== undefined) {
+      obj.block_id = BlockID.toJSON(message.block_id);
     }
-    if (message.blockSize !== 0) {
-      obj.blockSize = Math.round(message.blockSize);
+    if (message.block_size !== 0) {
+      obj.block_size = Math.round(message.block_size);
     }
     if (message.header !== undefined) {
       obj.header = Header.toJSON(message.header);
     }
-    if (message.numTxs !== 0) {
-      obj.numTxs = Math.round(message.numTxs);
+    if (message.num_txs !== 0) {
+      obj.num_txs = Math.round(message.num_txs);
     }
     return obj;
   },
@@ -1953,26 +1961,26 @@ export const BlockMeta: MessageFns<BlockMeta> = {
   },
   fromPartial<I extends Exact<DeepPartial<BlockMeta>, I>>(object: I): BlockMeta {
     const message = createBaseBlockMeta();
-    message.blockId = (object.blockId !== undefined && object.blockId !== null)
-      ? BlockID.fromPartial(object.blockId)
+    message.block_id = (object.block_id !== undefined && object.block_id !== null)
+      ? BlockID.fromPartial(object.block_id)
       : undefined;
-    message.blockSize = object.blockSize ?? 0;
+    message.block_size = object.block_size ?? 0;
     message.header = (object.header !== undefined && object.header !== null)
       ? Header.fromPartial(object.header)
       : undefined;
-    message.numTxs = object.numTxs ?? 0;
+    message.num_txs = object.num_txs ?? 0;
     return message;
   },
 };
 
 function createBaseTxProof(): TxProof {
-  return { rootHash: new Uint8Array(0), data: new Uint8Array(0), proof: undefined };
+  return { root_hash: new Uint8Array(0), data: new Uint8Array(0), proof: undefined };
 }
 
 export const TxProof: MessageFns<TxProof> = {
   encode(message: TxProof, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.rootHash.length !== 0) {
-      writer.uint32(10).bytes(message.rootHash);
+    if (message.root_hash.length !== 0) {
+      writer.uint32(10).bytes(message.root_hash);
     }
     if (message.data.length !== 0) {
       writer.uint32(18).bytes(message.data);
@@ -1995,7 +2003,7 @@ export const TxProof: MessageFns<TxProof> = {
             break;
           }
 
-          message.rootHash = reader.bytes();
+          message.root_hash = reader.bytes();
           continue;
         }
         case 2: {
@@ -2025,7 +2033,7 @@ export const TxProof: MessageFns<TxProof> = {
 
   fromJSON(object: any): TxProof {
     return {
-      rootHash: isSet(object.rootHash) ? bytesFromBase64(object.rootHash) : new Uint8Array(0),
+      root_hash: isSet(object.root_hash) ? bytesFromBase64(object.root_hash) : new Uint8Array(0),
       data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
       proof: isSet(object.proof) ? Proof.fromJSON(object.proof) : undefined,
     };
@@ -2033,8 +2041,8 @@ export const TxProof: MessageFns<TxProof> = {
 
   toJSON(message: TxProof): unknown {
     const obj: any = {};
-    if (message.rootHash.length !== 0) {
-      obj.rootHash = base64FromBytes(message.rootHash);
+    if (message.root_hash.length !== 0) {
+      obj.root_hash = base64FromBytes(message.root_hash);
     }
     if (message.data.length !== 0) {
       obj.data = base64FromBytes(message.data);
@@ -2050,7 +2058,7 @@ export const TxProof: MessageFns<TxProof> = {
   },
   fromPartial<I extends Exact<DeepPartial<TxProof>, I>>(object: I): TxProof {
     const message = createBaseTxProof();
-    message.rootHash = object.rootHash ?? new Uint8Array(0);
+    message.root_hash = object.root_hash ?? new Uint8Array(0);
     message.data = object.data ?? new Uint8Array(0);
     message.proof = (object.proof !== undefined && object.proof !== null) ? Proof.fromPartial(object.proof) : undefined;
     return message;

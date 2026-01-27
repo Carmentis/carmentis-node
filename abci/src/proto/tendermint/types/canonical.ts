@@ -13,7 +13,7 @@ export const protobufPackage = "tendermint.types";
 
 export interface CanonicalBlockID {
   hash: Uint8Array;
-  partSetHeader: CanonicalPartSetHeader | undefined;
+  part_set_header: CanonicalPartSetHeader | undefined;
 }
 
 export interface CanonicalPartSetHeader {
@@ -28,10 +28,10 @@ export interface CanonicalProposal {
   height: number;
   /** canonicalization requires fixed size encoding here */
   round: number;
-  polRound: number;
-  blockId: CanonicalBlockID | undefined;
+  pol_round: number;
+  block_id: CanonicalBlockID | undefined;
   timestamp: Timestamp | undefined;
-  chainId: string;
+  chain_id: string;
 }
 
 export interface CanonicalVote {
@@ -41,9 +41,9 @@ export interface CanonicalVote {
   height: number;
   /** canonicalization requires fixed size encoding here */
   round: number;
-  blockId: CanonicalBlockID | undefined;
+  block_id: CanonicalBlockID | undefined;
   timestamp: Timestamp | undefined;
-  chainId: string;
+  chain_id: string;
 }
 
 /**
@@ -54,11 +54,11 @@ export interface CanonicalVoteExtension {
   extension: Uint8Array;
   height: number;
   round: number;
-  chainId: string;
+  chain_id: string;
 }
 
 function createBaseCanonicalBlockID(): CanonicalBlockID {
-  return { hash: new Uint8Array(0), partSetHeader: undefined };
+  return { hash: new Uint8Array(0), part_set_header: undefined };
 }
 
 export const CanonicalBlockID: MessageFns<CanonicalBlockID> = {
@@ -66,8 +66,8 @@ export const CanonicalBlockID: MessageFns<CanonicalBlockID> = {
     if (message.hash.length !== 0) {
       writer.uint32(10).bytes(message.hash);
     }
-    if (message.partSetHeader !== undefined) {
-      CanonicalPartSetHeader.encode(message.partSetHeader, writer.uint32(18).fork()).join();
+    if (message.part_set_header !== undefined) {
+      CanonicalPartSetHeader.encode(message.part_set_header, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -92,7 +92,7 @@ export const CanonicalBlockID: MessageFns<CanonicalBlockID> = {
             break;
           }
 
-          message.partSetHeader = CanonicalPartSetHeader.decode(reader, reader.uint32());
+          message.part_set_header = CanonicalPartSetHeader.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -107,7 +107,9 @@ export const CanonicalBlockID: MessageFns<CanonicalBlockID> = {
   fromJSON(object: any): CanonicalBlockID {
     return {
       hash: isSet(object.hash) ? bytesFromBase64(object.hash) : new Uint8Array(0),
-      partSetHeader: isSet(object.partSetHeader) ? CanonicalPartSetHeader.fromJSON(object.partSetHeader) : undefined,
+      part_set_header: isSet(object.part_set_header)
+        ? CanonicalPartSetHeader.fromJSON(object.part_set_header)
+        : undefined,
     };
   },
 
@@ -116,8 +118,8 @@ export const CanonicalBlockID: MessageFns<CanonicalBlockID> = {
     if (message.hash.length !== 0) {
       obj.hash = base64FromBytes(message.hash);
     }
-    if (message.partSetHeader !== undefined) {
-      obj.partSetHeader = CanonicalPartSetHeader.toJSON(message.partSetHeader);
+    if (message.part_set_header !== undefined) {
+      obj.part_set_header = CanonicalPartSetHeader.toJSON(message.part_set_header);
     }
     return obj;
   },
@@ -128,8 +130,8 @@ export const CanonicalBlockID: MessageFns<CanonicalBlockID> = {
   fromPartial<I extends Exact<DeepPartial<CanonicalBlockID>, I>>(object: I): CanonicalBlockID {
     const message = createBaseCanonicalBlockID();
     message.hash = object.hash ?? new Uint8Array(0);
-    message.partSetHeader = (object.partSetHeader !== undefined && object.partSetHeader !== null)
-      ? CanonicalPartSetHeader.fromPartial(object.partSetHeader)
+    message.part_set_header = (object.part_set_header !== undefined && object.part_set_header !== null)
+      ? CanonicalPartSetHeader.fromPartial(object.part_set_header)
       : undefined;
     return message;
   },
@@ -212,7 +214,7 @@ export const CanonicalPartSetHeader: MessageFns<CanonicalPartSetHeader> = {
 };
 
 function createBaseCanonicalProposal(): CanonicalProposal {
-  return { type: 0, height: 0, round: 0, polRound: 0, blockId: undefined, timestamp: undefined, chainId: "" };
+  return { type: 0, height: 0, round: 0, pol_round: 0, block_id: undefined, timestamp: undefined, chain_id: "" };
 }
 
 export const CanonicalProposal: MessageFns<CanonicalProposal> = {
@@ -226,17 +228,17 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
     if (message.round !== 0) {
       writer.uint32(25).sfixed64(message.round);
     }
-    if (message.polRound !== 0) {
-      writer.uint32(32).int64(message.polRound);
+    if (message.pol_round !== 0) {
+      writer.uint32(32).int64(message.pol_round);
     }
-    if (message.blockId !== undefined) {
-      CanonicalBlockID.encode(message.blockId, writer.uint32(42).fork()).join();
+    if (message.block_id !== undefined) {
+      CanonicalBlockID.encode(message.block_id, writer.uint32(42).fork()).join();
     }
     if (message.timestamp !== undefined) {
       Timestamp.encode(message.timestamp, writer.uint32(50).fork()).join();
     }
-    if (message.chainId !== "") {
-      writer.uint32(58).string(message.chainId);
+    if (message.chain_id !== "") {
+      writer.uint32(58).string(message.chain_id);
     }
     return writer;
   },
@@ -277,7 +279,7 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
             break;
           }
 
-          message.polRound = longToNumber(reader.int64());
+          message.pol_round = longToNumber(reader.int64());
           continue;
         }
         case 5: {
@@ -285,7 +287,7 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
             break;
           }
 
-          message.blockId = CanonicalBlockID.decode(reader, reader.uint32());
+          message.block_id = CanonicalBlockID.decode(reader, reader.uint32());
           continue;
         }
         case 6: {
@@ -301,7 +303,7 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
             break;
           }
 
-          message.chainId = reader.string();
+          message.chain_id = reader.string();
           continue;
         }
       }
@@ -318,10 +320,10 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
       type: isSet(object.type) ? signedMsgTypeFromJSON(object.type) : 0,
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       round: isSet(object.round) ? globalThis.Number(object.round) : 0,
-      polRound: isSet(object.polRound) ? globalThis.Number(object.polRound) : 0,
-      blockId: isSet(object.blockId) ? CanonicalBlockID.fromJSON(object.blockId) : undefined,
+      pol_round: isSet(object.pol_round) ? globalThis.Number(object.pol_round) : 0,
+      block_id: isSet(object.block_id) ? CanonicalBlockID.fromJSON(object.block_id) : undefined,
       timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
-      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
+      chain_id: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
     };
   },
 
@@ -336,17 +338,17 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
     if (message.round !== 0) {
       obj.round = Math.round(message.round);
     }
-    if (message.polRound !== 0) {
-      obj.polRound = Math.round(message.polRound);
+    if (message.pol_round !== 0) {
+      obj.pol_round = Math.round(message.pol_round);
     }
-    if (message.blockId !== undefined) {
-      obj.blockId = CanonicalBlockID.toJSON(message.blockId);
+    if (message.block_id !== undefined) {
+      obj.block_id = CanonicalBlockID.toJSON(message.block_id);
     }
     if (message.timestamp !== undefined) {
       obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
-    if (message.chainId !== "") {
-      obj.chainId = message.chainId;
+    if (message.chain_id !== "") {
+      obj.chain_id = message.chain_id;
     }
     return obj;
   },
@@ -359,20 +361,20 @@ export const CanonicalProposal: MessageFns<CanonicalProposal> = {
     message.type = object.type ?? 0;
     message.height = object.height ?? 0;
     message.round = object.round ?? 0;
-    message.polRound = object.polRound ?? 0;
-    message.blockId = (object.blockId !== undefined && object.blockId !== null)
-      ? CanonicalBlockID.fromPartial(object.blockId)
+    message.pol_round = object.pol_round ?? 0;
+    message.block_id = (object.block_id !== undefined && object.block_id !== null)
+      ? CanonicalBlockID.fromPartial(object.block_id)
       : undefined;
     message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
       ? Timestamp.fromPartial(object.timestamp)
       : undefined;
-    message.chainId = object.chainId ?? "";
+    message.chain_id = object.chain_id ?? "";
     return message;
   },
 };
 
 function createBaseCanonicalVote(): CanonicalVote {
-  return { type: 0, height: 0, round: 0, blockId: undefined, timestamp: undefined, chainId: "" };
+  return { type: 0, height: 0, round: 0, block_id: undefined, timestamp: undefined, chain_id: "" };
 }
 
 export const CanonicalVote: MessageFns<CanonicalVote> = {
@@ -386,14 +388,14 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
     if (message.round !== 0) {
       writer.uint32(25).sfixed64(message.round);
     }
-    if (message.blockId !== undefined) {
-      CanonicalBlockID.encode(message.blockId, writer.uint32(34).fork()).join();
+    if (message.block_id !== undefined) {
+      CanonicalBlockID.encode(message.block_id, writer.uint32(34).fork()).join();
     }
     if (message.timestamp !== undefined) {
       Timestamp.encode(message.timestamp, writer.uint32(42).fork()).join();
     }
-    if (message.chainId !== "") {
-      writer.uint32(50).string(message.chainId);
+    if (message.chain_id !== "") {
+      writer.uint32(50).string(message.chain_id);
     }
     return writer;
   },
@@ -434,7 +436,7 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
             break;
           }
 
-          message.blockId = CanonicalBlockID.decode(reader, reader.uint32());
+          message.block_id = CanonicalBlockID.decode(reader, reader.uint32());
           continue;
         }
         case 5: {
@@ -450,7 +452,7 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
             break;
           }
 
-          message.chainId = reader.string();
+          message.chain_id = reader.string();
           continue;
         }
       }
@@ -467,9 +469,9 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
       type: isSet(object.type) ? signedMsgTypeFromJSON(object.type) : 0,
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       round: isSet(object.round) ? globalThis.Number(object.round) : 0,
-      blockId: isSet(object.blockId) ? CanonicalBlockID.fromJSON(object.blockId) : undefined,
+      block_id: isSet(object.block_id) ? CanonicalBlockID.fromJSON(object.block_id) : undefined,
       timestamp: isSet(object.timestamp) ? fromJsonTimestamp(object.timestamp) : undefined,
-      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
+      chain_id: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
     };
   },
 
@@ -484,14 +486,14 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
     if (message.round !== 0) {
       obj.round = Math.round(message.round);
     }
-    if (message.blockId !== undefined) {
-      obj.blockId = CanonicalBlockID.toJSON(message.blockId);
+    if (message.block_id !== undefined) {
+      obj.block_id = CanonicalBlockID.toJSON(message.block_id);
     }
     if (message.timestamp !== undefined) {
       obj.timestamp = fromTimestamp(message.timestamp).toISOString();
     }
-    if (message.chainId !== "") {
-      obj.chainId = message.chainId;
+    if (message.chain_id !== "") {
+      obj.chain_id = message.chain_id;
     }
     return obj;
   },
@@ -504,19 +506,19 @@ export const CanonicalVote: MessageFns<CanonicalVote> = {
     message.type = object.type ?? 0;
     message.height = object.height ?? 0;
     message.round = object.round ?? 0;
-    message.blockId = (object.blockId !== undefined && object.blockId !== null)
-      ? CanonicalBlockID.fromPartial(object.blockId)
+    message.block_id = (object.block_id !== undefined && object.block_id !== null)
+      ? CanonicalBlockID.fromPartial(object.block_id)
       : undefined;
     message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
       ? Timestamp.fromPartial(object.timestamp)
       : undefined;
-    message.chainId = object.chainId ?? "";
+    message.chain_id = object.chain_id ?? "";
     return message;
   },
 };
 
 function createBaseCanonicalVoteExtension(): CanonicalVoteExtension {
-  return { extension: new Uint8Array(0), height: 0, round: 0, chainId: "" };
+  return { extension: new Uint8Array(0), height: 0, round: 0, chain_id: "" };
 }
 
 export const CanonicalVoteExtension: MessageFns<CanonicalVoteExtension> = {
@@ -530,8 +532,8 @@ export const CanonicalVoteExtension: MessageFns<CanonicalVoteExtension> = {
     if (message.round !== 0) {
       writer.uint32(25).sfixed64(message.round);
     }
-    if (message.chainId !== "") {
-      writer.uint32(34).string(message.chainId);
+    if (message.chain_id !== "") {
+      writer.uint32(34).string(message.chain_id);
     }
     return writer;
   },
@@ -572,7 +574,7 @@ export const CanonicalVoteExtension: MessageFns<CanonicalVoteExtension> = {
             break;
           }
 
-          message.chainId = reader.string();
+          message.chain_id = reader.string();
           continue;
         }
       }
@@ -589,7 +591,7 @@ export const CanonicalVoteExtension: MessageFns<CanonicalVoteExtension> = {
       extension: isSet(object.extension) ? bytesFromBase64(object.extension) : new Uint8Array(0),
       height: isSet(object.height) ? globalThis.Number(object.height) : 0,
       round: isSet(object.round) ? globalThis.Number(object.round) : 0,
-      chainId: isSet(object.chainId) ? globalThis.String(object.chainId) : "",
+      chain_id: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
     };
   },
 
@@ -604,8 +606,8 @@ export const CanonicalVoteExtension: MessageFns<CanonicalVoteExtension> = {
     if (message.round !== 0) {
       obj.round = Math.round(message.round);
     }
-    if (message.chainId !== "") {
-      obj.chainId = message.chainId;
+    if (message.chain_id !== "") {
+      obj.chain_id = message.chain_id;
     }
     return obj;
   },
@@ -618,7 +620,7 @@ export const CanonicalVoteExtension: MessageFns<CanonicalVoteExtension> = {
     message.extension = object.extension ?? new Uint8Array(0);
     message.height = object.height ?? 0;
     message.round = object.round ?? 0;
-    message.chainId = object.chainId ?? "";
+    message.chain_id = object.chain_id ?? "";
     return message;
   },
 };

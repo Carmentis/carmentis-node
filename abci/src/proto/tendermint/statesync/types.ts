@@ -10,10 +10,10 @@ import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 export const protobufPackage = "tendermint.statesync";
 
 export interface Message {
-  snapshotsRequest?: SnapshotsRequest | undefined;
-  snapshotsResponse?: SnapshotsResponse | undefined;
-  chunkRequest?: ChunkRequest | undefined;
-  chunkResponse?: ChunkResponse | undefined;
+  snapshots_request?: SnapshotsRequest | undefined;
+  snapshots_response?: SnapshotsResponse | undefined;
+  chunk_request?: ChunkRequest | undefined;
+  chunk_response?: ChunkResponse | undefined;
 }
 
 export interface SnapshotsRequest {
@@ -43,26 +43,26 @@ export interface ChunkResponse {
 
 function createBaseMessage(): Message {
   return {
-    snapshotsRequest: undefined,
-    snapshotsResponse: undefined,
-    chunkRequest: undefined,
-    chunkResponse: undefined,
+    snapshots_request: undefined,
+    snapshots_response: undefined,
+    chunk_request: undefined,
+    chunk_response: undefined,
   };
 }
 
 export const Message: MessageFns<Message> = {
   encode(message: Message, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.snapshotsRequest !== undefined) {
-      SnapshotsRequest.encode(message.snapshotsRequest, writer.uint32(10).fork()).join();
+    if (message.snapshots_request !== undefined) {
+      SnapshotsRequest.encode(message.snapshots_request, writer.uint32(10).fork()).join();
     }
-    if (message.snapshotsResponse !== undefined) {
-      SnapshotsResponse.encode(message.snapshotsResponse, writer.uint32(18).fork()).join();
+    if (message.snapshots_response !== undefined) {
+      SnapshotsResponse.encode(message.snapshots_response, writer.uint32(18).fork()).join();
     }
-    if (message.chunkRequest !== undefined) {
-      ChunkRequest.encode(message.chunkRequest, writer.uint32(26).fork()).join();
+    if (message.chunk_request !== undefined) {
+      ChunkRequest.encode(message.chunk_request, writer.uint32(26).fork()).join();
     }
-    if (message.chunkResponse !== undefined) {
-      ChunkResponse.encode(message.chunkResponse, writer.uint32(34).fork()).join();
+    if (message.chunk_response !== undefined) {
+      ChunkResponse.encode(message.chunk_response, writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -79,7 +79,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.snapshotsRequest = SnapshotsRequest.decode(reader, reader.uint32());
+          message.snapshots_request = SnapshotsRequest.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -87,7 +87,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.snapshotsResponse = SnapshotsResponse.decode(reader, reader.uint32());
+          message.snapshots_response = SnapshotsResponse.decode(reader, reader.uint32());
           continue;
         }
         case 3: {
@@ -95,7 +95,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.chunkRequest = ChunkRequest.decode(reader, reader.uint32());
+          message.chunk_request = ChunkRequest.decode(reader, reader.uint32());
           continue;
         }
         case 4: {
@@ -103,7 +103,7 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.chunkResponse = ChunkResponse.decode(reader, reader.uint32());
+          message.chunk_response = ChunkResponse.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -117,28 +117,30 @@ export const Message: MessageFns<Message> = {
 
   fromJSON(object: any): Message {
     return {
-      snapshotsRequest: isSet(object.snapshotsRequest) ? SnapshotsRequest.fromJSON(object.snapshotsRequest) : undefined,
-      snapshotsResponse: isSet(object.snapshotsResponse)
-        ? SnapshotsResponse.fromJSON(object.snapshotsResponse)
+      snapshots_request: isSet(object.snapshots_request)
+        ? SnapshotsRequest.fromJSON(object.snapshots_request)
         : undefined,
-      chunkRequest: isSet(object.chunkRequest) ? ChunkRequest.fromJSON(object.chunkRequest) : undefined,
-      chunkResponse: isSet(object.chunkResponse) ? ChunkResponse.fromJSON(object.chunkResponse) : undefined,
+      snapshots_response: isSet(object.snapshots_response)
+        ? SnapshotsResponse.fromJSON(object.snapshots_response)
+        : undefined,
+      chunk_request: isSet(object.chunk_request) ? ChunkRequest.fromJSON(object.chunk_request) : undefined,
+      chunk_response: isSet(object.chunk_response) ? ChunkResponse.fromJSON(object.chunk_response) : undefined,
     };
   },
 
   toJSON(message: Message): unknown {
     const obj: any = {};
-    if (message.snapshotsRequest !== undefined) {
-      obj.snapshotsRequest = SnapshotsRequest.toJSON(message.snapshotsRequest);
+    if (message.snapshots_request !== undefined) {
+      obj.snapshots_request = SnapshotsRequest.toJSON(message.snapshots_request);
     }
-    if (message.snapshotsResponse !== undefined) {
-      obj.snapshotsResponse = SnapshotsResponse.toJSON(message.snapshotsResponse);
+    if (message.snapshots_response !== undefined) {
+      obj.snapshots_response = SnapshotsResponse.toJSON(message.snapshots_response);
     }
-    if (message.chunkRequest !== undefined) {
-      obj.chunkRequest = ChunkRequest.toJSON(message.chunkRequest);
+    if (message.chunk_request !== undefined) {
+      obj.chunk_request = ChunkRequest.toJSON(message.chunk_request);
     }
-    if (message.chunkResponse !== undefined) {
-      obj.chunkResponse = ChunkResponse.toJSON(message.chunkResponse);
+    if (message.chunk_response !== undefined) {
+      obj.chunk_response = ChunkResponse.toJSON(message.chunk_response);
     }
     return obj;
   },
@@ -148,17 +150,17 @@ export const Message: MessageFns<Message> = {
   },
   fromPartial<I extends Exact<DeepPartial<Message>, I>>(object: I): Message {
     const message = createBaseMessage();
-    message.snapshotsRequest = (object.snapshotsRequest !== undefined && object.snapshotsRequest !== null)
-      ? SnapshotsRequest.fromPartial(object.snapshotsRequest)
+    message.snapshots_request = (object.snapshots_request !== undefined && object.snapshots_request !== null)
+      ? SnapshotsRequest.fromPartial(object.snapshots_request)
       : undefined;
-    message.snapshotsResponse = (object.snapshotsResponse !== undefined && object.snapshotsResponse !== null)
-      ? SnapshotsResponse.fromPartial(object.snapshotsResponse)
+    message.snapshots_response = (object.snapshots_response !== undefined && object.snapshots_response !== null)
+      ? SnapshotsResponse.fromPartial(object.snapshots_response)
       : undefined;
-    message.chunkRequest = (object.chunkRequest !== undefined && object.chunkRequest !== null)
-      ? ChunkRequest.fromPartial(object.chunkRequest)
+    message.chunk_request = (object.chunk_request !== undefined && object.chunk_request !== null)
+      ? ChunkRequest.fromPartial(object.chunk_request)
       : undefined;
-    message.chunkResponse = (object.chunkResponse !== undefined && object.chunkResponse !== null)
-      ? ChunkResponse.fromPartial(object.chunkResponse)
+    message.chunk_response = (object.chunk_response !== undefined && object.chunk_response !== null)
+      ? ChunkResponse.fromPartial(object.chunk_response)
       : undefined;
     return message;
   },

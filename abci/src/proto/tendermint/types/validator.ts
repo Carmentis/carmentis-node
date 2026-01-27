@@ -63,23 +63,23 @@ export function blockIDFlagToJSON(object: BlockIDFlag): string {
 export interface ValidatorSet {
   validators: Validator[];
   proposer: Validator | undefined;
-  totalVotingPower: number;
+  total_voting_power: number;
 }
 
 export interface Validator {
   address: Uint8Array;
-  pubKey: PublicKey | undefined;
-  votingPower: number;
-  proposerPriority: number;
+  pub_key: PublicKey | undefined;
+  voting_power: number;
+  proposer_priority: number;
 }
 
 export interface SimpleValidator {
-  pubKey: PublicKey | undefined;
-  votingPower: number;
+  pub_key: PublicKey | undefined;
+  voting_power: number;
 }
 
 function createBaseValidatorSet(): ValidatorSet {
-  return { validators: [], proposer: undefined, totalVotingPower: 0 };
+  return { validators: [], proposer: undefined, total_voting_power: 0 };
 }
 
 export const ValidatorSet: MessageFns<ValidatorSet> = {
@@ -90,8 +90,8 @@ export const ValidatorSet: MessageFns<ValidatorSet> = {
     if (message.proposer !== undefined) {
       Validator.encode(message.proposer, writer.uint32(18).fork()).join();
     }
-    if (message.totalVotingPower !== 0) {
-      writer.uint32(24).int64(message.totalVotingPower);
+    if (message.total_voting_power !== 0) {
+      writer.uint32(24).int64(message.total_voting_power);
     }
     return writer;
   },
@@ -124,7 +124,7 @@ export const ValidatorSet: MessageFns<ValidatorSet> = {
             break;
           }
 
-          message.totalVotingPower = longToNumber(reader.int64());
+          message.total_voting_power = longToNumber(reader.int64());
           continue;
         }
       }
@@ -142,7 +142,7 @@ export const ValidatorSet: MessageFns<ValidatorSet> = {
         ? object.validators.map((e: any) => Validator.fromJSON(e))
         : [],
       proposer: isSet(object.proposer) ? Validator.fromJSON(object.proposer) : undefined,
-      totalVotingPower: isSet(object.totalVotingPower) ? globalThis.Number(object.totalVotingPower) : 0,
+      total_voting_power: isSet(object.total_voting_power) ? globalThis.Number(object.total_voting_power) : 0,
     };
   },
 
@@ -154,8 +154,8 @@ export const ValidatorSet: MessageFns<ValidatorSet> = {
     if (message.proposer !== undefined) {
       obj.proposer = Validator.toJSON(message.proposer);
     }
-    if (message.totalVotingPower !== 0) {
-      obj.totalVotingPower = Math.round(message.totalVotingPower);
+    if (message.total_voting_power !== 0) {
+      obj.total_voting_power = Math.round(message.total_voting_power);
     }
     return obj;
   },
@@ -169,13 +169,13 @@ export const ValidatorSet: MessageFns<ValidatorSet> = {
     message.proposer = (object.proposer !== undefined && object.proposer !== null)
       ? Validator.fromPartial(object.proposer)
       : undefined;
-    message.totalVotingPower = object.totalVotingPower ?? 0;
+    message.total_voting_power = object.total_voting_power ?? 0;
     return message;
   },
 };
 
 function createBaseValidator(): Validator {
-  return { address: new Uint8Array(0), pubKey: undefined, votingPower: 0, proposerPriority: 0 };
+  return { address: new Uint8Array(0), pub_key: undefined, voting_power: 0, proposer_priority: 0 };
 }
 
 export const Validator: MessageFns<Validator> = {
@@ -183,14 +183,14 @@ export const Validator: MessageFns<Validator> = {
     if (message.address.length !== 0) {
       writer.uint32(10).bytes(message.address);
     }
-    if (message.pubKey !== undefined) {
-      PublicKey.encode(message.pubKey, writer.uint32(18).fork()).join();
+    if (message.pub_key !== undefined) {
+      PublicKey.encode(message.pub_key, writer.uint32(18).fork()).join();
     }
-    if (message.votingPower !== 0) {
-      writer.uint32(24).int64(message.votingPower);
+    if (message.voting_power !== 0) {
+      writer.uint32(24).int64(message.voting_power);
     }
-    if (message.proposerPriority !== 0) {
-      writer.uint32(32).int64(message.proposerPriority);
+    if (message.proposer_priority !== 0) {
+      writer.uint32(32).int64(message.proposer_priority);
     }
     return writer;
   },
@@ -215,7 +215,7 @@ export const Validator: MessageFns<Validator> = {
             break;
           }
 
-          message.pubKey = PublicKey.decode(reader, reader.uint32());
+          message.pub_key = PublicKey.decode(reader, reader.uint32());
           continue;
         }
         case 3: {
@@ -223,7 +223,7 @@ export const Validator: MessageFns<Validator> = {
             break;
           }
 
-          message.votingPower = longToNumber(reader.int64());
+          message.voting_power = longToNumber(reader.int64());
           continue;
         }
         case 4: {
@@ -231,7 +231,7 @@ export const Validator: MessageFns<Validator> = {
             break;
           }
 
-          message.proposerPriority = longToNumber(reader.int64());
+          message.proposer_priority = longToNumber(reader.int64());
           continue;
         }
       }
@@ -246,9 +246,9 @@ export const Validator: MessageFns<Validator> = {
   fromJSON(object: any): Validator {
     return {
       address: isSet(object.address) ? bytesFromBase64(object.address) : new Uint8Array(0),
-      pubKey: isSet(object.pubKey) ? PublicKey.fromJSON(object.pubKey) : undefined,
-      votingPower: isSet(object.votingPower) ? globalThis.Number(object.votingPower) : 0,
-      proposerPriority: isSet(object.proposerPriority) ? globalThis.Number(object.proposerPriority) : 0,
+      pub_key: isSet(object.pub_key) ? PublicKey.fromJSON(object.pub_key) : undefined,
+      voting_power: isSet(object.voting_power) ? globalThis.Number(object.voting_power) : 0,
+      proposer_priority: isSet(object.proposer_priority) ? globalThis.Number(object.proposer_priority) : 0,
     };
   },
 
@@ -257,14 +257,14 @@ export const Validator: MessageFns<Validator> = {
     if (message.address.length !== 0) {
       obj.address = base64FromBytes(message.address);
     }
-    if (message.pubKey !== undefined) {
-      obj.pubKey = PublicKey.toJSON(message.pubKey);
+    if (message.pub_key !== undefined) {
+      obj.pub_key = PublicKey.toJSON(message.pub_key);
     }
-    if (message.votingPower !== 0) {
-      obj.votingPower = Math.round(message.votingPower);
+    if (message.voting_power !== 0) {
+      obj.voting_power = Math.round(message.voting_power);
     }
-    if (message.proposerPriority !== 0) {
-      obj.proposerPriority = Math.round(message.proposerPriority);
+    if (message.proposer_priority !== 0) {
+      obj.proposer_priority = Math.round(message.proposer_priority);
     }
     return obj;
   },
@@ -275,26 +275,26 @@ export const Validator: MessageFns<Validator> = {
   fromPartial<I extends Exact<DeepPartial<Validator>, I>>(object: I): Validator {
     const message = createBaseValidator();
     message.address = object.address ?? new Uint8Array(0);
-    message.pubKey = (object.pubKey !== undefined && object.pubKey !== null)
-      ? PublicKey.fromPartial(object.pubKey)
+    message.pub_key = (object.pub_key !== undefined && object.pub_key !== null)
+      ? PublicKey.fromPartial(object.pub_key)
       : undefined;
-    message.votingPower = object.votingPower ?? 0;
-    message.proposerPriority = object.proposerPriority ?? 0;
+    message.voting_power = object.voting_power ?? 0;
+    message.proposer_priority = object.proposer_priority ?? 0;
     return message;
   },
 };
 
 function createBaseSimpleValidator(): SimpleValidator {
-  return { pubKey: undefined, votingPower: 0 };
+  return { pub_key: undefined, voting_power: 0 };
 }
 
 export const SimpleValidator: MessageFns<SimpleValidator> = {
   encode(message: SimpleValidator, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.pubKey !== undefined) {
-      PublicKey.encode(message.pubKey, writer.uint32(10).fork()).join();
+    if (message.pub_key !== undefined) {
+      PublicKey.encode(message.pub_key, writer.uint32(10).fork()).join();
     }
-    if (message.votingPower !== 0) {
-      writer.uint32(16).int64(message.votingPower);
+    if (message.voting_power !== 0) {
+      writer.uint32(16).int64(message.voting_power);
     }
     return writer;
   },
@@ -311,7 +311,7 @@ export const SimpleValidator: MessageFns<SimpleValidator> = {
             break;
           }
 
-          message.pubKey = PublicKey.decode(reader, reader.uint32());
+          message.pub_key = PublicKey.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -319,7 +319,7 @@ export const SimpleValidator: MessageFns<SimpleValidator> = {
             break;
           }
 
-          message.votingPower = longToNumber(reader.int64());
+          message.voting_power = longToNumber(reader.int64());
           continue;
         }
       }
@@ -333,18 +333,18 @@ export const SimpleValidator: MessageFns<SimpleValidator> = {
 
   fromJSON(object: any): SimpleValidator {
     return {
-      pubKey: isSet(object.pubKey) ? PublicKey.fromJSON(object.pubKey) : undefined,
-      votingPower: isSet(object.votingPower) ? globalThis.Number(object.votingPower) : 0,
+      pub_key: isSet(object.pub_key) ? PublicKey.fromJSON(object.pub_key) : undefined,
+      voting_power: isSet(object.voting_power) ? globalThis.Number(object.voting_power) : 0,
     };
   },
 
   toJSON(message: SimpleValidator): unknown {
     const obj: any = {};
-    if (message.pubKey !== undefined) {
-      obj.pubKey = PublicKey.toJSON(message.pubKey);
+    if (message.pub_key !== undefined) {
+      obj.pub_key = PublicKey.toJSON(message.pub_key);
     }
-    if (message.votingPower !== 0) {
-      obj.votingPower = Math.round(message.votingPower);
+    if (message.voting_power !== 0) {
+      obj.voting_power = Math.round(message.voting_power);
     }
     return obj;
   },
@@ -354,10 +354,10 @@ export const SimpleValidator: MessageFns<SimpleValidator> = {
   },
   fromPartial<I extends Exact<DeepPartial<SimpleValidator>, I>>(object: I): SimpleValidator {
     const message = createBaseSimpleValidator();
-    message.pubKey = (object.pubKey !== undefined && object.pubKey !== null)
-      ? PublicKey.fromPartial(object.pubKey)
+    message.pub_key = (object.pub_key !== undefined && object.pub_key !== null)
+      ? PublicKey.fromPartial(object.pub_key)
       : undefined;
-    message.votingPower = object.votingPower ?? 0;
+    message.voting_power = object.voting_power ?? 0;
     return message;
   },
 };

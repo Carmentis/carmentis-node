@@ -203,7 +203,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             index: 0,
             key: new Uint8Array(),
             value: response,
-            proofOps: undefined,
+            proof_ops: undefined,
             height: 0,
             codespace: 'Carmentis',
         });
@@ -255,7 +255,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 data: 'Carmentis ABCI application',
                 //app_version: APP_VERSION,
                 //last_block_height,
-                lastBlockHeight: last_block_height
+                last_block_height: last_block_height
             });
         } else {
             const { appHash } = await this.getGlobalState().getApplicationHash();
@@ -268,8 +268,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 version: '1',
                 data: 'Carmentis ABCI application',
                 //app_version: APP_VERSION,
-                lastBlockHeight: last_block_height,
-                lastBlockAppHash: appHash,
+                last_block_height: last_block_height,
+                last_block_app_hash: appHash,
             });
         }
     }
@@ -311,7 +311,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         console.debug(request)
         this.logger.debug(`Current node public key: ${currentNodePublicKey.value}`);
         for (const validator of initialValidatorSet) {
-            const validatorPublicKey = validator.pubKey;
+            const validatorPublicKey = validator.pub_key;
             console.log(validator, validatorPublicKey)
             /*
             const { pubKey: validatorPublicKey } =
@@ -323,7 +323,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
              */
             const base64 = EncoderFactory.bytesToBase64Encoder();
-            const {pubKeyType: validatorPublicKeyType, pubKey: validatorPublicKeyValue} = CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
+            const {pub_keyType: validatorPublicKeyType, pub_key: validatorPublicKeyValue} = CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
             const b64EncodedNodePublicKey = base64.encode(validatorPublicKeyValue);
             //const validatorPublicKeyValue = base64.encode(validator.pubKey);
             //const validatorPublicKeyType = validator.pub_key_type;
@@ -454,7 +454,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         const consensusParams: ConsensusParams = ConsensusParams.fromPartial({
             validator: {
-                pubKeyTypes: ['ed25519'], // ['tendermint/PubKeyEd25519']
+                pub_key_types: ['ed25519'], // ['tendermint/PubKeyEd25519']
             },
         });
         /*
@@ -496,9 +496,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         */
         //      const consensusParams = {};
         return ResponseInitChain.create({
-            consensusParams: consensusParams,
+            consensus_params: consensusParams,
             validators: [],
-            appHash: appHash,
+            app_hash: appHash,
         });
     }
 
@@ -544,8 +544,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 code: CheckTxResponseCode.KO,
                 log: '',
                 data: new Uint8Array(),
-                gasWanted: 0,
-                gasUsed: 0,
+                gas_wanted: 0,
+                gas_used: 0,
                 info: 'Microblock already checked and checkTx executed twice: aborting',
                 events: [],
                 codespace: 'app',
@@ -582,8 +582,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     code: CheckTxResponseCode.OK,
                     log: '',
                     data: new Uint8Array(),
-                    gasWanted: 0,
-                    gasUsed: 0,
+                    gas_wanted: 0,
+                    gas_used: 0,
                     info: '',
                     events: [],
                     codespace: 'app',
@@ -594,8 +594,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     code: CheckTxResponseCode.KO,
                     log: '',
                     data: new Uint8Array(),
-                    gasWanted: 0,
-                    gasUsed: 0,
+                    gas_wanted: 0,
+                    gas_used: 0,
                     info: checkResult.error,
                     events: [],
                     codespace: 'app',
@@ -614,8 +614,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 code: CheckTxResponseCode.KO,
                 log: '',
                 data: new Uint8Array(),
-                gasWanted: 0,
-                gasUsed: 0,
+                gas_wanted: 0,
+                gas_used: 0,
                 info: e instanceof Error ? e.message : typeof e === 'string' ? e : 'CheckTx error',
                 events: [],
                 codespace: 'app',
@@ -839,8 +839,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                             data: new Uint8Array(),
                             log: '',
                             info: '',
-                            gasWanted: 0,
-                            gasUsed: 0,
+                            gas_wanted: 0,
+                            gas_used: 0,
                             events: [],
                             codespace: 'app',
                         }),
@@ -871,17 +871,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const validatorSetUpdates = globalStateUpdater.getCometValidatorSetUpdates();
         const validatorUpdate: ValidatorUpdate[] = validatorSetUpdates.map((update) => ({
             power: update.power,
-            pubKey: {
+            pub_key: {
                 ed25519: update.pub_key_bytes,
             },
         }));
 
         return ResponseFinalizeBlock.create({
-            txResults: txResults,
-            appHash: appHash,
+            tx_results: txResults,
+            app_hash: appHash,
             events: [],
-            validatorUpdates: validatorUpdate,
-            consensusParamUpdates: undefined,
+            validator_updates: validatorUpdate,
+            consensus_param_updates: undefined,
         });
     }
 
@@ -920,7 +920,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
 
         return ResponseCommit.create({
-            retainHeight: retainedHeight,
+            retain_height: retainedHeight,
         });
     }
 
@@ -1007,8 +1007,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         return ResponseApplySnapshotChunk.create({
             result,
-            refetchChunks: [],
-            rejectSenders: [],
+            refetch_chunks: [],
+            reject_senders: [],
         });
     }
 
