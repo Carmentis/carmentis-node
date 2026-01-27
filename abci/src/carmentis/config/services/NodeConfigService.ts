@@ -117,6 +117,10 @@ export class NodeConfigService implements OnModuleInit {
         return this.abciConfig.max_block_size_in_bytes;
     }
 
+    getMinMicroblockGasInAtomicAccepted(): number {
+        return this.abciConfig.min_microblock_gas_in_atomic_accepted;
+    }
+
     /**
      * Retrieves various storage paths configured for the application.
      *
