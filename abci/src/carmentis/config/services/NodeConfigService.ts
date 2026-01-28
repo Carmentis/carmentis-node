@@ -18,7 +18,7 @@ export class NodeConfigService implements OnModuleInit {
         this.loadConfigFile();
     }
 
-    private loadConfigFile() {
+    loadConfigFile() {
         this.logger.log('Initializing Node Config...');
         // for resilience, we search through multiple possible config files.
         // Some filenames might be undefined due to access to env variables that might be undefined./

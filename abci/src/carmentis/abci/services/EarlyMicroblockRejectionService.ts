@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Microblock } from '@cmts-dev/carmentis-sdk/server';
-import { Cron } from '@nestjs/schedule';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { getLogger } from '@logtape/logtape';
 
 @Injectable()
@@ -17,9 +17,7 @@ export class EarlyMicroblockRejectionService {
         return this.shouldReject.has(microblock.getHash().encode());
     }
 
-    @Cron('*/10 * * * * *', {
-        name: 'Clear rejected microblocks',
-    })
+    @Cron(CronExpression.EVERY_10_MINUTES)
     clearRejectedMicroblocks() {
         this.logger.info(`Clearing rejected microblocks (${this.shouldReject.size} entries)`);
         this.shouldReject.clear();
