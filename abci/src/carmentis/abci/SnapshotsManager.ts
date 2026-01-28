@@ -92,7 +92,7 @@ export class SnapshotsManager {
      * Called from LoadSnapshotChunk.
      */
     async getChunk(storage: Storage, height: number, index: number): Promise<Uint8Array> {
-        this.logger.info(`getChunk() with height = ${height}, index = ${index}`);
+        this.logger.debug(`getChunk() with height = ${height}, index = ${index}`);
 
         const emptyBuffer = new Uint8Array();
         const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + JSON_SUFFIX);
@@ -156,7 +156,7 @@ export class SnapshotsManager {
         await chunksFile.processChunk(
             index - 1,
             async (fileIdentifier, fileOffset, size) => {
-                this.logger.info(`getChunk() - processChunk callback with fileIdentifier: ${Utils.numberToHexa(fileIdentifier, 8)}, fileOffset: ${fileOffset}, size: ${size}`);
+                this.logger.debug(`getChunk() - processChunk callback with fileIdentifier: ${Utils.numberToHexa(fileIdentifier, 8)}, fileOffset: ${fileOffset}, size: ${size}`);
                 if (fileIdentifier == 0) {
                     await this.copyDbFileToBuffer(height, buffer, bufferOffset, fileOffset, size);
                 } else {
@@ -444,7 +444,7 @@ export class SnapshotsManager {
         let currentChunkSize = 0;
 
         for (const [fileIdentifier, fileSize] of files) {
-            this.logger.info(`adding to chunks file: fileIdentifier = ${Utils.numberToHexa(fileIdentifier, 8)}, fileSize = ${fileSize}`);
+            this.logger.debug(`Adding to chunks file: fileIdentifier = ${Utils.numberToHexa(fileIdentifier, 8)}, fileSize = ${fileSize}`);
 
             let remainingSize = fileSize;
             let offset = 0;
