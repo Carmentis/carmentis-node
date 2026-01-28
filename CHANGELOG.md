@@ -1,3 +1,18 @@
+# [1.1.0](https://github.com/Carmentis/carmentis-node/compare/v1.0.6...v1.1.0) (2026-01-28)
+
+
+### Bug Fixes
+
+* **logging:** add error logs for rejected microblocks in `AbciService` ([c89e922](https://github.com/Carmentis/carmentis-node/commit/c89e922775de0c0ef697cf7592d1c29439a9a04f))
+
+
+### Features
+
+* add account write permission validation and upgrade to SDK 1.17 ([7b828b3](https://github.com/Carmentis/carmentis-node/commit/7b828b337b2518f9281ff5c67531c68fd2a9b81c))
+* add min gas limit for microblock acceptance and rejection logic ([e7e6f76](https://github.com/Carmentis/carmentis-node/commit/e7e6f76a20100ca709ff7345464d821476f26b78))
+* implement max block size checks and early microblock rejection service ([8bbd8ce](https://github.com/Carmentis/carmentis-node/commit/8bbd8ced3e4f24926a3cbb893066dc4d63401a6d))
+* integrate `FeesDispatcher` and implement stake-based fee distribution ([3105500](https://github.com/Carmentis/carmentis-node/commit/3105500ae6830fa23b24681ef9baa7094b82b05c))
+
 ## [1.0.6](https://github.com/Carmentis/carmentis-node/compare/v1.0.5...v1.0.6) (2026-01-22)
 
 
