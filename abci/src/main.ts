@@ -62,10 +62,9 @@ function createSink(
 }
 
 async function bootstrap() {
-    // we start by instantiating the NodeConfigModule containing the configuration for the node.
-    const nodeConfigModule = await NestFactory.create(NodeConfigModule);
-    await nodeConfigModule.init();
-    const nodeConfigService = nodeConfigModule.get(NodeConfigService);
+    // we start by instantiating the node config service handling the configuration for the node.
+    const nodeConfigService = new NodeConfigService();
+    nodeConfigService.loadConfigFile();
 
     // Get log configuration from NodeConfig or use defaults
     const config = nodeConfigService.getConfig();
@@ -144,7 +143,6 @@ async function bootstrap() {
         },
     });
 
-    await app.init();
     await app.listen();
 }
 
