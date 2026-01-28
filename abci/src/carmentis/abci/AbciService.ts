@@ -697,7 +697,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
-            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp})`,
+            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
         );
 
         // Step 1: transaction decoding (and early rejection)
@@ -826,7 +826,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             `[ ProcessProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
-            `Handling ${request.txs.length} transactions at ts=${cometParameters.blockTimestamp}`,
+            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
         );
 
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
@@ -868,17 +868,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         }
 
-        /*
-        this.logger.info(
-            `processProposal / total block fees: ${processBlockResult.totalFees / ECO.TOKEN} ${ECO.TOKEN_NAME}`,
-        );
-
-         */
-
         perfMeasure.end();
 
         return ResponseProcessProposal.create({
-            status: 1, // TODO: use enum
+            status: ResponseProcessProposal_ProposalStatus.ACCEPT,
         });
     }
 
@@ -898,7 +891,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             `[ FinalizeBlock - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
-            `Handling ${request.txs.length} transactions at ts=$cometParameters.{blockTimestamp}`,
+            `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
         );
 
         const workingState = this.getGlobalState();
