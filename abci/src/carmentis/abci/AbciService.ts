@@ -739,8 +739,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Step 3: check and verify microblocks until max size is reached
         const proposedTxs: Uint8Array[] = [];
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
+        const protocolVariables = await workingState.getProtocolState();
+        const maxBlockSize = protocolVariables.getMaximumBlockSizeInBytes();
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
-        const maxBlockSize = this.nodeConfig.getMaxBlockSizeInBytes();
         let currentBlockSize = 0;
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
