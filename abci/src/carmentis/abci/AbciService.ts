@@ -83,12 +83,6 @@ import { ConsensusParams } from '../../proto/tendermint/types/params';
 import { CometBFTUtils } from './CometBFTUtils';
 import { EarlyMicroblockRejectionService } from './services/EarlyMicroblockRejectionService';
 
-const APP_VERSION = 1;
-
-const KEY_TYPE_MAPPING = {
-    'tendermint/PubKeyEd25519': 'ed25519',
-};
-
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private initialized: boolean;
