@@ -40,7 +40,6 @@ const LogCategoryConfigSchema = v.object({
     ),
     sinks: v.array(v.string()),
 });
-const DEFAULT_MAX_BLOCK_SIZE_IN_BYTES = 4194304; // default CometBFT value
 export const ConfigSchema = v.object({
     genesis: v.optional(
         v.object({
@@ -89,7 +88,6 @@ export const ConfigSchema = v.object({
                 ),
             }),
         ),
-        max_block_size_in_bytes: v.fallback(v.number(), DEFAULT_MAX_BLOCK_SIZE_IN_BYTES),
         min_microblock_gas_in_atomic_accepted: v.fallback(v.number(), 0),
     }),
     paths: v.object({
