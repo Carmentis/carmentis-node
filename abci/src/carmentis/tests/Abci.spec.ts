@@ -41,6 +41,7 @@ import {
     AccountByPublicKeyHashAbciResponseSchema,
     AccountStateAbciResponseSchema,
 } from "../../../../../carmentis-core/src/common/type/valibot/provider/abci/AbciResponse";
+import { CheckTxType } from '../../proto/tendermint/abci/types';
 
 interface RunOffsAccountInterface {
     id: string,
@@ -275,7 +276,7 @@ class TestScriptManager {
         const response = await this.abci.CheckTx(
             {
                 tx: mb.serialize().microblockData,
-                type: CheckTxType.CHECK_TX_TYPE_CHECK,
+                type: CheckTxType.RECHECK,
             },
             timestampInSeconds
         );
