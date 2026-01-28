@@ -555,14 +555,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const declaredGas = parsedMicroblock.getGas().getAmountAsAtomic();
             const minAcceptedGas = this.nodeConfig.getMinMicroblockGasInAtomicAccepted();
             if (declaredGas < minAcceptedGas) {
-                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected due to insufficient gas`);
+                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected due to gas below the minimum accepted gas: ${minAcceptedGas}`);
                 return {
                     code: CheckTxResponseCode.KO,
                     log: '',
                     data: new Uint8Array(),
                     gas_wanted: 0,
                     gas_used: 0,
-                    info: `Microblock rejected due to insufficient gas. Minimum accepted gas: ${minAcceptedGas}`,
+                    info: `Microblock rejected due to gas below the minimum accepted gas ${minAcceptedGas}`,
                     events: [],
                     codespace: 'app',
                 }
