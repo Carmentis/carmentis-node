@@ -540,7 +540,7 @@ export class GlobalStateUpdater {
     }
 
     private async dispatchFeesAmongValidators(state: GlobalState, request: RequestFinalizeBlock) {
-        this.logger.info(`dispatchFeesAmongValidators`);
+        this.logger.info(`Dispatch fees among validators`);
         const feesAccountIdentifier = Economics.getSpecialAccountTypeIdentifier(
             ECO.ACCOUNT_BLOCK_FEES,
         );
@@ -548,7 +548,10 @@ export class GlobalStateUpdater {
         const feesAccountInfo: AccountInformation =
             await accountManager.loadAccountInformation(feesAccountIdentifier);
         const pendingFees = feesAccountInfo.state.balance;
+
+        // we stop if there is no fees to pay
         if (!pendingFees) {
+            this.logger.info('No fees to dispatch: Done');
             return;
         }
 
