@@ -620,7 +620,6 @@ export class GlobalStateUpdater {
             `${pendingFees} to be dispatched among ${nValidators} validators (height=${blockHeight})`,
         );
         const feesDispatcher = new FeesDispatcher(pendingFees, validatorStakes, blockHeight);
-        const defaultTimestamp = 0;
         const timeInRequest: number = CometBFTUtils.convertDateInTimestamp(request.time);//Number(request.time?.seconds ?? defaultTimestamp);
         const feesInAtomisToDispatchForEachValidator = feesDispatcher.dispatch();
         for (let index = 0; index < nValidators; index++) {
