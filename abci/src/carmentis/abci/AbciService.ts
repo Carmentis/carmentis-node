@@ -309,26 +309,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Hence, I assume that the types of both keys are identical.
         const currentNodePublicKey = this.cometConfig.getPublicKey();
         const initialValidatorSet = request.validators;
-        console.debug(request);
         this.logger.debug(`Current node public key: ${currentNodePublicKey.value}`);
         for (const validator of initialValidatorSet) {
-            const validatorPublicKey = validator.pub_key;
-            console.log(validator, validatorPublicKey);
-            /*
-            const { pubKey: validatorPublicKey } =
-                CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
-            if (!validatorPublicKey) throw new Error('Validator public key is undefined');
-            if (validatorPublicKey.sum.oneofKind == 'ed25519') {
-                const t = validatorPublicKey.sum.ed25519;
-            }
-
-             */
             const base64 = EncoderFactory.bytesToBase64Encoder();
             const { pub_keyType: validatorPublicKeyType, pub_key: validatorPublicKeyValue } =
                 CometBFTUtils.extractNodePublicKeyKeyFromValidatorUpdate(validator);
             const b64EncodedNodePublicKey = base64.encode(validatorPublicKeyValue);
-            //const validatorPublicKeyValue = base64.encode(validator.pubKey);
-            //const validatorPublicKeyType = validator.pub_key_type;
             this.logger.debug(`Validator node public key: ${b64EncodedNodePublicKey}`);
             const isPublicKeyValueMatching = b64EncodedNodePublicKey === currentNodePublicKey.value;
             const isPublicKeyTypeMatching = validatorPublicKeyType === currentNodePublicKey.type;
