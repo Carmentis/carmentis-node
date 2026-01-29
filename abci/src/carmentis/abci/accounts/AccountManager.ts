@@ -494,9 +494,12 @@ export class AccountManager {
         let historyHash = lastHistoryHash;
         const list: AccountHistoryEntry[] = [];
 
-        while (maxRecords-- && !Utils.binaryIsEqual(historyHash, Utils.getNullHash())) {
-            const entry = await this.loadHistoryEntry(accountHash, historyHash);
+        for (let index = maxRecords; index > 0; index--) {
+            // if there are no more history entries, break the loop
+            if (Utils.binaryIsEqual(historyHash, Utils.getNullHash())) break;
 
+            // load and add the history entry to the list
+            const entry = await this.loadHistoryEntry(accountHash, historyHash);
             list.push(entry);
             historyHash = entry.previousHistoryHash;
         }

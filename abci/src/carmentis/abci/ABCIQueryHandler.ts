@@ -46,6 +46,9 @@ import { GlobalState } from './state/GlobalState';
 import { Logger, getLogger } from '@logtape/logtape';
 
 export class ABCIQueryHandler {
+
+    private static readonly MAX_HISTORY_RECORDS_LIMIT = 100;
+
     private logger: Logger;
 
     private readonly accountManager: AccountManager;
@@ -267,10 +270,16 @@ export class ABCIQueryHandler {
     }
 
     async getAccountHistory(request: GetAccountHistoryAbciRequest): Promise<AccountHistoryAbciResponse> {
+        // ensure that the desired number of records is not exceeding the limit
+        const maxRecords = request.maxRecords;
+        if (ABCIQueryHandler.MAX_HISTORY_RECORDS_LIMIT < maxRecords) {
+            throw new Error(`The maximum number of records to return is ${ABCIQueryHandler.MAX_HISTORY_RECORDS_LIMIT}`);
+        }
+
         const history = await this.accountManager.loadHistory(
             request.accountHash,
             request.lastHistoryHash,
-            request.maxRecords,
+            maxRecords,
         );
 
         return {
