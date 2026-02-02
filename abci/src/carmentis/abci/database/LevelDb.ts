@@ -148,7 +148,7 @@ export class LevelDb extends AbstractLevelDb {
     }
 
 
-    async getKeys(tableId: number): Promise<Uint8Array[]> {
+    async getKeys(tableId: number, limit?: number): Promise<Uint8Array[]> {
         const table = this.sub.get(tableId);
         if (table === undefined) {
             this.logger.debug(
@@ -160,7 +160,7 @@ export class LevelDb extends AbstractLevelDb {
         }
 
         const keys: Uint8Array[] = [];
-        for await (const [key] of table.iterator()) {
+        for await (const [key] of table.iterator({ limit })) {
             keys.push(key);
         }
         return keys;

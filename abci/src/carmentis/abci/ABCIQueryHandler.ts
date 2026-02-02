@@ -46,6 +46,10 @@ import { GlobalState } from './state/GlobalState';
 import { Logger, getLogger } from '@logtape/logtape';
 
 export class ABCIQueryHandler {
+
+    private static readonly MAX_HISTORY_RECORDS_LIMIT = 100;
+    private static readonly MAX_MICROBLOCK_BODIES_LIMIT = 100;
+
     private logger: Logger;
 
     private readonly accountManager: AccountManager;
@@ -267,10 +271,16 @@ export class ABCIQueryHandler {
     }
 
     async getAccountHistory(request: GetAccountHistoryAbciRequest): Promise<AccountHistoryAbciResponse> {
+        // ensure that the desired number of records is not exceeding the limit
+        const maxRecords = request.maxRecords;
+        if (ABCIQueryHandler.MAX_HISTORY_RECORDS_LIMIT < maxRecords) {
+            throw new Error(`The maximum number of records to return is ${ABCIQueryHandler.MAX_HISTORY_RECORDS_LIMIT}`);
+        }
+
         const history = await this.accountManager.loadHistory(
             request.accountHash,
             request.lastHistoryHash,
-            request.maxRecords,
+            maxRecords,
         );
 
         return {
@@ -309,7 +319,7 @@ export class ABCIQueryHandler {
             throw new Error(`Invalid object type ${requestedObjectType}`);
         }
 
-        const list = await this.db.getKeys(indexTableId);
+        const list = await this.db.getKeys(indexTableId, 100);
         this.logger.debug(`Returning ${list.length} elements`);
         return {
             responseType: AbciResponseType.OBJECT_LIST,
@@ -319,6 +329,12 @@ export class ABCIQueryHandler {
     }
 
     async getMicroblockBodys(request: GetMicroblockBodysAbciRequest): Promise<MicroblockBodysAbciResponse> {
+
+        // limit the number of requested bodies per request
+        if (request.hashes.length > ABCIQueryHandler.MAX_MICROBLOCK_BODIES_LIMIT) throw new Error(
+            `The maximum number of microblock bodies to return is 100. Requested ${request.hashes.length}`
+        )
+
         // TODO: check what happen if no body found
         const microblockHashes = request.hashes;
         const microblockBodies = await this.provider.getListOfMicroblockBody(microblockHashes);
