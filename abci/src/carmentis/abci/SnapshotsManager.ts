@@ -17,7 +17,7 @@ import {NodeEncoder} from './NodeEncoder';
 import {LevelDbTable} from './database/LevelDbTable';
 
 const FORMAT = 1;
-const MAX_CHUNK_SIZE = 4096; // 10 * 1024 * 1024;
+const MAX_CHUNK_SIZE = 10 * 1024 * 1024;
 const DB_BATCH_SIZE = 1000;
 const SNAPSHOT_PREFIX = 'snapshot-';
 const CHUNKS_SUFFIX = '-chunks.bin';
