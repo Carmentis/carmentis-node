@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/Carmentis/carmentis-node/compare/v1.2.0...v1.2.1) (2026-02-02)
+
+
+### Bug Fixes
+
+* snapshot chunk size 4KB -> 10MB ([20bd501](https://github.com/Carmentis/carmentis-node/commit/20bd50100130ed1b02abd030cb4c3a162576b6cf))
+
 # [1.2.0](https://github.com/Carmentis/carmentis-node/compare/v1.1.0...v1.2.0) (2026-02-02)
 
 
