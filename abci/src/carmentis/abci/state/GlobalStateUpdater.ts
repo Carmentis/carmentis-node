@@ -18,6 +18,7 @@ import {
     VirtualBlockchain,
     BalanceAvailability,
     EncoderFactory,
+    VirtualBlockchainType,
 } from '@cmts-dev/carmentis-sdk/server';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
@@ -95,6 +96,8 @@ export class GlobalStateUpdater {
             this.logger.info('First block of the day: applying daily updates');
             await this.updateVestingLocks(globalState, cometParameters);
             await this.updateEscrowLocks(globalState, cometParameters);
+            await this.updateUnstaking(globalState, cometParameters);
+            await this.purgeStorage(globalState, cometParameters);
         }
     }
 
@@ -180,6 +183,16 @@ export class GlobalStateUpdater {
                 }
             }
         }
+    }
+
+    private async updateUnstaking(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
+        const database = globalState.getCachedDatabase();
+        const blockHeight = cometParameters.blockHeight;
+        const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
+        const accountManager = globalState.getAccountManager();
+    }
+
+    private async purgeStorage(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
     }
 
     async updateGlobalStateOnMicroblockDuringGenesis(
@@ -345,6 +358,15 @@ export class GlobalStateUpdater {
         const priceStructure = protocolState.getPriceStructure();
         const storagePriceManager = new StoragePriceManager(priceStructure);
         const expirationDay = virtualBlockchain.getExpirationDay();
+        if (expirationDay !== 0) {
+            const virtualBlockchainType = virtualBlockchain.getType();
+            if (virtualBlockchainType !== VirtualBlockchainType.APP_LEDGER_VIRTUAL_BLOCKCHAIN) {
+                throw new Error(`Virtual blockchains other than application ledgers may not have an expiration day`);
+            }
+            if (cometParameters.blockTimestamp > expirationDay) {
+                throw new Error(`This virtual blockchain has expired: no more microblock can be added`);
+            }
+        }
         const numberOfDaysOfStorage = storagePriceManager.getNumberOfDaysOfStorage(
             cometParameters.blockTimestamp,
             expirationDay

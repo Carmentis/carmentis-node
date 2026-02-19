@@ -188,6 +188,4 @@ export class CachedLevelDb extends AbstractLevelDb {
         )
         return dataFileEntries
     }
-
-
 }

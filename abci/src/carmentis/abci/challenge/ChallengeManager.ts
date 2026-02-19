@@ -6,7 +6,6 @@ import { ChallengeFile } from './ChallengeFile';
 import { Storage } from '../storage/Storage';
 import { getLogger } from '@logtape/logtape';
 
-
 const CHALLENGE_FILES_PER_CHALLENGE = 8;
 const CHALLENGE_PARTS_PER_FILE = 256;
 const CHALLENGE_BYTES_PER_PART = 1024;

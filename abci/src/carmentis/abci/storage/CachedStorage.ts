@@ -58,7 +58,7 @@ export class CachedStorage implements IStorage {
         // we first search in the cache
         const stringHash = Utils.binaryToHexa(hash);
         let returnedSerializedMicroblock: Uint8Array;
-        const cachedSerializedMicroblock = this.cachedSerializedMicroblockByHash.get(stringHash);
+        const cachedSerializedMicroblock = undefined//this.cachedSerializedMicroblockByHash.get(stringHash);
         if (cachedSerializedMicroblock) {
             this.logger.debug(`Microblock ${stringHash} found in cache`);
             returnedSerializedMicroblock = cachedSerializedMicroblock;
@@ -226,6 +226,7 @@ export class CachedStorage implements IStorage {
 
     clear() {
         this.contentToBeWritten.clear();
+        this.cachedSerializedMicroblockByHash.clear();
     }
 
     async flush() {

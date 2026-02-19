@@ -1,13 +1,9 @@
 import fs, { mkdirSync } from 'node:fs';
 import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
-import { NodeCrypto } from '../crypto/NodeCrypto';
-import { ChallengeFile } from '../challenge/ChallengeFile';
 import { SnapshotDataCopyManager } from '../SnapshotDataCopyManager';
 import { DbInterface } from '../database/DbInterface';
-import { NODE_SCHEMAS } from '../constants/constants';
-
-import { SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
+import {Microblock, SCHEMAS, Utils} from '@cmts-dev/carmentis-sdk/server';
 import { FileIdentifier } from '../types/FileIdentifier';
 import { getLogger } from '@logtape/logtape';
 import { IStorage } from './IStorage';
@@ -99,27 +95,38 @@ export class Storage implements IStorage {
      * Reads a full microblock from its hash.
      */
     async readFullMicroblock(hash: Uint8Array) {
-        return await this.readMicroblock(hash, READ_FULL);
+        const serializedMicroblock = await this.readMicroblock(hash);
+        return serializedMicroblock;
     }
 
     /**
      * Reads a microblock header from its hash.
+     * TODO: This is quite inefficient, especially if the caller is unserializing the data again. Refactor?
      */
     async readSerializedMicroblockHeader(hash: Uint8Array) {
-        return await this.readMicroblock(hash, READ_HEADER);
+        const serializedMicroblock = await this.readMicroblock(hash);
+        if (serializedMicroblock === undefined) return undefined;
+        const microblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+        const { headerData } = microblock.serialize();
+        return headerData;
     }
 
     /**
      * Reads a microblock body from its hash.
+     * TODO: This is quite inefficient, especially if the caller is unserializing the data again. Refactor?
      */
     async readSerializedMicroblockBody(hash: Uint8Array) {
-        return await this.readMicroblock(hash, READ_BODY);
+        const serializedMicroblock = await this.readMicroblock(hash);
+        if (serializedMicroblock === undefined) return undefined;
+        const microblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+        const { bodyData } = microblock.serialize();
+        return bodyData;
     }
 
     /**
-     * Reads a full microblock, microblock header or microblock body from its hash.
+     * Reads a microblock from its hash.
      */
-    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode): Promise<Uint8Array | undefined> {
+    private async readMicroblock(hash: Uint8Array): Promise<Uint8Array | undefined> {
         const storageInfo = await this.db.getMicroblockStorage(hash);
         if (!storageInfo) {
             this.logger.info(`Microblock ${Utils.binaryToHexa(hash)} not found in storage: returning undefined`)
@@ -127,47 +134,22 @@ export class Storage implements IStorage {
         }
 
         const filePath = this.getFilePath(storageInfo.fileIdentifier);
-        let dataBuffer: Uint8Array;
 
         try {
             const handle = await open(filePath, 'r');
-            dataBuffer = await this.readMicroblockPart(
-                handle,
-                storageInfo.offset,
-                storageInfo.size,
-                partType,
-            );
+            const offset = storageInfo.offset;
+            const size = storageInfo.size;
+            const dataBuffer = new Uint8Array(size);
+            const rd = await handle.read(dataBuffer, 0, size, offset);
+            if (rd.bytesRead < size) {
+                throw new Error(`PANIC - encountered end of file while reading microblock data`);
+            }
             await handle.close();
             return dataBuffer
         } catch (error) {
             this.logger.error("{error}", {error});
             return undefined;
         }
-    }
-
-    /**
-     * Reads a microblock part given a file handle, offset, size and type of part.
-     */
-    private async readMicroblockPart(
-        handle: FileHandle,
-        offset: number,
-        size: number,
-        partType: MicroblockReadingMode,
-    ) {
-        const [extraOffset, targetSize] = [
-            [0, size],
-            [0, SCHEMAS.MICROBLOCK_HEADER_SIZE],
-            [SCHEMAS.MICROBLOCK_HEADER_SIZE, size - SCHEMAS.MICROBLOCK_HEADER_SIZE],
-        ][partType];
-
-        const dataBuffer = new Uint8Array(targetSize);
-        const rd = await handle.read(dataBuffer, 0, targetSize, offset + extraOffset);
-
-        if (rd.bytesRead < targetSize) {
-            throw new Error(`PANIC - encountered end of file while reading microblock data`);
-        }
-
-        return dataBuffer;
     }
 
     async writeTransactions(

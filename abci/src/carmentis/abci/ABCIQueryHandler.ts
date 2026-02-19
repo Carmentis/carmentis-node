@@ -261,7 +261,7 @@ export class ABCIQueryHandler {
             virtualBlockchainId
         );
 
-        // return empty response if virtual blockchain does not exists
+        // return empty response if virtual blockchain does not exist
         if (vbStatus === null) {
             this.logger.warn(`Cannot load virtual blockchain update: Virtual blockchain with id ${Utils.binaryToHexa(virtualBlockchainId)} not found`);
             return {

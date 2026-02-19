@@ -132,40 +132,40 @@
             "type": "transfer",
             "source": "issuer",
             "destination": "team-advisors",
-            "amount": 600
+            "amount": 6000
         },
         {
             "type": "transfer",
             "source": "issuer",
             "destination": "another-account",
-            "amount": 400
+            "amount": 4000
         },
         {
             "type": "transfer",
             "source": "another-account",
             "destination": "invest-1",
-            "amount": 200
+            "amount": 2000
         },
         {
             "type": "transfer",
             "source": "team-advisors",
             "destination": "invest-1",
             "vesting": "seed",
-            "amount": 10
+            "amount": 100
         },
         {
             "type": "transfer",
             "source": "team-advisors",
             "destination": "invest-2",
             "vesting": "invest",
-            "amount": 20
+            "amount": 200
         },
         {
             "type": "transfer",
             "source": "team-advisors",
             "destination": "invest-3",
             "vesting": "test",
-            "amount": 30
+            "amount": 300
         }
     ]
 }
