@@ -23,9 +23,7 @@ const READ_FULL = 0;
 const READ_HEADER = 1;
 const READ_BODY = 2;
 
-
 export class Storage implements IStorage {
-
     /**
      * Converts the 32-bit encoded expiration day and microblock hash to a 32-bit file identifier:
      * - the range 0x00000000 - 0x000EFFFF is reserved for special uses (only 0x00000000 is currently
@@ -37,7 +35,6 @@ export class Storage implements IStorage {
     static getFileIdentifier(expirationDay: number, hash: Uint8Array): FileIdentifier {
         return expirationDay || (0xff000000 | hash[0]) >>> 0;
     }
-
 
     private db: DbInterface;
     private path: string;
@@ -173,10 +170,6 @@ export class Storage implements IStorage {
         return dataBuffer;
     }
 
-
-
-
-
     async writeTransactions(
         fileIdentifier: number,
         expectedFileSizeBeforeToWrite: number,
@@ -216,8 +209,6 @@ export class Storage implements IStorage {
             this.logger.error("{e}", {e: error})
         }
     }
-
-
 
     /**
      * Converts a 32-bit file identifier to a file path:

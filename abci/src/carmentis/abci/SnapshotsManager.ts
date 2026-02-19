@@ -17,7 +17,6 @@ import {NodeEncoder} from './NodeEncoder';
 import {LevelDbTable} from './database/LevelDbTable';
 
 const FORMAT = 1;
-const MAX_CHUNK_SIZE = 10 * 1024 * 1024;
 const DB_BATCH_SIZE = 1000;
 const SNAPSHOT_PREFIX = 'snapshot-';
 const CHUNKS_SUFFIX = '-chunks.bin';
@@ -29,11 +28,13 @@ const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
 export class SnapshotsManager {
     db: LevelDb;
     path: string;
+    chunkSize: number;
     private logger = getLogger(['node', 'snapshots', SnapshotsManager.name])
 
-    constructor(db: LevelDb, path: string, logger: unknown) {
+    constructor(db: LevelDb, path: string, chunkSize: number, logger: unknown) {
         this.db = db;
         this.path = path;
+        this.chunkSize = chunkSize;
     }
 
     /**
@@ -144,7 +145,7 @@ export class SnapshotsManager {
             chunkSize += size;
         });
 
-        if (chunkSize > MAX_CHUNK_SIZE) {
+        if (chunkSize > this.chunkSize) {
             this.logger.error('internal error: chunk size is inconsistent');
             return emptyBuffer;
         }
@@ -449,8 +450,8 @@ export class SnapshotsManager {
             let remainingSize = fileSize;
             let offset = 0;
 
-            while (currentChunkSize + remainingSize > MAX_CHUNK_SIZE) {
-                const size = MAX_CHUNK_SIZE - currentChunkSize;
+            while (currentChunkSize + remainingSize > this.chunkSize) {
+                const size = this.chunkSize - currentChunkSize;
                 if (size) {
                     currentChunk.push(
                         SnapshotChunksFile.encodeChunkRecord(fileIdentifier, offset, size),

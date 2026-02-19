@@ -194,6 +194,10 @@ export class NodeConfigService implements OnModuleInit {
         return this.snapshotConfig.block_history_before_snapshot;
     }
 
+    getSnapshotChunkSize() {
+        return this.snapshotConfig.max_snapshot_chunk_size;
+    }
+
     /**
      * Retrieves the complete node configuration.
      *

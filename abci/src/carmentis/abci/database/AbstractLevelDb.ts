@@ -3,6 +3,7 @@ import { NODE_SCHEMAS } from '../constants/constants';
 import {
     BlockContent,
     BlockInformation,
+    BlockModifiedAccounts,
     ChainInformation,
     DataFile,
     Escrows,
@@ -15,11 +16,11 @@ import {
     Microblock,
     MicroblockInformation,
     Utils,
+    AccountHistoryEntry,
 } from '@cmts-dev/carmentis-sdk/server';
 import { NodeEncoder } from '../NodeEncoder';
 import { LevelDb } from './LevelDb';
 import { ChainInformationObject } from '../types/ChainInformationObject';
-import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
 import { MicroblockStorage } from '../types/valibot/storage/MicroblockStorage';
 import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
 import { getLogger, Logger } from '@logtape/logtape';
@@ -178,6 +179,23 @@ export abstract class AbstractLevelDb implements DbInterface {
             LevelDb.convertHeightToTableKey(height),
             NodeEncoder.encodeBlockContent(blockContent),
         );
+    }
+
+    async putBlockModifiedAccounts(height: number, modifiedAccounts: BlockModifiedAccounts) {
+        return await this.putRaw(
+            LevelDbTable.BLOCK_MODIFIED_ACCOUNTS,
+            LevelDb.convertHeightToTableKey(height),
+            NodeEncoder.encodeBlockModifiedAccounts(modifiedAccounts),
+        );
+    }
+
+    async getBlockModifiedAccounts(height: number): Promise<BlockModifiedAccounts | undefined> {
+        const serializedBlockModifiedAccounts = await this.getRaw(
+            LevelDbTable.BLOCK_MODIFIED_ACCOUNTS,
+            LevelDb.convertHeightToTableKey(height),
+        );
+        if (serializedBlockModifiedAccounts === undefined) return undefined;
+        return NodeEncoder.decodeBlockModifiedAccounts(serializedBlockModifiedAccounts);
     }
 
     async getDataFileFromDataFileKey(

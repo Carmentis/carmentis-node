@@ -21,14 +21,14 @@ import {
     VirtualBlockchainType,
     ProtocolInternalState,
     Hash,
+    AccountHistory,
+    AccountHistoryEntry,
 } from '@cmts-dev/carmentis-sdk/server';
 import { Escrow } from '../types/Escrow';
 import { getLogger, Logger } from '@logtape/logtape';
 import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
 import { RadixTree } from '../RadixTree';
-import { AccountHistory } from '../types/valibot/account/AccountHistory';
-import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
 import { NodeEncoder } from '../NodeEncoder';
 import { LevelDbTable } from '../database/LevelDbTable';
 
@@ -62,18 +62,28 @@ export interface Transfer {
 export class AccountManager {
     private readonly db: DbInterface;
     private readonly accountRadix: RadixTree;
+    private readonly modifiedAccounts: Set<string>;
     private readonly perf: Performance;
     private readonly logger: Logger;
 
     constructor(db: DbInterface) {
         this.db = db;
         this.accountRadix = new RadixTree(this.db, LevelDbTable.TOKEN_RADIX);
+        this.modifiedAccounts = new Set;
         this.logger = getLogger([ 'node', 'accounts', AccountManager.name ]);
         this.perf = new Performance(this.logger, true);
     }
 
     getAccountRootHash() {
         return this.accountRadix.getRootHash();
+    }
+
+    clearModifiedAccounts() {
+        this.modifiedAccounts.clear();
+    }
+
+    getModifiedAccounts() {
+        return [...this.modifiedAccounts].map((s) => Utils.binaryFromHexa(s));
     }
 
     async transferToken(
@@ -470,9 +480,9 @@ export class AccountManager {
      */
     private async saveState(accountHash: Uint8Array, accountState: AccountState) {
         const record = BlockchainUtils.encodeAccountState(accountState);
-        //const record = this.db.serialize(LevelDbTable.ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
+        this.storeModifiedAccount(accountHash);
         await this.accountRadix.set(accountHash, stateHash);
         this.logger.debug(`Storing account state for account ${Utils.binaryToHexa(accountHash)}`);
         await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
@@ -487,28 +497,52 @@ export class AccountManager {
      * @returns The account history with a list of entries
      */
     async loadHistory(
-        accountHash: Uint8Array,
         lastHistoryHash: Uint8Array,
         maxRecords: number,
     ): Promise<AccountHistory> {
         let historyHash = lastHistoryHash;
-        const list: AccountHistoryEntry[] = [];
+        const list: AccountHistory = [];
 
         for (let index = maxRecords; index > 0; index--) {
             // if there are no more history entries, break the loop
             if (Utils.binaryIsEqual(historyHash, Utils.getNullHash())) break;
 
             // load and add the history entry to the list
-            const entry = await this.loadHistoryEntry(accountHash, historyHash);
+            const entry = await this.loadHistoryEntry(historyHash);
             list.push(entry);
             historyHash = entry.previousHistoryHash;
         }
+        return list;
+    }
 
-        return { list };
+    /**
+     * Loads the transaction history for an account between two history hashes.
+     * This is typically used by the indexer to fetch missing history lines.
+     *
+     * @param fromHistoryHash - The hash of the current history entry
+     * @param toHistoryHash - The hash of the last known history entry
+     * @returns The account history with a list of entries
+     */
+    async getHistoryRange(
+        fromHistoryHash: Uint8Array,
+        toHistoryHash: Uint8Array,
+    ): Promise<AccountHistory> {
+        let historyHash = fromHistoryHash;
+        const list: AccountHistory = [];
+
+        while (!Utils.binaryIsEqual(historyHash, toHistoryHash)) {
+            // if there are no more history entries, break the loop
+            if (Utils.binaryIsEqual(historyHash, Utils.getNullHash())) break;
+
+            // load and add the history entry to the list
+            const entry = await this.loadHistoryEntry(historyHash);
+            list.push(entry);
+            historyHash = entry.previousHistoryHash;
+        }
+        return list;
     }
 
     private async loadHistoryEntry(
-        accountHash: Uint8Array,
         historyHash: Uint8Array,
     ): Promise<AccountHistoryEntry> {
         const accountHistoryEntry = await this.db.getAccountHistoryEntryByHistoryHash(historyHash);
@@ -544,7 +578,6 @@ export class AccountManager {
         };
 
         const record = NodeEncoder.encodeAccountHistoryEntry(entry);
-        //const record = this.db.serialize(LevelDbTable.ACCOUNT_HISTORY, entry);
         const hash = this.getHistoryEntryHash(
             accountHash,
             NodeCrypto.Hashes.sha256AsBinary(record),
@@ -696,6 +729,7 @@ export class AccountManager {
         const record = BlockchainUtils.encodeAccountState(accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
+        this.storeModifiedAccount(accountHash);
         await this.accountRadix.set(accountHash, stateHash);
         await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
     }
@@ -715,5 +749,9 @@ export class AccountManager {
         if (accountState === undefined) throw new Error(`Cannot return stake for this account: Account ${accountId.encode()} not found`);
         const balanceAvailability = new BalanceAvailability(0, accountState.locks);
         return balanceAvailability.getBreakdown().staked;
+    }
+
+    private storeModifiedAccount(accountHash: Uint8Array) {
+        this.modifiedAccounts.add(Utils.binaryToHexa(accountHash));
     }
 }

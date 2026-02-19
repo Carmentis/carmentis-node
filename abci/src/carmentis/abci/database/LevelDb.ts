@@ -1,10 +1,8 @@
 import { Level } from 'level';
-import { NODE_SCHEMAS } from '../constants/constants';
-import { CHAIN, Schema, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk/server';
+import { CHAIN, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk/server';
 import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
-import { getLogger, Logger } from '@logtape/logtape';
+import { getLogger } from '@logtape/logtape';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
-import { AbstractIteratorOptions } from 'abstract-level';
 import { ChainInformation } from '../types/valibot/db/db';
 import { NodeEncoder } from '../NodeEncoder';
 import { AbstractLevelDb } from './AbstractLevelDb';
@@ -13,7 +11,6 @@ import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
 export class LevelDb extends AbstractLevelDb {
     private db: Level<Uint8Array, Uint8Array>;
     private path: string;
-    //private sub: AbstractSublevel<Level<Uint8Array, Uint8Array>,Uint8Array,Uint8Array,Uint8Array>[] = [];
     private sub: Map<
         number,
         AbstractSublevel<

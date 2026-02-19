@@ -30,13 +30,16 @@ import {
     BlockInformationSchema,
     BlockContent,
     BlockContentSchema,
+    BlockModifiedAccounts,
+    BlockModifiedAccountsSchema,
 } from './types/valibot/db/db';
-import { AccountHistory, AccountHistorySchema } from './types/valibot/account/AccountHistory';
 import {
+    CryptoEncoderFactory,
+    AccountHistory,
+    AccountHistorySchema,
     AccountHistoryEntry,
     AccountHistoryEntrySchema,
-} from './types/valibot/account/AccountHistoryEntry';
-import { CryptoEncoderFactory } from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk/server';
 
 export class NodeEncoder {
     private static encoder = CryptoEncoderFactory.getCryptoBinaryEncoder();
@@ -225,6 +228,17 @@ export class NodeEncoder {
         return v.parse(BlockContentSchema, decoded);
     }
 
+    // BlockModifiedAccounts
+    static encodeBlockModifiedAccounts(blockModifiedAccounts: BlockModifiedAccounts): Uint8Array {
+        const validated = v.parse(BlockModifiedAccountsSchema, blockModifiedAccounts);
+        return this.encodeObject(validated);
+    }
+
+    static decodeBlockModifiedAccounts(encodedBlockModifiedAccounts: Uint8Array): BlockModifiedAccounts {
+        const decoded = this.decodeBinary(encodedBlockModifiedAccounts);
+        return v.parse(BlockModifiedAccountsSchema, decoded);
+    }
+
     // AccountHistory
     static encodeAccountHistory(accountHistory: AccountHistory): Uint8Array {
         const validated = v.parse(AccountHistorySchema, accountHistory);
@@ -236,11 +250,9 @@ export class NodeEncoder {
         return v.parse(AccountHistorySchema, decoded);
     }
 
-
     static encodeAccountHistoryEntry(accountHistoryEntry: AccountHistoryEntry): Uint8Array {
        return this.encodeObject(v.parse(AccountHistoryEntrySchema, accountHistoryEntry));
     }
-
 
     static decodeAccountHistoryEntry(serializedAccountHistoryEntry: Uint8Array): AccountHistoryEntry {
         const decoded = this.decodeBinary(serializedAccountHistoryEntry);

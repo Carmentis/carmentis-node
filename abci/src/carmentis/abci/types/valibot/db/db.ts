@@ -96,3 +96,20 @@ export const BlockContentSchema = v.object({
     })),
 });
 export type BlockContent = v.InferOutput<typeof BlockContentSchema>;
+
+// BlockModifiedAccounts
+export const BlockModifiedAccountsSchema = v.object({
+    modifiedAccounts: v.array(uint8array()),
+});
+export type BlockModifiedAccounts = v.InferOutput<typeof BlockModifiedAccountsSchema>;
+
+// BlockRawContent
+// TODO: is it really used?
+export const BlockRawContentSchema = v.object({
+    hash: uint8array(),
+    timestamp: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    proposerAddress: uint8array(),
+    size: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    microblocks: v.array(uint8array()),
+})
+export type BlockRawContent = v.InferOutput<typeof BlockRawContentSchema>;

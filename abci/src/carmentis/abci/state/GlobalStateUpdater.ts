@@ -32,6 +32,7 @@ import { BlockIDFlag } from '../../../proto/tendermint/types/validator';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { FeesDispatcher } from '../accounts/FeesDispatcher';
 import { CometBFTUtils } from '../CometBFTUtils';
+import { StoragePriceManager } from '../storage/StoragePriceManager';
 
 const KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',
@@ -59,8 +60,18 @@ export class GlobalStateUpdater {
         globalState: GlobalState,
         cometParameters: GlobalStateUpdateCometParameters
     ) {
+        const blockHeight = cometParameters.blockHeight;
         const database = globalState.getCachedDatabase();
-        const previousBlockInformation = await database.getBlockInformation(cometParameters.blockHeight - 1);
+        const existingBlock = await database.getBlockContent(blockHeight);
+        if (existingBlock !== undefined) {
+            if (blockHeight == 1) {
+                throw new Error(`duplicate block at height 1: make sure initial_height is set to "2" in genesis.json`);
+            }
+            else {
+                throw new Error(`duplicate block at height ${blockHeight}`);
+            }
+        }
+        const previousBlockInformation = await database.getBlockInformation(blockHeight - 1);
         const previousBlockDayTs = previousBlockInformation ?
             Utils.addDaysToTimestamp(previousBlockInformation.timestamp, 0) :
             0;
@@ -82,80 +93,90 @@ export class GlobalStateUpdater {
         // if this is the first block of the day, apply daily updates
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
-            // update vesting locks
-            const accountsWithVestingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS);
+            await this.updateVestingLocks(globalState, cometParameters);
+            await this.updateEscrowLocks(globalState, cometParameters);
+        }
+    }
 
-            for(const id of accountsWithVestingLocksIdentifiers) {
-                this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(id)}`);
+    private async updateVestingLocks(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
+        const database = globalState.getCachedDatabase();
+        const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
+        const accountsWithVestingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS);
 
-                const accountState = await database.getAccountStateByAccountId(id);
-                if (accountState) {
-                    const balanceAvailability = new BalanceAvailability(
-                        accountState.balance,
-                        accountState.locks,
-                    );
+        for(const id of accountsWithVestingLocksIdentifiers) {
+            this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(id)}`);
 
-                    if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
-                        accountState.locks = balanceAvailability.getLocks();
-                        await database.putAccountState(id, accountState);
-
-                        if(!balanceAvailability.hasVestingLocks()) {
-                            this.logger.info(`No more vesting locks on account ${Utils.binaryToHexa(id)}: removing entry from ACCOUNTS_WITH_VESTING_LOCKS`);
-                            await database.del(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, id);
-                        }
-                    }
-                } else {
-                    this.logger.warn(`Account state for account ${id.toString()} not found`);
-                    // TODO: handle undefined account state
-                }
-            }
-
-            // update escrow locks
-            const accountManager = globalState.getAccountManager();
-            const escrowIdentifiers = await database.getKeys(LevelDbTable.ESCROWS);
-
-            for(const id of escrowIdentifiers) {
-                // TODO: it would be more efficient to have a method that directly returns all objects of a table
-                const escrow = await database.getEscrow(id);
-                if (escrow == null) {
-                    throw new Error(`Escrow ${id.toString()} not found`);
-                }
-
-                const accountState = await database.getAccountStateByAccountId(escrow.payeeAccount);
-                if (accountState === undefined) throw new Error(
-                    `Escrow ${id.toString()} refers to an unknown account ${escrow.payeeAccount.toString()}`
-                )
-
+            const accountState = await database.getAccountStateByAccountId(id);
+            if (accountState) {
                 const balanceAvailability = new BalanceAvailability(
                     accountState.balance,
                     accountState.locks,
                 );
-                const escrowLocks = balanceAvailability.getEscrowLocks();
 
-                for(const lock of escrowLocks) {
-                    const isEscrowLockExpired = currentBlockDayTs > Utils.addDaysToTimestamp(
-                        lock.parameters.startTimestamp,
-                        lock.parameters.durationDays
-                    );
-                    if (isEscrowLockExpired) {
-                        // the escrow has expired: the funds are sent back from payee to payer
-                        this.logger.info(`Escrow has expired`);
-                        const tokenTransfer: Transfer = {
-                            type: ECO.BK_SENT_EXPIRED_ESCROW,
-                            payerAccount: escrow.payeeAccount,
-                            payeeAccount: escrow.payerAccount,
-                            amount: lock.lockedAmountInAtomics
-                        };
-                        const chainReference = {
-                            height: cometParameters.blockHeight
-                        };
+                if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
+                    accountState.locks = balanceAvailability.getLocks();
+                    await database.putAccountState(id, accountState);
 
-                        await accountManager.tokenTransfer(
-                            tokenTransfer,
-                            chainReference,
-                            cometParameters.blockTimestamp
-                        );
+                    if(!balanceAvailability.hasVestingLocks()) {
+                        this.logger.info(`No more vesting locks on account ${Utils.binaryToHexa(id)}: removing entry from ACCOUNTS_WITH_VESTING_LOCKS`);
+                        await database.del(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, id);
                     }
+                }
+            } else {
+                this.logger.warn(`Account state for account ${id.toString()} not found`);
+                // TODO: handle undefined account state
+            }
+        }
+    }
+
+    private async updateEscrowLocks(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
+        const database = globalState.getCachedDatabase();
+        const blockHeight = cometParameters.blockHeight;
+        const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
+        const accountManager = globalState.getAccountManager();
+        const escrowIdentifiers = await database.getKeys(LevelDbTable.ESCROWS);
+
+        for(const id of escrowIdentifiers) {
+            // TODO: it would be more efficient to have a method that directly returns all objects of a table
+            const escrow = await database.getEscrow(id);
+            if (escrow == null) {
+                throw new Error(`Escrow ${id.toString()} not found`);
+            }
+
+            const accountState = await database.getAccountStateByAccountId(escrow.payeeAccount);
+            if (accountState === undefined) throw new Error(
+                `Escrow ${id.toString()} refers to an unknown account ${escrow.payeeAccount.toString()}`
+            )
+
+            const balanceAvailability = new BalanceAvailability(
+                accountState.balance,
+                accountState.locks,
+            );
+            const escrowLocks = balanceAvailability.getEscrowLocks();
+
+            for(const lock of escrowLocks) {
+                const isEscrowLockExpired = currentBlockDayTs > Utils.addDaysToTimestamp(
+                    lock.parameters.startTimestamp,
+                    lock.parameters.durationDays
+                );
+                if (isEscrowLockExpired) {
+                    // the escrow has expired: the funds are sent back from payee to payer
+                    this.logger.info(`Escrow has expired`);
+                    const tokenTransfer: Transfer = {
+                        type: ECO.BK_SENT_EXPIRED_ESCROW,
+                        payerAccount: escrow.payeeAccount,
+                        payeeAccount: escrow.payerAccount,
+                        amount: lock.lockedAmountInAtomics
+                    };
+                    const chainReference = {
+                        height: blockHeight
+                    };
+
+                    await accountManager.tokenTransfer(
+                        tokenTransfer,
+                        chainReference,
+                        cometParameters.blockTimestamp
+                    );
                 }
             }
         }
@@ -317,11 +338,20 @@ export class GlobalStateUpdater {
             FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(
                 feesCalculationVersion,
             );
-        const feesToPay: CMTSToken = await usedFeesCalculationFormula.computeFees(
+        const baseFeesToPay: CMTSToken = await usedFeesCalculationFormula.computeFees(
             usedSignatureSchemeId,
             microblock,
         );
+        const priceStructure = protocolState.getPriceStructure();
+        const storagePriceManager = new StoragePriceManager(priceStructure);
+        const expirationDay = virtualBlockchain.getExpirationDay();
+        const numberOfDaysOfStorage = storagePriceManager.getNumberOfDaysOfStorage(
+            cometParameters.blockTimestamp,
+            expirationDay
+        );
+        const feesToPay = storagePriceManager.getStoragePrice(baseFeesToPay, numberOfDaysOfStorage);
         const hasEnoughTokensToPublish = feesPayerAccountBalance.isGreaterThan(feesToPay);
+        this.logger.debug(`Base fees: ${baseFeesToPay.toString()}, # of days: ${numberOfDaysOfStorage}, fees to pay: ${feesToPay.toString()}`);
         if (!hasEnoughTokensToPublish) {
             throw new Error(
                 `Insufficient funds to publish microblock: expected at least ${feesToPay.toString()}, got ${feesPayerAccountBalance.toString()} on account`,
@@ -399,15 +429,15 @@ export class GlobalStateUpdater {
         await globalState.indexVirtualBlockchain(virtualBlockchain);
     }
 
-    async finalizeBlockApproval(state: GlobalState, request: RequestFinalizeBlock) {
+    async finalizeBlockApproval(globalState: GlobalState, request: RequestFinalizeBlock) {
         const blockHeight: number = Number(request.height);
         const blockTimestamp: number = CometBFTUtils.convertDateInTimestamp(request.time);//Number(request.time?.seconds ?? 0);
 
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
-        await this.dispatchFeesAmongValidators(state, request);
+        await this.dispatchFeesAmongValidators(globalState, request);
         await this.storeBlockInformationInBuffer(
-            state,
+            globalState,
             blockHeight,
             request.hash,
             blockTimestamp,
@@ -417,12 +447,17 @@ export class GlobalStateUpdater {
         );
 
         await this.storeBlockContentInBuffer(
-            state,
+            globalState,
             blockHeight,
             this.processedAndAcceptedMicroblocks,
         );
 
-        const database = state.getCachedDatabase();
+        await this.storeModifiedAccountsInBuffer(
+            globalState,
+            blockHeight,
+        );
+
+        const database = globalState.getCachedDatabase();
 
         for (const [key, entry] of this.validatorSetUpdates) {
             const update = entry.cometValidatorSetUpdate;
@@ -527,12 +562,17 @@ export class GlobalStateUpdater {
     ) {
         const db = state.getCachedDatabase();
         await db.putBlockContent(height, { microblocks });
-        /*
-        await db.putObject(LevelDbTable.BLOCK_CONTENT, this.heightToTableKey(height), {
-            microblocks,
-        });
+    }
 
-         */
+    private async storeModifiedAccountsInBuffer(
+        state: GlobalState,
+        height: number,
+    ) {
+        const db = state.getCachedDatabase();
+        const accountManager = state.getAccountManager();
+        const modifiedAccounts = accountManager.getModifiedAccounts();
+        this.logger.info(`${modifiedAccounts.length} accounts were modified`);
+        await db.putBlockModifiedAccounts(height, { modifiedAccounts });
     }
 
     private heightToTableKey(height: number) {

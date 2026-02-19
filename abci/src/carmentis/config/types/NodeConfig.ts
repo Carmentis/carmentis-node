@@ -65,9 +65,10 @@ export const ConfigSchema = v.object({
     ),
     snapshots: v.optional(
         v.object({
-            snapshot_block_period: v.fallback(v.number(), 1),
+            snapshot_block_period: v.fallback(v.number(), 50),
             block_history_before_snapshot: v.fallback(v.number(), 0),
-            max_snapshots: v.fallback(v.number(), 3),
+            max_snapshots: v.fallback(v.number(), 10),
+            max_snapshot_chunk_size: v.fallback(v.number(), 2 * 1024 * 1024),
         }),
     ),
     cometbft: v.object({

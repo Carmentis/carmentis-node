@@ -152,6 +152,13 @@ export class GlobalState extends AbstractProvider {
         return Hash.from(accountIdAsBytes);
     }
 
+    async getFullSerializedMicroblock(microblockHash: Hash): Promise<Uint8Array | null> {
+        const serializedMicroblock = await this.cachedStorage.readFullMicroblock(
+            microblockHash.toBytes(),
+        );
+        return serializedMicroblock || null;
+    }
+
     async getMicroblockBody(microblockHash: Hash): Promise<MicroblockBody | null> {
         const serializedBody = await this.cachedStorage.readSerializedMicroblockBody(
             microblockHash.toBytes(),

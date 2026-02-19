@@ -174,7 +174,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         // creates the snapshot system
         const snapshotPath = snapshotStoragePath;
-        this.snapshot = new SnapshotsManager(this.db, snapshotPath, this.logger);
+        const snapshotChunkSize = this.nodeConfig.getSnapshotChunkSize();
+        this.snapshot = new SnapshotsManager(this.db, snapshotPath, snapshotChunkSize, this.logger);
         this.state = new GlobalState(this.db, this.storage);
 
         this.abciQueryHandler = new ABCIQueryHandler(
@@ -562,8 +563,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 }
             }
 
-
-
             this.logger.info(`Checking microblock ${parsedMicroblock.getHash().encode()}`);
 
             // we create working state to check the transaction
@@ -714,7 +713,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const sortedMicroblocks = microblocks.sort((a, b) => {
             return b.gasInAtomics - a.gasInAtomics
         });
-
 
         // Step 3: check and verify microblocks until max size is reached
         const proposedTxs: Uint8Array[] = [];
@@ -875,6 +873,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         const workingState = this.getGlobalState();
+        workingState.getAccountManager().clearModifiedAccounts();
         const txResults: ExecTxResult[] = [];
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 

@@ -1,7 +1,7 @@
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
-import { AccountState } from '@cmts-dev/carmentis-sdk/server';
+import { AccountState, AccountHistoryEntry } from '@cmts-dev/carmentis-sdk/server';
 import { MicroblockStorage } from '../types/valibot/storage/MicroblockStorage';
 import {
     BlockContent,
@@ -11,7 +11,6 @@ import {
     Escrows,
     ValidatorNodeByAddress,
 } from '../types/valibot/db/db';
-import { AccountHistoryEntry } from '../types/valibot/account/AccountHistoryEntry';
 
 export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>;
 

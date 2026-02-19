@@ -1,0 +1,16 @@
+{
+  "name": "dev-wizard",
+  "version": "0.0.1",
+  "description": "",
+  "author": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines" : { 
+    "node" : ">=22.18.0"
+  },
+  "scripts": {
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5"
+  }
+}

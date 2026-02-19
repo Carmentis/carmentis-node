@@ -6,10 +6,14 @@ import {
     AccountByPublicKeyHashAbciResponse,
     AccountHistoryAbciResponse,
     AccountStateAbciResponse,
+    AccountUpdatesAbciResponse,
+    AccountUpdate,
+    AccountHistory,
     AwaitMicroblockAnchoringAbciRequest,
     BlockchainUtils,
     BlockContentAbciResponse,
     BlockInformationAbciResponse,
+    BlockModifiedAccountsAbciResponse,
     ChainInformationAbciResponse,
     GenesisSnapshotAbciResponse,
     GetAccountByPublicKeyHashAbciRequest,
@@ -17,23 +21,23 @@ import {
     GetAccountStateAbciRequest,
     GetBlockContentAbciRequest,
     GetBlockInformationAbciRequest,
+    GetBlockModifiedAccountsAbciRequest,
+    GetAccountUpdatesAbciRequest,
     GetChainInformationAbciRequest,
     GetGenesisSnapshotAbciRequest,
     GetMicroblockBodysAbciRequest,
     GetMicroblockInformationAbciRequest,
+    GetRawBlockContentAbciRequest,
     GetObjectListAbciRequest,
     GetValidatorNodeByAddressAbciRequest,
     GetVirtualBlockchainStateAbciRequest,
     GetVirtualBlockchainUpdateAbciRequest,
     Hash,
-    MessageSerializer,
-    MessageUnserializer,
     MicroblockAnchoringAbciResponse,
     MicroblockBodysAbciResponse,
     MicroblockInformationAbciResponse,
+    RawBlockContentAbciResponse,
     ObjectListAbciResponse,
-    Provider,
-    SCHEMAS,
     Utils,
     ValidatorNodeByAddressAbciResponse,
     VirtualBlockchainStateAbciResponse,
@@ -44,6 +48,8 @@ import { AccountManager } from './accounts/AccountManager';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { GlobalState } from './state/GlobalState';
 import { Logger, getLogger } from '@logtape/logtape';
+
+const MAX_RAW_BLOCK_PART_SIZE = 2 * 1024 * 1024;
 
 export class ABCIQueryHandler {
 
@@ -91,6 +97,12 @@ export class ABCIQueryHandler {
                 return this.getBlockInformation(request);
             case AbciRequestType.GET_BLOCK_CONTENT:
                 return this.getBlockContent(request);
+            case AbciRequestType.GET_BLOCK_MODIFIED_ACCOUNTS:
+                return this.getBlockModifiedAccounts(request);
+            case AbciRequestType.GET_ACCOUNT_UPDATES:
+                return this.getAccountUpdates(request);
+            case AbciRequestType.GET_RAW_BLOCK_CONTENT:
+                return this.getRawBlockContent(request);
             case AbciRequestType.GET_CHAIN_INFORMATION:
                 return this.getChainInformation(request);
             default:
@@ -104,7 +116,6 @@ export class ABCIQueryHandler {
             responseType: AbciResponseType.GENESIS_SNAPSHOT,
             base64EncodedChunks: snapshot.base64EncodedChunks,
         }
-        //return this.messageSerializer.serialize(SCHEMAS.MSG_GENESIS_SNAPSHOT, snapshot);
     }
 
     async getChainInformation(request: GetChainInformationAbciRequest): Promise<ChainInformationAbciResponse> {
@@ -131,15 +142,94 @@ export class ABCIQueryHandler {
         const requestedBlockHeight = request.height;
         this.logger.info(`Request to get content for block ${requestedBlockHeight}`);
         const blockContent = await this.db.getBlockContent(requestedBlockHeight);
-        if (blockContent === undefined) {
-            throw new Error(`No block found at height ${requestedBlockHeight}`)
-        } else {
-            return {
-                responseType: AbciResponseType.BLOCK_CONTENT,
-                ...blockContent
+        if (blockContent === undefined) throw new Error(`No block found at height ${requestedBlockHeight}`);
+        return {
+            responseType: AbciResponseType.BLOCK_CONTENT,
+            ...blockContent
+        }
+    }
+
+    async getBlockModifiedAccounts(request: GetBlockModifiedAccountsAbciRequest): Promise<BlockModifiedAccountsAbciResponse> {
+        const requestedBlockHeight = request.height;
+        this.logger.info(`Request to get modified accounts for block ${requestedBlockHeight}`);
+        const blockModifiedAccounts = await this.db.getBlockModifiedAccounts(requestedBlockHeight);
+        if (blockModifiedAccounts === undefined) throw new Error(`No data found at height ${requestedBlockHeight}`);
+        return {
+            responseType: AbciResponseType.BLOCK_MODIFIED_ACCOUNTS,
+            ...blockModifiedAccounts
+        }
+    }
+
+    async getAccountUpdates(request: GetAccountUpdatesAbciRequest): Promise<AccountUpdatesAbciResponse> {
+        const requestedAccounts = request.list;
+        this.logger.info(`Request to get account updates for ${requestedAccounts.length} account(s)`);
+        const list: AccountUpdate[] = [];
+        for (const requestedAccount of requestedAccounts) {
+            const accountHash = requestedAccount.accountHash;
+            const currentState =
+                await this.db.getAccountStateByAccountId(accountHash);
+            if (currentState === undefined) {
+                this.logger.warn(`account ${Utils.binaryToHexa(accountHash)} is undefined`);
+            }
+            else {
+                const historyUpdate =
+                    await this.accountManager.getHistoryRange(
+                        currentState.lastHistoryHash,
+                        requestedAccount.lastKnownHistoryHash,
+                    );
+                list.push({
+                    accountHash,
+                    currentState,
+                    historyUpdate,
+                });
             }
         }
+        return {
+            responseType: AbciResponseType.ACCOUNT_UPDATES,
+            list,
+        }
+    }
 
+    async getRawBlockContent(request: GetRawBlockContentAbciRequest): Promise<RawBlockContentAbciResponse> {
+        const requestedBlockHeight = request.height;
+        const partIndex = request.partIndex;
+        this.logger.info(`Request to get raw content for block at height ${requestedBlockHeight} / partIndex = ${partIndex}`);
+        const blockContent = await this.db.getBlockContent(requestedBlockHeight);
+        if (blockContent === undefined) {
+            throw new Error(`Unable to retrieve block content at height ${requestedBlockHeight}`);
+        }
+        const currentPart: Uint8Array[] = [];
+        const parts = [];
+        let currentPartSize = 0;
+
+        for (const microblock of blockContent.microblocks) {
+            const serializedMicroblock = await this.provider.getFullSerializedMicroblock(
+                Hash.from(microblock.hash)
+            );
+            if (serializedMicroblock !== null) {
+                if (currentPartSize + serializedMicroblock.length > MAX_RAW_BLOCK_PART_SIZE) {
+                    parts.push(currentPart);
+                    currentPart.length = 0;
+                    currentPartSize = 0;
+                }
+                currentPartSize += serializedMicroblock.length;
+                currentPart.push(serializedMicroblock);
+            }
+        }
+        if (currentPart.length > 0) {
+            parts.push(currentPart);
+        }
+        const numberOfParts = parts.length;
+        const serializedMicroblocks = parts[partIndex] || [];
+        const response = {
+            partIndex,
+            numberOfParts,
+            serializedMicroblocks,
+        };
+        return {
+            responseType: AbciResponseType.RAW_BLOCK_CONTENT,
+            ...response
+        };
     }
 
     async getVirtualBlockchainState(request: GetVirtualBlockchainStateAbciRequest): Promise<VirtualBlockchainStateAbciResponse> {
@@ -278,18 +368,14 @@ export class ABCIQueryHandler {
         }
 
         const history = await this.accountManager.loadHistory(
-            request.accountHash,
             request.lastHistoryHash,
             maxRecords,
         );
 
         return {
             responseType: AbciResponseType.ACCOUNT_HISTORY,
-            list: history.list
+            list: history
         }
-
-
-        //return this.messageSerializer.serialize(SCHEMAS.MSG_ACCOUNT_HISTORY, history);
     }
 
     async getAccountByPublicKeyHash(request: GetAccountByPublicKeyHashAbciRequest): Promise<AccountByPublicKeyHashAbciResponse> {
@@ -329,7 +415,6 @@ export class ABCIQueryHandler {
     }
 
     async getMicroblockBodys(request: GetMicroblockBodysAbciRequest): Promise<MicroblockBodysAbciResponse> {
-
         // limit the number of requested bodies per request
         if (request.hashes.length > ABCIQueryHandler.MAX_MICROBLOCK_BODIES_LIMIT) throw new Error(
             `The maximum number of microblock bodies to return is 100. Requested ${request.hashes.length}`
