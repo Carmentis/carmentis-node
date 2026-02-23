@@ -1,3 +1,10 @@
+## [1.2.3](https://github.com/Carmentis/carmentis-node/compare/v1.2.2...v1.2.3) (2026-02-23)
+
+
+### Bug Fixes
+
+* force npm install in Dockerfile to bypass peer dependency conflicts ([4688288](https://github.com/Carmentis/carmentis-node/commit/4688288881bdcff92d29512b1d31c68579527543))
+
 ## [1.2.2](https://github.com/Carmentis/carmentis-node/compare/v1.2.1...v1.2.2) (2026-02-23)
 
 
