@@ -1,5 +1,6 @@
-import { StoragePriceManager } from './StoragePriceManager';
+
 import { CMTSToken } from "@cmts-dev/carmentis-sdk/server";
+import { StoragePriceManager } from './storagePriceManager';
 
 describe("storage price manager", () => {
     it("Should compute correct prices", () => {
