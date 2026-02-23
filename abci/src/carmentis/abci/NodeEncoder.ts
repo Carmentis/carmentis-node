@@ -1,6 +1,5 @@
 import * as v from 'valibot';
-import { Encoder } from 'cbor-x';
-import { MicroblockStorage, MicroblockStorageSchema } from './types/valibot/storage/MicroblockStorage';
+import { MicroblockStorage, MicroblockStorageSchema } from './types/valibot/db/db';
 import { StoredSnapshot, StoredSnapshotSchema } from './types/valibot/snapshots/StoredSnapshot';
 import { StoredGenesisSnapshot, StoredGenesisSnapshotSchema } from './types/valibot/StoredGenesisSnapshot';
 import {
@@ -16,6 +15,8 @@ import {
     AccountByPublicKeySchema,
     AccountsWithVestingLocks,
     AccountsWithVestingLocksSchema,
+    AccountsWithStakingLocks,
+    AccountsWithStakingLocksSchema,
     Escrows,
     EscrowsSchema,
     ValidatorNodeByAddress,
@@ -149,6 +150,17 @@ export class NodeEncoder {
     static decodeAccountsWithVestingLocks(encodedAccountsWithVestingLocks: Uint8Array): AccountsWithVestingLocks {
         const decoded = this.decodeBinary(encodedAccountsWithVestingLocks);
         return v.parse(AccountsWithVestingLocksSchema, decoded);
+    }
+
+    // AccountsWithStakingLocks
+    static encodeAccountsWithStakingLocks(accountsWithStakingLocks: AccountsWithStakingLocks): Uint8Array {
+        const validated = v.parse(AccountsWithStakingLocksSchema, accountsWithStakingLocks);
+        return this.encodeObject(validated);
+    }
+
+    static decodeAccountsWithStakingLocks(encodedAccountsWithStakingLocks: Uint8Array): AccountsWithStakingLocks {
+        const decoded = this.decodeBinary(encodedAccountsWithStakingLocks);
+        return v.parse(AccountsWithStakingLocksSchema, decoded);
     }
 
     // Escrows

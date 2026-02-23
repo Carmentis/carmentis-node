@@ -31,7 +31,7 @@ export class SnapshotsManager {
     chunkSize: number;
     private logger = getLogger(['node', 'snapshots', SnapshotsManager.name])
 
-    constructor(db: LevelDb, path: string, chunkSize: number, logger: unknown) {
+    constructor(db: LevelDb, path: string, chunkSize: number) {
         this.db = db;
         this.path = path;
         this.chunkSize = chunkSize;
@@ -60,7 +60,7 @@ export class SnapshotsManager {
      * Gets the list of snapshots stored by this node.
      * Called internally and from ListSnapshots.
      */
-    async getList() {
+    async getList(): Promise<StoredSnapshot[]> {
         const entries = await this.getSnapshotEntriesFromDirectory();
 
         // FIXME: The '\\' before ${JSON_SUFFIX} is for the '.' of '.json' and is temporary.
@@ -79,7 +79,6 @@ export class SnapshotsManager {
             try {
                 const content = fs.readFileSync(filePath);
                 const res = v.parse(StoredSnapshotSchema, JSON.parse(content.toString()));
-
                 list.push(res);
             } catch (error) {
                 this.logger.error(`{error}`, () => ({error}));
@@ -331,20 +330,12 @@ export class SnapshotsManager {
                 const serializedChainInfo = value;
                 const chainInfo = NodeEncoder.decodeChainInformation(serializedChainInfo);
                 height = chainInfo.height;
-                /*
-                const chainInfoUnserializer = new SchemaUnserializer<ChainInformationObject>(
-                    NODE_SCHEMAS.DB[LevelDbTable.CHAIN_INFORMATION],
-                );
-                const chainInfoObject = chainInfoUnserializer.unserialize(value);
-
-                 */
             }
             // if this is a DB_DATA_FILE record, collect the file identifier and size
             else if (key[1] == dataFileTableChar0 && key[2] == dataFileTableChar1) {
                 const fileIdentifier = [4, 5, 6, 7].reduce((t, n) => t * 0x100 + key[n], 0);
                 const serializedDataFile = value;
                 const dataFile = NodeEncoder.decodeDataFile(serializedDataFile);
-                //const dataFileObject = dataFileUnserializer.unserialize(value);
                 files.push([fileIdentifier, dataFile.fileSize]);
                 earliestFileIdentifier = Math.min(earliestFileIdentifier, fileIdentifier);
             }
@@ -361,12 +352,15 @@ export class SnapshotsManager {
 
         files.push([0, size]);
 
-        const [earliestYear, earliestMonth, earliestDay] = Utils.decodeDay(earliestFileIdentifier);
-        const earliestFileDate =
-            earliestYear.toString(10) +
-            earliestMonth.toString(10).padStart(2, '0') +
-            earliestDay.toString(10).padStart(2, '0');
+        let earliestFileDate = "";
 
+        if(earliestFileIdentifier < 0xff000000) {
+            const [earliestYear, earliestMonth, earliestDay] = Utils.decodeDay(earliestFileIdentifier);
+            earliestFileDate =
+                earliestYear.toString(10) +
+                earliestMonth.toString(10).padStart(2, '0') +
+                earliestDay.toString(10).padStart(2, '0');
+        }
         return { height, files, earliestFileDate, dbFilePath };
     }
 

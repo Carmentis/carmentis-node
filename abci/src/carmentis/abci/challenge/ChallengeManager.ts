@@ -27,7 +27,6 @@ export class ChallengeManager {
         let prngCounter = 0;
         let hash: Uint8Array = Utils.getNullHash();
 
-        //const dataFileTable = await this.db.getFullTable(NODE_SCHEMAS.DB_DATA_FILE);
         const dataFileTable = await this.db.getFullDataFileTable();
         if (dataFileTable === null) {
             return hash;
@@ -42,7 +41,6 @@ export class ChallengeManager {
             fileEntries.push([
                 dataFileKey.reduce((t, n) => t * 0x100 + n, 0),
                 dataFile.fileSize
-                //value.slice(0, 6).reduce((t, n) => t * 0x100 + n, 0),
             ]);
         }
         fileEntries.sort(([key0], [key1]) => key0 - key1);

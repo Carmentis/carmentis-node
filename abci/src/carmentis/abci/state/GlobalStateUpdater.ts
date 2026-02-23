@@ -17,7 +17,6 @@ import {
     ValidatorNodeVotingPowerUpdateSection,
     VirtualBlockchain,
     BalanceAvailability,
-    EncoderFactory,
     VirtualBlockchainType,
 } from '@cmts-dev/carmentis-sdk/server';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
@@ -53,7 +52,6 @@ export class GlobalStateUpdater {
     private totalFees = 0;
     private blockSizeInBytes = 0;
     private blockSectionCount = 0;
-    private processedMicroblock: ProcessedMicroblock[] = []; // TODO(explain): why not used
 
     private logger = getLogger(['node', 'state', GlobalStateUpdater.name]);
 
@@ -94,44 +92,46 @@ export class GlobalStateUpdater {
         // if this is the first block of the day, apply daily updates
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
+            globalState.setNewDayTimestamp(currentBlockDayTs);
             await this.updateVestingLocks(globalState, cometParameters);
             await this.updateEscrowLocks(globalState, cometParameters);
-            await this.updateUnstaking(globalState, cometParameters);
-            await this.purgeStorage(globalState, cometParameters);
+            await this.applyNodeStakingUnlocks(globalState, cometParameters);
+            await this.purgeDataFileTable(globalState, cometParameters);
         }
     }
 
+    /**
+     * Updates vesting locks: applies linear vesting.
+     */
     private async updateVestingLocks(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
         const database = globalState.getCachedDatabase();
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
         const accountsWithVestingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS);
 
-        for(const id of accountsWithVestingLocksIdentifiers) {
-            this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(id)}`);
+        for(const accountHash of accountsWithVestingLocksIdentifiers) {
+            this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(accountHash)}`);
 
-            const accountState = await database.getAccountStateByAccountId(id);
-            if (accountState) {
-                const balanceAvailability = new BalanceAvailability(
-                    accountState.balance,
-                    accountState.locks,
-                );
+            const accountState = await this.getAccountStateOrFail(globalState, accountHash);
+            const balanceAvailability = new BalanceAvailability(
+                accountState.balance,
+                accountState.locks,
+            );
 
-                if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
-                    accountState.locks = balanceAvailability.getLocks();
-                    await database.putAccountState(id, accountState);
+            if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
+                accountState.locks = balanceAvailability.getLocks();
+                await database.putAccountState(accountHash, accountState);
 
-                    if(!balanceAvailability.hasVestingLocks()) {
-                        this.logger.info(`No more vesting locks on account ${Utils.binaryToHexa(id)}: removing entry from ACCOUNTS_WITH_VESTING_LOCKS`);
-                        await database.del(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, id);
-                    }
+                if(!balanceAvailability.hasVestingLocks()) {
+                    this.logger.info(`No more vesting locks on account ${Utils.binaryToHexa(accountHash)}: removing entry from ACCOUNTS_WITH_VESTING_LOCKS`);
+                    await database.del(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, accountHash);
                 }
-            } else {
-                this.logger.warn(`Account state for account ${id.toString()} not found`);
-                // TODO: handle undefined account state
             }
         }
     }
 
+    /**
+     * Updates escrow locks: sends back the funds in case of expiration.
+     */
     private async updateEscrowLocks(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
         const database = globalState.getCachedDatabase();
         const blockHeight = cometParameters.blockHeight;
@@ -146,11 +146,7 @@ export class GlobalStateUpdater {
                 throw new Error(`Escrow ${id.toString()} not found`);
             }
 
-            const accountState = await database.getAccountStateByAccountId(escrow.payeeAccount);
-            if (accountState === undefined) throw new Error(
-                `Escrow ${id.toString()} refers to an unknown account ${escrow.payeeAccount.toString()}`
-            )
-
+            const accountState = await this.getAccountStateOrFail(globalState, escrow.payeeAccount);
             const balanceAvailability = new BalanceAvailability(
                 accountState.balance,
                 accountState.locks,
@@ -185,14 +181,50 @@ export class GlobalStateUpdater {
         }
     }
 
-    private async updateUnstaking(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
+    /**
+     * Updates node staking locks: unlocks the funds in case of expiration of the unstaking period.
+     */
+    private async applyNodeStakingUnlocks(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
         const database = globalState.getCachedDatabase();
-        const blockHeight = cometParameters.blockHeight;
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
-        const accountManager = globalState.getAccountManager();
+        const accountsWithStakingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS);
+
+        for(const accountHash of accountsWithStakingLocksIdentifiers) {
+            const accountState = await this.getAccountStateOrFail(globalState, accountHash);
+            const balanceAvailability = new BalanceAvailability(
+                accountState.balance,
+                accountState.locks,
+            );
+            if(balanceAvailability.applyNodeStakingUnlocks(currentBlockDayTs) > 0) {
+                accountState.locks = balanceAvailability.getLocks();
+                await database.putAccountState(accountHash, accountState);
+
+                if(!balanceAvailability.hasNodeStakingLocks()) {
+                    this.logger.info(`No more staking locks on account ${Utils.binaryToHexa(accountHash)}: removing entry from ACCOUNTS_WITH_STAKING_LOCKS`);
+                    await database.del(LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS, accountHash);
+                }
+            }
+        }
     }
 
-    private async purgeStorage(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
+    private async getAccountStateOrFail(globalState: GlobalState, accountHash: Uint8Array) {
+        const database = globalState.getCachedDatabase();
+        const state = await database.getAccountStateByAccountId(accountHash);
+        if (state == undefined) {
+            throw new Error(`Account state for account ${accountHash.toString()} not found`);
+        }
+        return state;
+    }
+
+    /**
+     * Removes expired entries in the DATA_FILE table.
+     * Unlike the physical removal of data files which is performed in commit() and only serves to free up disk space,
+     * this operation is part of the consensus as it modifies the set of files used in the storage challenges.
+     */
+    private async purgeDataFileTable(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
+        const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
+        const cachedStorage = globalState.getCachedStorage();
+        await cachedStorage.purgeDataFileTable(currentBlockDayTs);
     }
 
     async updateGlobalStateOnMicroblockDuringGenesis(

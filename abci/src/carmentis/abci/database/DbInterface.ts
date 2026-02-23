@@ -2,7 +2,6 @@ import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
 import { AccountState, AccountHistoryEntry } from '@cmts-dev/carmentis-sdk/server';
-import { MicroblockStorage } from '../types/valibot/storage/MicroblockStorage';
 import {
     BlockContent,
     BlockInformation,
@@ -10,6 +9,7 @@ import {
     DataFile,
     Escrows,
     ValidatorNodeByAddress,
+    MicroblockStorage,
 } from '../types/valibot/db/db';
 
 export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>;
@@ -64,8 +64,10 @@ export interface DbInterface {
     ): Promise<boolean>;
 
     // account with vesting locks
-    containsAccountWithVestingLocks(accountId: Uint8Array): Promise<boolean>;
     putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean>;
+
+    // account with staking locks
+    putAccountWithStakingLocks(accountHash: Uint8Array): Promise<boolean>;
 
     // escrow
     getEscrow(escrowIdentifier: Uint8Array): Promise<Escrows | undefined>;

@@ -1,9 +1,9 @@
 import fs, { mkdirSync } from 'node:fs';
-import { FileHandle, access, mkdir, open, rm } from 'node:fs/promises';
+import { access, readdir, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
 import { SnapshotDataCopyManager } from '../SnapshotDataCopyManager';
 import { DbInterface } from '../database/DbInterface';
-import {Microblock, SCHEMAS, Utils} from '@cmts-dev/carmentis-sdk/server';
+import {Microblock, Utils} from '@cmts-dev/carmentis-sdk/server';
 import { FileIdentifier } from '../types/FileIdentifier';
 import { getLogger } from '@logtape/logtape';
 import { IStorage } from './IStorage';
@@ -15,9 +15,6 @@ export enum MicroblockReadingMode {
     READ_HEADER = 1,
     READ_BODY = 2,
 }
-const READ_FULL = 0;
-const READ_HEADER = 1;
-const READ_BODY = 2;
 
 export class Storage implements IStorage {
     /**
@@ -34,18 +31,41 @@ export class Storage implements IStorage {
 
     private db: DbInterface;
     private path: string;
-
-    //private txs: Uint8Array[];
-    //private cache: Map<number, any>;
-
     private static logger = getLogger(['node', 'storage', Storage.name]);
     private logger = Storage.logger;
 
     constructor(db: DbInterface, path: string) {
         this.db = db;
         this.path = path;
-        //this.txs = txs;
-        //this.cache = new Map();
+    }
+
+    async getFilesWithExpirationDayBefore(dayTimestamp: number) {
+        const rootEntries = await readdir(this.path, { withFileTypes: true });
+        const dirRegex = /^\d{4}$/;
+        const fileRegex = /^(\d{4})(\d{2})(\d{2})$/;
+        const list: string[] = [];
+
+        for (const rootEntry of rootEntries) {
+            if (!rootEntry.isDirectory() || !dirRegex.test(rootEntry.name)) {
+                continue;
+            }
+            const subPath = path.join(this.path, rootEntry.name);
+            const subEntries = await readdir(subPath, { withFileTypes: true });
+            for (const subEntry of subEntries) {
+                if (!subEntry.isFile() || !fileRegex.test(subEntry.name)) {
+                    continue;
+                }
+                const [ year, month, day ] = (subEntry.name.match(fileRegex) || []).slice(1).map(Number);
+                const expirationDate = new Date(Date.UTC(year, month - 1, day));
+                const expirationDay = Math.floor(expirationDate.getTime() / 1000);
+
+                if(expirationDay < dayTimestamp) {
+                    const filePath = path.join(subPath, subEntry.name);
+                    list.push(filePath);
+                }
+            }
+        }
+        return list;
     }
 
     /**
@@ -129,7 +149,7 @@ export class Storage implements IStorage {
     private async readMicroblock(hash: Uint8Array): Promise<Uint8Array | undefined> {
         const storageInfo = await this.db.getMicroblockStorage(hash);
         if (!storageInfo) {
-            this.logger.info(`Microblock ${Utils.binaryToHexa(hash)} not found in storage: returning undefined`)
+            this.logger.info(`Storage info not found in DB for microblock ${Utils.binaryToHexa(hash)}: returning undefined`)
             return undefined
         }
 
@@ -142,7 +162,7 @@ export class Storage implements IStorage {
             const dataBuffer = new Uint8Array(size);
             const rd = await handle.read(dataBuffer, 0, size, offset);
             if (rd.bytesRead < size) {
-                throw new Error(`PANIC - encountered end of file while reading microblock data`);
+                throw new Error(`PANIC - encountered end of file while reading microblock file ${filePath}`);
             }
             await handle.close();
             return dataBuffer
@@ -154,9 +174,8 @@ export class Storage implements IStorage {
 
     async writeTransactions(
         fileIdentifier: number,
-        expectedFileSizeBeforeToWrite: number,
+        expectedFileSizeBeforeWriting: number,
         transactions: Uint8Array[],
-        //cacheObject: { txIds: number[]; expectedFileSize: number },
     ) {
         const filePath = this.getFilePath(fileIdentifier);
         const directoryPath = path.dirname(filePath);
@@ -174,9 +193,9 @@ export class Storage implements IStorage {
             const stats = await handle.stat();
             const fileSize = stats.size;
 
-            if (fileSize != expectedFileSizeBeforeToWrite) {
+            if (fileSize != expectedFileSizeBeforeWriting) {
                 throw new Error(
-                    `PANIC - '${filePath}' has an invalid size (expected ${expectedFileSizeBeforeToWrite}, got ${fileSize})`,
+                    `PANIC - '${filePath}' has an invalid size (expected ${expectedFileSizeBeforeWriting}, got ${fileSize})`,
                 );
             }
 
@@ -201,8 +220,8 @@ export class Storage implements IStorage {
         let directory;
         let filename;
 
-        const isFocusingFileHavingExpirationDay = fileIdentifier < 0xff000000;
-        if (isFocusingFileHavingExpirationDay) {
+        const hasExpirationDay = fileIdentifier < 0xff000000;
+        if (hasExpirationDay) {
             // We extract the expiration day from the file identifier.
             const [year, month, day] = Utils.decodeDay(fileIdentifier);
             const yearStr = year.toString(10);

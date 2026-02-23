@@ -1,5 +1,4 @@
 import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
-import { NODE_SCHEMAS } from '../constants/constants';
 import {
     BlockContent,
     BlockInformation,
@@ -8,6 +7,7 @@ import {
     DataFile,
     Escrows,
     ValidatorNodeByAddress,
+    MicroblockStorage,
 } from '../types/valibot/db/db';
 import {
     AccountState,
@@ -21,7 +21,6 @@ import {
 import { NodeEncoder } from '../NodeEncoder';
 import { LevelDb } from './LevelDb';
 import { ChainInformationObject } from '../types/ChainInformationObject';
-import { MicroblockStorage } from '../types/valibot/storage/MicroblockStorage';
 import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
 import { getLogger, Logger } from '@logtape/logtape';
 
@@ -153,11 +152,6 @@ export abstract class AbstractLevelDb implements DbInterface {
         return BlockchainUtils.decodeMicroblockInformation(serializedMicroblockInformation);
     }
 
-    async containsAccountWithVestingLocks(accountId: Uint8Array): Promise<boolean> {
-        const response = await this.getRaw(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, accountId);
-        return response !== undefined;
-    }
-
     async getEscrow(escrowIdentifier: Uint8Array): Promise<Escrows | undefined> {
         const serializedEscrows = await this.getRaw(LevelDbTable.ESCROWS, escrowIdentifier);
         return serializedEscrows === undefined
@@ -253,6 +247,14 @@ export abstract class AbstractLevelDb implements DbInterface {
             LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS,
             accountHash,
             NodeEncoder.encodeAccountsWithVestingLocks({}),
+        );
+    }
+
+    async putAccountWithStakingLocks(accountHash: Uint8Array): Promise<boolean> {
+        return await this.putRaw(
+            LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS,
+            accountHash,
+            NodeEncoder.encodeAccountsWithStakingLocks({}),
         );
     }
 

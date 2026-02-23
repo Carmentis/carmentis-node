@@ -47,6 +47,7 @@ import { CometBFTNodeConfigService } from './CometBFTNodeConfigService';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
 import { GenesisInitialTransactionsBuilder } from './GenesisInitialTransactionsBuilder';
 import { Storage } from './storage/Storage';
+import { StorageCleaner } from './storage/StorageCleaner';
 import { Performance } from './Performance';
 
 import {
@@ -175,7 +176,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // creates the snapshot system
         const snapshotPath = snapshotStoragePath;
         const snapshotChunkSize = this.nodeConfig.getSnapshotChunkSize();
-        this.snapshot = new SnapshotsManager(this.db, snapshotPath, snapshotChunkSize, this.logger);
+        this.snapshot = new SnapshotsManager(this.db, snapshotPath, snapshotChunkSize);
         this.state = new GlobalState(this.db, this.storage);
 
         this.abciQueryHandler = new ABCIQueryHandler(
@@ -963,6 +964,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const state = this.getGlobalState();
         const db = this.getLevelDb();
         const snapshot = this.getSnapshot();
+
         if (!state.hasSomethingToCommit()) {
             this.logger.warn(`nothing to commit`);
             return ResponseCommit.create({});
@@ -970,6 +972,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         await state.commit();
         this.logger.info(`Commit done`);
+
+        // if this is the first block of the day, delete expired data files
+        const newDayTimestamp = state.getNewDayTimestamp();
+        if (newDayTimestamp !== 0) {
+            const storage = this.getStorage();
+            const storageCleaner = new StorageCleaner(snapshot, storage);
+            await storageCleaner.removeExpiredDataFiles(newDayTimestamp);
+            state.setNewDayTimestamp(0);
+        }
 
         // Create snapshots under conditions that we are not already importing snapshots and it is
         // the right period to generate snapshots.

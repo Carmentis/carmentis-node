@@ -320,6 +320,7 @@ export class AccountManager {
             accountState.locks,
         );
         balanceAvailability.addNodeStaking(amount, objectIdentifier);
+        await this.db.putAccountWithStakingLocks(accountHash);
         accountState.balance = balanceAvailability.getBalanceAsAtomics();
         accountState.locks = balanceAvailability.getLocks();
 

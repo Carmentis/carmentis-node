@@ -76,9 +76,6 @@ export class LevelDb extends AbstractLevelDb {
     }
 
     async clear() {
-//      if (this.db.status !== 'open') {
-//          await this.open()
-//      }
         await this.db.clear();
     }
 
@@ -117,7 +114,6 @@ export class LevelDb extends AbstractLevelDb {
         );
         return undefined;
     }
-
 
     async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
         this.logger.debug(

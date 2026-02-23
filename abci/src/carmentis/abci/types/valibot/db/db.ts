@@ -4,7 +4,7 @@ export function uint8array() {
     return v.instance(Uint8Array<ArrayBuffer | ArrayBufferLike>)
 }
 
-// ChainInformation
+// (0x00) CHAIN_INFORMATION - ChainInformation
 export const ChainInformationSchema = v.object({
     height: v.number(),
     lastBlockTimestamp: v.number(),
@@ -13,32 +13,85 @@ export const ChainInformationSchema = v.object({
 });
 export type ChainInformation = v.InferOutput<typeof ChainInformationSchema>;
 
-// DataFile
+// (0x01) DATA_FILE - DataFile
 export const DataFileSchema = v.object({
     fileSize: v.number(),
     microblockCount: v.number(),
 });
 export type DataFile = v.InferOutput<typeof DataFileSchema>;
 
-// VbRadix
+// (0x02) VB_RADIX - VbRadix
 export const VbRadixSchema = v.object({});
 export type VbRadix = v.InferOutput<typeof VbRadixSchema>;
 
-// TokenRadix
+// (0x03) TOKEN_RADIX - TokenRadix
 export const TokenRadixSchema = v.object({});
 export type TokenRadix = v.InferOutput<typeof TokenRadixSchema>;
 
-// AccountByPublicKey
+// (0x04) BLOCK_INFORMATION - BlockInformation
+export const BlockInformationSchema = v.object({
+    hash: uint8array(),
+    timestamp: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    proposerAddress: uint8array(),
+    size: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    microblockCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+})
+export type BlockInformation = v.InferOutput<typeof BlockInformationSchema>;
+
+// (0x05) BLOCK_CONTENT - BlockContent
+export const BlockContentSchema = v.object({
+    microblocks: v.array(v.object({
+        hash: uint8array(),
+        vbId: uint8array(),
+        vbType: v.number(),
+        height: v.number(),
+        size: v.number(),
+        sectionCount: v.number(),
+    })),
+});
+export type BlockContent = v.InferOutput<typeof BlockContentSchema>;
+
+// (0x06) BLOCK_MODIFIED_ACCOUNTS - BlockModifiedAccounts
+export const BlockModifiedAccountsSchema = v.object({
+    modifiedAccounts: v.array(uint8array()),
+});
+export type BlockModifiedAccounts = v.InferOutput<typeof BlockModifiedAccountsSchema>;
+
+// (0x07) MICROBLOCK_VB_INFORMATION
+// encoded with MicroblockInformationSchema from core
+
+// (0x08) MICROBLOCK_STORAGE - MicroblockStorage
+export const MicroblockStorageSchema = v.object({
+    fileIdentifier: v.number(),
+    offset: v.number(),
+    size: v.number(),
+});
+export type MicroblockStorage = v.InferOutput<typeof MicroblockStorageSchema>;
+
+// (0x09) VIRTUAL_BLOCKCHAIN_STATE
+// encoded with VirtualBlockchainStateSchema from core
+
+// (0x0a) ACCOUNT_STATE
+// encoded with AccountStateSchema from core
+
+// (0x0b) ACCOUNT_HISTORY
+// encoded with AccountHistoryEntrySchema from core
+
+// (0x0c) ACCOUNT_BY_PUBLIC_KEY - AccountByPublicKey
 export const AccountByPublicKeySchema = v.object({
     accountHash: uint8array(),
 });
 export type AccountByPublicKey = v.InferOutput<typeof AccountByPublicKeySchema>;
 
-// AccountsWithVestingLocks
+// (0x0d) ACCOUNTS_WITH_VESTING_LOCKS - AccountsWithVestingLocks
 export const AccountsWithVestingLocksSchema = v.object({});
 export type AccountsWithVestingLocks = v.InferOutput<typeof AccountsWithVestingLocksSchema>;
 
-// Escrows
+// (0x0e) ACCOUNTS_WITH_STAKING_LOCKS - AccountsWithStakingLocks
+export const AccountsWithStakingLocksSchema = v.object({});
+export type AccountsWithStakingLocks = v.InferOutput<typeof AccountsWithStakingLocksSchema>;
+
+// (0x0f) ESCROWS - Escrows
 export const EscrowsSchema = v.object({
     payerAccount: uint8array(),
     payeeAccount: uint8array(),
@@ -46,7 +99,7 @@ export const EscrowsSchema = v.object({
 });
 export type Escrows = v.InferOutput<typeof EscrowsSchema>;
 
-// ValidatorNodeByAddress
+// (0x10) VALIDATOR_NODE_BY_ADDRESS - ValidatorNodeByAddress
 export const ValidatorNodeByAddressSchema = v.object({
     validatorNodeHash: uint8array(),
     votingPower: v.number(),
@@ -73,43 +126,3 @@ export const AccountSectionReferenceSchema = v.object({
     sectionIndex: v.number(),
 });
 export type AccountSectionReference = v.InferOutput<typeof AccountSectionReferenceSchema>;
-
-// BlockInformation
-export const BlockInformationSchema = v.object({
-    hash: uint8array(),
-    timestamp: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    proposerAddress: uint8array(),
-    size: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    microblockCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
-})
-export type BlockInformation = v.InferOutput<typeof BlockInformationSchema>;
-
-// BlockContent
-export const BlockContentSchema = v.object({
-    microblocks: v.array(v.object({
-        hash: uint8array(),
-        vbId: uint8array(),
-        vbType: v.number(),
-        height: v.number(),
-        size: v.number(),
-        sectionCount: v.number(),
-    })),
-});
-export type BlockContent = v.InferOutput<typeof BlockContentSchema>;
-
-// BlockModifiedAccounts
-export const BlockModifiedAccountsSchema = v.object({
-    modifiedAccounts: v.array(uint8array()),
-});
-export type BlockModifiedAccounts = v.InferOutput<typeof BlockModifiedAccountsSchema>;
-
-// BlockRawContent
-// TODO: is it really used?
-export const BlockRawContentSchema = v.object({
-    hash: uint8array(),
-    timestamp: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    proposerAddress: uint8array(),
-    size: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    microblocks: v.array(uint8array()),
-})
-export type BlockRawContent = v.InferOutput<typeof BlockRawContentSchema>;

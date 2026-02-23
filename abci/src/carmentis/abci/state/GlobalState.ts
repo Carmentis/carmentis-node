@@ -28,11 +28,8 @@ export class GlobalState extends AbstractProvider {
     private readonly logger: Logger;
     private cachedStorage: CachedStorage;
     private cachedDb: CachedLevelDb;
-
-    // instantiate radix trees
     private readonly vbRadix: RadixTree;
-    //private readonly tokenRadix: RadixTree;
-
+    private newDayTimestamp: number;
     private perf: Performance;
 
     private readonly cachedAccountManager: AccountManager;
@@ -48,7 +45,16 @@ export class GlobalState extends AbstractProvider {
         this.cachedStorage = new CachedStorage(this.storage, this.cachedDb);
         this.vbRadix = new RadixTree(this.cachedDb, LevelDbTable.VB_RADIX);
         this.cachedAccountManager = new AccountManager(this.cachedDb);
+        this.newDayTimestamp = 0;
         this.perf = new Performance(this.logger);
+    }
+
+    setNewDayTimestamp(dayTimestamp: number) {
+        this.newDayTimestamp = dayTimestamp;
+    }
+
+    getNewDayTimestamp() {
+        return this.newDayTimestamp;
     }
 
     async getAccountHashFromPublicKey(publicKey: PublicSignatureKey): Promise<Hash> {
@@ -230,55 +236,16 @@ export class GlobalState extends AbstractProvider {
         return this.cachedAccountManager;
     }
 
-    /*
-    finalize(request: FinalizeBlockRequest) {
-        // Extract the votes of validators involved in the publishing of this block.
-        // Then proceed to the payment of the validators.
-        const votes = request.decided_last_commit?.votes || [];
-        await this.payValidators(this.finalizedBlockContext, votes, blockHeight, blockTimestamp);
-
-        const processBlockResult = await this.processBlock(
-            this.finalizedBlockContext,
-            blockHeight,
-            blockTimestamp,
-            request.txs,
-        );
-        const fees = CMTSToken.createAtomic(processBlockResult.totalFees);
-        this.logger.log(`Total block fees: ${fees.toString()}`);
-
-
-        await this.setBlockInformation(
-            this.finalizedBlockContext,
-            blockHeight,
-            request.hash,
-            blockTimestamp,
-            request.proposer_address,
-            processBlockResult.blockSize,
-            request.txs.length,
-        );
-
-        await this.setBlockContent(
-            this.finalizedBlockContext,
-            blockHeight,
-            processBlockResult.microblocks,
-        );
-
-        this.finalizedBlockContext.validatorSetUpdate.forEach((entry) => {
-            this.logger.log(
-                `validatorSet update: pub_key=[${entry.pub_key_type}]${Base64.encodeBinary(entry.pub_key_bytes)}, power=${entry.power}`,
-            );
-        });
-
-    }
-
-     */
-
     getCachedDatabase() {
         return this.cachedDb;
     }
 
     getDatabase() {
         return this.db;
+    }
+
+    getCachedStorage() {
+        return this.cachedStorage;
     }
 
     /**
@@ -315,8 +282,6 @@ export class GlobalState extends AbstractProvider {
             virtualBlockchainType: virtualBlockchain.getType(),
         });
     }
-
-
 
     async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
         if (virtualBlockchain.getHeight() === 1) {

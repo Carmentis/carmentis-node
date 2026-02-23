@@ -1,11 +1,10 @@
 import { MicroblockReadingMode, Storage } from './Storage';
-import { NodeCrypto } from '../crypto/NodeCrypto';
-import { BlockchainUtils, Microblock, SCHEMAS, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { Microblock, Utils } from '@cmts-dev/carmentis-sdk/server';
 import { CachedLevelDb } from '../database/CachedLevelDb';
 import { FileIdentifier } from '../types/FileIdentifier';
-import { FileHandle, open } from 'node:fs/promises';
 import { IStorage } from './IStorage';
 import { getLogger } from '@logtape/logtape';
+import {LevelDbTable} from "../database/LevelDbTable";
 
 interface BufferedTransactions {
     transactionsToWrite: Uint8Array[];
@@ -25,9 +24,24 @@ export class CachedStorage implements IStorage {
     constructor(
         private readonly storage: Storage,
         private readonly db: CachedLevelDb,
-        initialPendingTransactions: Uint8Array[] = [],
     ) {
         this.contentToBeWritten = new Map();
+    }
+
+    /**
+     * remove expired entries from the DATA_FILE table
+     * @param {number} dayTimestamp - day timestamp of the block that triggered the call
+     */
+    async purgeDataFileTable(dayTimestamp: number): Promise<void> {
+        const dataFileTable = await this.db.getFullDataFileTable();
+
+        for (const dataFileEntry of dataFileTable) {
+            const dataFileKey = dataFileEntry.dataFileKey;
+            const fileIdentifier = dataFileKey.reduce((t, n) => t * 0x100 + n, 0);
+            if (fileIdentifier < dayTimestamp) {
+                await this.db.del(LevelDbTable.DATA_FILE, dataFileKey);
+            }
+        }
     }
 
     async readFullMicroblock(hash: Uint8Array): Promise<Uint8Array | undefined> {
@@ -58,7 +72,7 @@ export class CachedStorage implements IStorage {
         // we first search in the cache
         const stringHash = Utils.binaryToHexa(hash);
         let returnedSerializedMicroblock: Uint8Array;
-        const cachedSerializedMicroblock = undefined//this.cachedSerializedMicroblockByHash.get(stringHash);
+        const cachedSerializedMicroblock = this.cachedSerializedMicroblockByHash.get(stringHash);
         if (cachedSerializedMicroblock) {
             this.logger.debug(`Microblock ${stringHash} found in cache`);
             returnedSerializedMicroblock = cachedSerializedMicroblock;
@@ -102,64 +116,7 @@ export class CachedStorage implements IStorage {
                 return cachedSerializedMicroblockBody;
             }
         }
-
-        /*
-        // not found in cache, so we search on the disk storage
-        const storageInfo = await this.db.getMicroblockStorage(hash);
-        if (!storageInfo) {
-            this.logger.warn(`Microblock ${stringHash} not found`);
-            return undefined;
-        }
-
-        const filePath = this.getFilePath(storageInfo.fileIdentifier);
-        let dataBuffer: Uint8Array;
-
-        try {
-            const handle = await open(filePath, 'r');
-            dataBuffer = await this.readMicroblockPart(
-                handle,
-                storageInfo.offset,
-                storageInfo.size,
-                partType,
-            );
-            await handle.close();
-        } catch (error) {
-            console.error(error);
-            dataBuffer = new Uint8Array();
-        }
-
-        return dataBuffer;
-
-         */
     }
-
-    /**
-     * Reads a microblock part given a file handle, offset, size and type of part.
-     */
-    private async readMicroblockPart(
-        handle: FileHandle,
-        offset: number,
-        size: number,
-        partType: MicroblockReadingMode,
-    ) {
-        // TODO(fix): in the SDK, header and body are no more concatenated, so we need to read them separately
-        // See BlockchainSerializer
-        const [extraOffset, targetSize] = [
-            [0, size],
-            [0, SCHEMAS.MICROBLOCK_HEADER_SIZE],
-            [SCHEMAS.MICROBLOCK_HEADER_SIZE, size - SCHEMAS.MICROBLOCK_HEADER_SIZE],
-        ][partType];
-
-        const dataBuffer = new Uint8Array(targetSize);
-        const rd = await handle.read(dataBuffer, 0, targetSize, offset + extraOffset);
-
-        if (rd.bytesRead < targetSize) {
-            throw new Error(`PANIC - encountered end of file while reading microblock data`);
-        }
-
-        return dataBuffer;
-    }
-
 
     /**
      * Adds a microblock and its associated transaction to a buffer for later processing.
@@ -183,19 +140,14 @@ export class CachedStorage implements IStorage {
         this.logger.debug(`Showing details on serialized microblock: ${Microblock.loadFromSerializedMicroblock(serializedMicroblock).toString()}`);
         const content = serializedMicroblock; //this.pendingTransactions[txId];
         const size = content.length;
-        /*
-        const microblockHeaderHash = NodeCrypto.Hashes.sha256AsBinary(
-            content.slice(0, SCHEMAS.MICROBLOCK_HEADER_SIZE),
-        );
-         */
-
         const microblockHash = microblock.getHashAsBytes();
         const fileIdentifier = Storage.getFileIdentifier(expirationDay, microblockHash);
         const dbFileKey = new Uint8Array(Utils.intToByteArray(fileIdentifier, 4));
-        const dataFileObject = (await this.db.getDataFileFromDataFileKey(dbFileKey)) || {
-            fileSize: 0,
-            microblockCount: 0,
-        };
+        const dataFileObject =
+            (await this.db.getDataFileFromDataFileKey(dbFileKey)) || {
+                fileSize: 0,
+                microblockCount: 0,
+            };
 
         // we add the transaction in the buffer
         this.cachedSerializedMicroblockByHash.set(stringMicroblockHash, serializedMicroblock);
@@ -215,7 +167,6 @@ export class CachedStorage implements IStorage {
             offset: dataFileObject.fileSize,
             size,
         });
-
 
         dataFileObject.fileSize += size;
         dataFileObject.microblockCount += 1;
