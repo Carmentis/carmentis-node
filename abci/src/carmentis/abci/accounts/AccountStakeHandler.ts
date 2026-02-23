@@ -24,6 +24,9 @@ export class AccountStakeHandler {
         objectIdentifier: Uint8Array,
         protocolState: ProtocolInternalState,
     ) {
+        // defense programming
+        if (!Number.isInteger(amount)) throw new TypeError(`Amount must be an integer`);
+
         // we currently only support staking for validator nodes
         if (objectType != VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN) {
             throw new Error(
@@ -31,20 +34,7 @@ export class AccountStakeHandler {
             );
         }
 
-        // verify that the amount is within the allowed range
-        const minimumAmount = protocolState.getMinimumNodeStakingAmountInAtomics();
-        const maximumAmount = protocolState.getMaximumNodeStakingAmountInAtomics();
-        if (amount < minimumAmount || maximumAmount < amount) {
-            throw new Error(
-                `Staking amount in atomics must be in [${minimumAmount} .. ${maximumAmount}], got ${amount}`,
-            );
-        }
-
-        // we need to ensure that the staking will not exceed the maximum allowed amount of staked tokens
-        // TODO
-
-        // load the current account state
-        // TODO: check that the account exists
+        // we recover the current account state to get the current stake for this objetc
         const accountInformation =
             await this.accountStateManager.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;
@@ -52,12 +42,23 @@ export class AccountStakeHandler {
             accountState.balance,
             accountState.locks,
         );
+
+        // we need to ensure that the staking will not exceed the maximum allowed amount of staked tokens
+        const minimumAmount = protocolState.getMinimumNodeStakingAmountInAtomics();
+        const maximumAmount = protocolState.getMaximumNodeStakingAmountInAtomics();
+        const currentStakedAmount = balanceAvailability.getNodeStakingLockAmount(objectIdentifier);
+        const newStakeAmount = currentStakedAmount + amount;
+        if (newStakeAmount < minimumAmount || maximumAmount < newStakeAmount) {
+            throw new Error(
+                `Staking amount in atomics must be in [${minimumAmount} .. ${maximumAmount}], got ${amount}`,
+            );
+        }
+
         balanceAvailability.addNodeStaking(amount, objectIdentifier);
-        await this.db.putAccountWithStakingLocks(accountHash);
+        await this.accountStateManager.putAccountWithStakingLocks(accountHash);
         accountState.balance = balanceAvailability.getBalanceAsAtomics();
         accountState.locks = balanceAvailability.getLocks();
 
         await this.accountStateManager.saveAccountState(accountHash, accountState);
-
     }
 }

@@ -26,6 +26,9 @@ export class AccountUnstakeHandler {
         timestamp: number,
         protocolState: ProtocolInternalState,
     ) {
+        // defense programming
+        if (!Number.isInteger(amount)) throw new TypeError(`Amount must be an integer`);
+
         if (objectType != VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN) {
             throw new Error(
                 `Staking and unstaking are currently supported for validator nodes only`,

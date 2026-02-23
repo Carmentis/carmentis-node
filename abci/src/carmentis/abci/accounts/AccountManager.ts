@@ -1,57 +1,35 @@
-import { NODE_SCHEMAS } from '../constants/constants';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import {
-    CMTSToken,
-    CryptographicHash,
-    CryptoSchemeFactory,
-    ECO,
-    Economics,
-    LockType,
-    EscrowParameters,
-    VestingParameters,
-    INITIAL_OFFER,
-    PublicSignatureKey,
-    SchemaSerializer,
-    Sha256CryptographicHash,
-    Utils,
+    AccountHistory,
     AccountInformation,
     AccountState,
-    BlockchainUtils,
     BalanceAvailability,
-    VirtualBlockchainType,
-    ProtocolInternalState,
+    BlockchainUtils,
+    CMTSToken,
+    CryptographicHash,
+    ECO,
+    Economics,
+    EscrowParameters,
     Hash,
-    AccountHistory,
-    AccountHistoryEntry,
+    INITIAL_OFFER,
+    ProtocolInternalState,
+    PublicSignatureKey,
+    Sha256CryptographicHash,
+    Utils,
+    VestingParameters,
 } from '@cmts-dev/carmentis-sdk/server';
-import { Escrow } from '../types/Escrow';
 import { getLogger, Logger } from '@logtape/logtape';
 import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
 import { RadixTree } from '../RadixTree';
-import { NodeEncoder } from '../NodeEncoder';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { AccountStateManager } from './AccountStateManager';
 import { AccountStakeHandler } from './AccountStakeHandler';
 import { AccountUnstakeHandler } from './AccountUnstakeHandler';
-
-/**
- * Error messages used by AccountManager
- */
-export const ErrorMessages = {
-    UNDEFINED_FEES_PAYER: 'Undefined fees payer account',
-    ACCOUNT_TYPE_NOT_ALLOWED: (accountType: string, transferType: string) =>
-        `account of type '${accountType}' not allowed for transfer of type '${transferType}'`,
-    INSUFFICIENT_FUNDS: (amount: number, tokenName: string, from: string, to: string, balance: number) =>
-        `insufficient funds to transfer ${amount} ${tokenName} from ${from} to ${to}: the current payer balance is ${balance} ${tokenName}`,
-    ACCOUNT_ALREADY_EXISTS: 'account already exists',
-    INVALID_PAYEE: 'invalid payee',
-    HISTORY_ENTRY_NOT_FOUND: 'Internal error: account history entry not found',
-    PUBLIC_KEY_IN_USE: 'public key already in use',
-    UNKNOWN_ACCOUNT_KEY_HASH: 'unknown account key hash',
-    UNDEFINED_ACCOUNT_HASH: 'Cannot load information account: received undefined hash',
-} as const;
-
+import { AccountEscrowHandler } from './AccountEscrowHandler';
+import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
+import { AccountHistoryHandler } from './AccountHistoryHandler';
+import { ErrorMessages } from './ErrorMessages';
 
 export interface Transfer {
     type: number;
@@ -68,23 +46,34 @@ export class AccountManager {
     private readonly modifiedAccounts: Set<string>;
     private readonly perf: Performance;
     private readonly logger: Logger;
-    private readonly accountStateManager: AccountStateManager
+    private readonly accountStateManager: AccountStateManager;
 
     // dedicated handlers
     private readonly accountStakeHandler: AccountStakeHandler;
     private readonly accountUnstakeHandler: AccountUnstakeHandler;
+    private readonly accountEscrowHandler: AccountEscrowHandler;
+    private readonly accountTokenTransferHandler: AccountTokenTransferHandler;
+    private readonly accountHistoryHandler: AccountHistoryHandler;
 
     constructor(db: DbInterface) {
         this.db = db;
         this.accountRadix = new RadixTree(this.db, LevelDbTable.TOKEN_RADIX);
-        this.modifiedAccounts = new Set;
-        this.logger = getLogger([ 'node', 'accounts', AccountManager.name ]);
+        this.modifiedAccounts = new Set();
+        this.logger = getLogger(['node', 'accounts', AccountManager.name]);
         this.perf = new Performance(this.logger, true);
 
-
         this.accountStateManager = new AccountStateManager(this.db, this.accountRadix);
+        this.accountHistoryHandler = new AccountHistoryHandler(this.accountStateManager);
+        this.accountTokenTransferHandler = new AccountTokenTransferHandler(
+            this.accountStateManager,
+            this.accountHistoryHandler,
+        );
         this.accountStakeHandler = new AccountStakeHandler(this.accountStateManager);
         this.accountUnstakeHandler = new AccountUnstakeHandler(this.accountStateManager);
+        this.accountEscrowHandler = new AccountEscrowHandler(
+            this.accountStateManager,
+            this.accountTokenTransferHandler,
+        );
     }
 
     getAccountRootHash() {
@@ -134,119 +123,7 @@ export class AccountManager {
         chainReference: unknown,
         timestamp: number,
     ): Promise<void> {
-        this.logger.debug(
-            `Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amount} at ${timestamp}`,
-        );
-        this.logger.debug(
-            `Transfer from: ${transfer.payerAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payerAccount) : 'Unknown'}`,
-        );
-        this.logger.debug(
-            `Transfer to: ${transfer.payeeAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payeeAccount) : 'Unknown'}`,
-        );
-
-        const perfMeasure = this.perf.start('tokenTransfer');
-
-        const accountCreation = transfer.type == ECO.BK_SENT_ISSUANCE || transfer.type == ECO.BK_SALE;
-
-        let payeeBalance;
-        let payerBalance;
-
-        const shortPayerAccountString = this.getShortAccountString(transfer.payerAccount);
-        const shortPayeeAccountString = this.getShortAccountString(transfer.payeeAccount);
-
-        if (transfer.payerAccount === null) {
-            this.logger.warn(ErrorMessages.UNDEFINED_FEES_PAYER);
-            payerBalance = null;
-        } else {
-            const payerInfo = await this.loadAccountInformation(transfer.payerAccount);
-
-            if (!Economics.isAllowedTransfer(payerInfo.type, transfer.type)) {
-                throw new Error(
-                    ErrorMessages.ACCOUNT_TYPE_NOT_ALLOWED(
-                        ECO.ACCOUNT_NAMES[payerInfo.type],
-                        ECO.BK_NAMES[transfer.type],
-                    ),
-                );
-            }
-
-            payerBalance = payerInfo.state.balance;
-
-            const balanceAvailability = new BalanceAvailability(payerBalance, payerInfo.state.locks);
-            const spendableTokens = balanceAvailability.getBreakdown().spendable;
-
-            if (spendableTokens < transfer.amount) {
-                throw new Error(
-                    ErrorMessages.INSUFFICIENT_FUNDS(
-                        transfer.amount / ECO.TOKEN,
-                        ECO.TOKEN_NAME,
-                        shortPayerAccountString,
-                        shortPayeeAccountString,
-                        spendableTokens / ECO.TOKEN,
-                    ),
-                );
-            }
-        }
-
-        if (transfer.payeeAccount === null) {
-            payeeBalance = null;
-        } else {
-            const payeeInfo = await this.loadAccountInformation(transfer.payeeAccount);
-
-            if (!Economics.isAllowedTransfer(payeeInfo.type, transfer.type ^ ECO.BK_PLUS)) {
-                throw new Error(
-                    ErrorMessages.ACCOUNT_TYPE_NOT_ALLOWED(
-                        ECO.ACCOUNT_NAMES[payeeInfo.type],
-                        ECO.BK_NAMES[transfer.type ^ ECO.BK_PLUS],
-                    ),
-                );
-            }
-
-            if (accountCreation) {
-                if (payeeInfo.exists) {
-                    throw new Error(ErrorMessages.ACCOUNT_ALREADY_EXISTS);
-                }
-            } else {
-                if (!payeeInfo.exists) {
-                    throw new Error(ErrorMessages.INVALID_PAYEE);
-                }
-            }
-
-            payeeBalance = payeeInfo.state.balance;
-        }
-
-        perfMeasure.event('before updates');
-
-        if (payerBalance !== null && transfer.payerAccount !== null) {
-            await this.update(
-                transfer.type,
-                transfer.payerAccount,
-                transfer.payeeAccount,
-                transfer.amount,
-                chainReference,
-                timestamp,
-                transfer.vestingParameters || null,
-                transfer.escrowParameters || null,
-            );
-        }
-
-        if (payeeBalance !== null && transfer.payeeAccount !== null) {
-            await this.update(
-                transfer.type ^ 1,
-                transfer.payeeAccount,
-                transfer.payerAccount,
-                transfer.amount,
-                chainReference,
-                timestamp,
-                transfer.vestingParameters || null,
-                transfer.escrowParameters || null,
-            );
-        }
-
-        this.logger.info(
-            `${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
-        );
-
-        perfMeasure.end();
+        await this.accountTokenTransferHandler.tokenTransfer(transfer, chainReference, timestamp);
     }
 
     /**
@@ -259,50 +136,13 @@ export class AccountManager {
         timestamp: number,
         chainReference: unknown,
     ) {
-        const escrow = await this.db.getEscrow(escrowIdentifier);
-
-        // make sure that this escrow exists
-        if (escrow === undefined) {
-            throw new Error(`rejected escrow settlement: unknown or out-of-date escrow identifier`);
-        }
-        // make sure that the caller is the agent
-        if (!Utils.binaryIsEqual(account, escrow.agentAccount)) {
-            throw new Error(`rejected escrow settlement: caller is not the agent`);
-        }
-
-        // retrieve the lock from the payee account, get the amount, then remove the lock
-        const accountInformation = await this.loadAccountInformation(escrow.payeeAccount);
-        const payeeAccountState = accountInformation.state;
-        const lockIndex = payeeAccountState.locks.findIndex(
-            (lock) =>
-                lock.type == LockType.Escrow &&
-                Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier),
+        await this.accountEscrowHandler.escrowSettlement(
+            account,
+            escrowIdentifier,
+            confirmed,
+            timestamp,
+            chainReference,
         );
-
-        if (lockIndex === -1) {
-            throw new Error(`PANIC - unable to find the lock of the escrow to be settled`);
-        }
-
-        const amount = payeeAccountState.locks[lockIndex].lockedAmountInAtomics;
-
-        payeeAccountState.locks.splice(lockIndex, 1);
-
-        await this.saveState(escrow.payeeAccount, payeeAccountState);
-
-        // if the escrow is canceled, send the funds back to the payer
-        if (!confirmed) {
-            const tokenTransfer: Transfer = {
-                type: ECO.BK_SENT_ESCROW_REFUND,
-                payerAccount: escrow.payeeAccount,
-                payeeAccount: escrow.payerAccount,
-                amount,
-            };
-
-            await this.tokenTransfer(tokenTransfer, chainReference, timestamp);
-        }
-
-        // remove the escrow from the DB
-        await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
     }
 
     /**
@@ -315,14 +155,34 @@ export class AccountManager {
         objectIdentifier: Uint8Array,
         protocolState: ProtocolInternalState,
     ) {
-       await this.accountStakeHandler.stake(accountHash, amount, objectType, objectIdentifier, protocolState);
+        await this.accountStakeHandler.stake(
+            accountHash,
+            amount,
+            objectType,
+            objectIdentifier,
+            protocolState,
+        );
     }
 
     /**
      * Declares that the user wants to unstake some tokens.
      */
-    async planUnstake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array, timestamp: number, protocolState: ProtocolInternalState) {
-        await this.accountUnstakeHandler.planUnstake(accountHash, amount, objectType, objectIdentifier, timestamp, protocolState);
+    async planUnstake(
+        accountHash: Uint8Array,
+        amount: number,
+        objectType: number,
+        objectIdentifier: Uint8Array,
+        timestamp: number,
+        protocolState: ProtocolInternalState,
+    ) {
+        await this.accountUnstakeHandler.planUnstake(
+            accountHash,
+            amount,
+            objectType,
+            objectIdentifier,
+            timestamp,
+            protocolState,
+        );
     }
 
     /**
@@ -360,95 +220,6 @@ export class AccountManager {
         }
     }
 
-    private async update(
-        type: number,
-        accountHash: Uint8Array,
-        linkedAccountHash: Uint8Array | null,
-        amount: number,
-        chainReference: unknown,
-        timestamp: number,
-        vestingParameters: VestingParameters | null = null,
-        escrowParameters: EscrowParameters | null = null,
-    ): Promise<void> {
-        const accountInformation = await this.loadAccountInformation(accountHash);
-        const accountState = accountInformation.state;
-        const signedAmount = type & ECO.BK_PLUS ? amount : -amount;
-
-        const balanceAvailability = new BalanceAvailability(
-            accountState.balance,
-            accountState.locks,
-        );
-
-        switch (type) {
-            case ECO.BK_RECEIVED_VESTING: {
-                this.logger.debug(`Received vested tokens on account ${Utils.binaryToHexa(accountHash)}`);
-
-                if (vestingParameters === null) {
-                    throw new Error('Vesting parameters are missing');
-                }
-                balanceAvailability.addVestedTokens(signedAmount, vestingParameters);
-                await this.db.putAccountWithVestingLocks(accountHash);
-                break;
-            }
-            case ECO.BK_RECEIVED_ESCROW: {
-                this.logger.debug(`Received escrowed tokens on account ${Utils.binaryToHexa(accountHash)}`);
-
-                // reject if escrow parameters are missing
-                if (escrowParameters === null) {
-                    throw new Error('Escrow parameters are missing');
-                }
-
-                // the payer account must exist because it has sent funds to the escrow account
-                if (linkedAccountHash === null) {
-                    throw new Error(
-                        'Received undefined linked account hash for escrow transfer: SHOULD NOT HAPPEN',
-                    );
-                }
-
-                balanceAvailability.addEscrowedTokens(signedAmount, escrowParameters);
-                await this.db.putEscrow(escrowParameters.escrowIdentifier, {
-                    payerAccount: linkedAccountHash,
-                    payeeAccount: accountHash,
-                    agentAccount: escrowParameters.transferAuthorizerAccountId,
-                });
-                break;
-            }
-            default: {
-                balanceAvailability.addSpendableTokens(signedAmount);
-                break;
-            }
-        }
-
-        accountState.height++;
-        accountState.balance = balanceAvailability.getBalanceAsAtomics();
-        accountState.locks = balanceAvailability.getLocks();
-
-        accountState.lastHistoryHash = await this.addHistoryEntry(
-            accountState,
-            type,
-            accountHash,
-            linkedAccountHash,
-            amount,
-            chainReference,
-            timestamp,
-        );
-
-        await this.saveState(accountHash, accountState);
-    }
-
-    /**
-     * Saves an account state in the DB_ACCOUNT_STATE table and in the account radix tree.
-     */
-    private async saveState(accountHash: Uint8Array, accountState: AccountState) {
-        const record = BlockchainUtils.encodeAccountState(accountState);
-        const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
-
-        this.storeModifiedAccount(accountHash);
-        await this.accountRadix.set(accountHash, stateHash);
-        this.logger.debug(`Storing account state for account ${Utils.binaryToHexa(accountHash)}`);
-        await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
-    }
-
     /**
      * Loads the transaction history for an account.
      *
@@ -457,23 +228,8 @@ export class AccountManager {
      * @param maxRecords - Maximum number of history records to retrieve
      * @returns The account history with a list of entries
      */
-    async loadHistory(
-        lastHistoryHash: Uint8Array,
-        maxRecords: number,
-    ): Promise<AccountHistory> {
-        let historyHash = lastHistoryHash;
-        const list: AccountHistory = [];
-
-        for (let index = maxRecords; index > 0; index--) {
-            // if there are no more history entries, break the loop
-            if (Utils.binaryIsEqual(historyHash, Utils.getNullHash())) break;
-
-            // load and add the history entry to the list
-            const entry = await this.loadHistoryEntry(historyHash);
-            list.push(entry);
-            historyHash = entry.previousHistoryHash;
-        }
-        return list;
+    async loadHistory(lastHistoryHash: Uint8Array, maxRecords: number): Promise<AccountHistory> {
+        return await this.accountHistoryHandler.loadHistory(lastHistoryHash, maxRecords);
     }
 
     /**
@@ -488,30 +244,7 @@ export class AccountManager {
         fromHistoryHash: Uint8Array,
         toHistoryHash: Uint8Array,
     ): Promise<AccountHistory> {
-        let historyHash = fromHistoryHash;
-        const list: AccountHistory = [];
-
-        while (!Utils.binaryIsEqual(historyHash, toHistoryHash)) {
-            // if there are no more history entries, break the loop
-            if (Utils.binaryIsEqual(historyHash, Utils.getNullHash())) break;
-
-            // load and add the history entry to the list
-            const entry = await this.loadHistoryEntry(historyHash);
-            list.push(entry);
-            historyHash = entry.previousHistoryHash;
-        }
-        return list;
-    }
-
-    private async loadHistoryEntry(
-        historyHash: Uint8Array,
-    ): Promise<AccountHistoryEntry> {
-        const accountHistoryEntry = await this.db.getAccountHistoryEntryByHistoryHash(historyHash);
-        if (accountHistoryEntry) {
-            return accountHistoryEntry;
-        } else {
-            throw new Error(ErrorMessages.HISTORY_ENTRY_NOT_FOUND);
-        }
+        return await this.accountHistoryHandler.getHistoryRange(fromHistoryHash, toHistoryHash);
     }
 
     private async addHistoryEntry(
@@ -523,36 +256,15 @@ export class AccountManager {
         chainReference: unknown,
         timestamp: number,
     ): Promise<Uint8Array> {
-        const serializer = new SchemaSerializer(
-            NODE_SCHEMAS.ACCOUNT_REF_SCHEMAS[ECO.BK_REFERENCES[type]],
-        );
-        const chainReferenceBinary = serializer.serialize(chainReference);
-
-        const entry = {
-            height: state.height,
-            previousHistoryHash: state.lastHistoryHash,
-            type: type,
-            timestamp: timestamp,
-            linkedAccount: linkedAccountHash || Utils.getNullHash(),
-            amount: amount,
-            chainReference: chainReferenceBinary,
-        };
-
-        const record = NodeEncoder.encodeAccountHistoryEntry(entry);
-        const hash = this.getHistoryEntryHash(
+        return await this.accountHistoryHandler.addHistoryEntry(
+            state,
+            type,
             accountHash,
-            NodeCrypto.Hashes.sha256AsBinary(record),
+            linkedAccountHash,
+            amount,
+            chainReference,
+            timestamp,
         );
-        this.logger.debug(
-            `Storing new entry in account history for account ${Utils.binaryToHexa(accountHash)}`,
-        );
-        await this.db.putRaw(LevelDbTable.ACCOUNT_HISTORY, hash, record);
-
-        return hash;
-    }
-
-    private getHistoryEntryHash(accountHash: Uint8Array, recordHash: Uint8Array): Uint8Array {
-        return NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(accountHash, recordHash));
     }
 
     /**
@@ -616,21 +328,6 @@ export class AccountManager {
         return CMTSToken.createAtomic(accountInformation.state.balance);
     }
 
-    async getAccountBalanceAvailabilityByAccountId(accountId: Uint8Array): Promise<BalanceAvailability> {
-        const accountInformation = await this.loadAccountInformation(accountId);
-        const accountState = accountInformation.state;
-        return new BalanceAvailability(
-            accountState.balance,
-            accountState.locks,
-        );
-    }
-
-    private getShortAccountString(account: Uint8Array | null): string {
-        return account === null
-            ? 'NULL'
-            : Utils.truncateStringMiddle(Utils.binaryToHexa(account), 8, 4);
-    }
-
     async loadAccountByPublicKey(publicSignatureKey: PublicSignatureKey) {
         return this.loadAccountIdByPublicKeyHash(
             await AccountManager.getAccountHashFromPublicSignatureKey(publicSignatureKey),
@@ -651,17 +348,6 @@ export class AccountManager {
             ECO.BK_RECEIVED_ISSUANCE,
             issuerAccountHash,
             initialTokenAmountAsAtomic,
-            Utils.getTimestampInSeconds(),
-        );
-    }
-
-    async createAccountWithNoTokens(publicKey: PublicSignatureKey) {
-        const accountHash = await AccountManager.getAccountHashFromPublicSignatureKey(publicKey);
-        await this.saveAccountByPublicKey(accountHash, await publicKey.getPublicKeyAsBytes());
-        await this.setBalanceForAccount(
-            ECO.BK_RECEIVED_PAYMENT,
-            accountHash,
-            0,
             Utils.getTimestampInSeconds(),
         );
     }
@@ -707,7 +393,10 @@ export class AccountManager {
 
     async getStakedAmount(accountId: Hash) {
         const accountState = await this.db.getAccountStateByAccountId(accountId.toBytes());
-        if (accountState === undefined) throw new Error(`Cannot return stake for this account: Account ${accountId.encode()} not found`);
+        if (accountState === undefined)
+            throw new Error(
+                `Cannot return stake for this account: Account ${accountId.encode()} not found`,
+            );
         const balanceAvailability = new BalanceAvailability(0, accountState.locks);
         return balanceAvailability.getBreakdown().staked;
     }

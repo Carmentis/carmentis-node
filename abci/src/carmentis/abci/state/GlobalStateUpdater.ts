@@ -32,7 +32,7 @@ import { BlockIDFlag } from '../../../proto/tendermint/types/validator';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { FeesDispatcher } from '../accounts/FeesDispatcher';
 import { CometBFTUtils } from '../CometBFTUtils';
-import { StoragePriceManager } from '../storage/StoragePriceManager';
+import { StoragePriceManager } from '../storage/storagePriceManager';
 
 const KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',

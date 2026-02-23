@@ -38,17 +38,6 @@ export class AccountStateManager {
         await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
     }
 
-    async getAccountStateByAccountId(accountHash: Uint8Array): Promise<AccountState | undefined> {
-        // defensive programming
-        if (accountHash === undefined) {
-            throw new TypeError(UNDEFINED_ACCOUNT_HASH);
-        }
-
-        // search for the type of account based on its hash
-        const type = Economics.getAccountTypeFromIdentifier(accountHash);
-        const state = await this.db.getAccountStateByAccountId(accountHash);
-        return state;
-    }
 
     async loadAccountInformation(accountHash: Uint8Array): Promise<AccountInformation> {
         // defensive programming
@@ -77,5 +66,13 @@ export class AccountStateManager {
                 },
             };
         }
+    }
+
+    async putAccountWithStakingLocks(accountHash: Uint8Array) {
+        await this.db.putAccountWithStakingLocks(accountHash);
+    }
+
+    getDatabase() {
+        return this.db;
     }
 }
