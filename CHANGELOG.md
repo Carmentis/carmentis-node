@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/Carmentis/carmentis-node/compare/v1.2.1...v1.2.2) (2026-02-23)
+
+
+### Bug Fixes
+
+* addition of comments ([b107b90](https://github.com/Carmentis/carmentis-node/commit/b107b90543fb302e5ef762789edc2c164bb08be0))
+
 ## [1.2.1](https://github.com/Carmentis/carmentis-node/compare/v1.2.0...v1.2.1) (2026-02-02)
 
 
