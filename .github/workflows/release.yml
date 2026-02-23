@@ -3,7 +3,9 @@ name: Release and Publish Docker Image
 on:
   push:
     branches:
-      - main
+      - mainnet
+      - testnet
+      - devnet
 
 permissions:
   contents: write
@@ -73,9 +75,10 @@ jobs:
         with:
           images: ghcr.io/carmentis/node/abci
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.release.outputs.new_release_version }}
-            type=sha,prefix=,format=long
-            type=raw,value=latest
+            type=raw,value=${{ github.ref_name }}-latest
+            type=raw,value=${{ github.ref_name }}-${{ needs.release.outputs.new_release_version }}
+            type=raw,value=${{ github.ref_name }}-${{ github.sha }}
+            type=raw,value=${{ github.ref_name }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
