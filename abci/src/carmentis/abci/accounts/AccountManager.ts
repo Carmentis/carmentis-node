@@ -31,11 +31,14 @@ import { DbInterface } from '../database/DbInterface';
 import { RadixTree } from '../RadixTree';
 import { NodeEncoder } from '../NodeEncoder';
 import { LevelDbTable } from '../database/LevelDbTable';
+import { AccountStateManager } from './AccountStateManager';
+import { AccountStakeHandler } from './AccountStakeHandler';
+import { AccountUnstakeHandler } from './AccountUnstakeHandler';
 
 /**
  * Error messages used by AccountManager
  */
-const ErrorMessages = {
+export const ErrorMessages = {
     UNDEFINED_FEES_PAYER: 'Undefined fees payer account',
     ACCOUNT_TYPE_NOT_ALLOWED: (accountType: string, transferType: string) =>
         `account of type '${accountType}' not allowed for transfer of type '${transferType}'`,
@@ -65,6 +68,11 @@ export class AccountManager {
     private readonly modifiedAccounts: Set<string>;
     private readonly perf: Performance;
     private readonly logger: Logger;
+    private readonly accountStateManager: AccountStateManager
+
+    // dedicated handlers
+    private readonly accountStakeHandler: AccountStakeHandler;
+    private readonly accountUnstakeHandler: AccountUnstakeHandler;
 
     constructor(db: DbInterface) {
         this.db = db;
@@ -72,6 +80,11 @@ export class AccountManager {
         this.modifiedAccounts = new Set;
         this.logger = getLogger([ 'node', 'accounts', AccountManager.name ]);
         this.perf = new Performance(this.logger, true);
+
+
+        this.accountStateManager = new AccountStateManager(this.db, this.accountRadix);
+        this.accountStakeHandler = new AccountStakeHandler(this.accountStateManager);
+        this.accountUnstakeHandler = new AccountUnstakeHandler(this.accountStateManager);
     }
 
     getAccountRootHash() {
@@ -302,67 +315,14 @@ export class AccountManager {
         objectIdentifier: Uint8Array,
         protocolState: ProtocolInternalState,
     ) {
-        if (objectType != VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN) {
-            throw new Error(`Staking and unstaking are currently supported for validator nodes only`);
-        }
-
-        const minimumAmount = protocolState.getMinimumNodeStakingAmountInAtomics();
-        const maximumAmount = protocolState.getMaximumNodeStakingAmountInAtomics();
-
-        if (amount < minimumAmount || amount > maximumAmount) {
-            throw new Error(`Staking amount in atomics must be in [${minimumAmount} .. ${maximumAmount}], got ${amount}`);
-        }
-
-        const accountInformation = await this.loadAccountInformation(accountHash);
-        const accountState = accountInformation.state;
-        const balanceAvailability = new BalanceAvailability(
-            accountState.balance,
-            accountState.locks,
-        );
-        balanceAvailability.addNodeStaking(amount, objectIdentifier);
-        await this.db.putAccountWithStakingLocks(accountHash);
-        accountState.balance = balanceAvailability.getBalanceAsAtomics();
-        accountState.locks = balanceAvailability.getLocks();
-
-        await this.saveState(accountHash, accountState);
+       await this.accountStakeHandler.stake(accountHash, amount, objectType, objectIdentifier, protocolState);
     }
 
     /**
      * Declares that the user wants to unstake some tokens.
      */
-    async declareUnstake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array, timestamp: number, protocolState: ProtocolInternalState) {
-        if (objectType != VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN) {
-            throw new Error(`Staking and unstaking are currently supported for validator nodes only`);
-        }
-
-        const minimumAmount = protocolState.getMinimumNodeStakingAmountInAtomics();
-        const delayInDays = protocolState.getUnstakingDelayInDays();
-        const plannedUnlockTimestamp = Utils.addDaysToTimestamp(timestamp, delayInDays);
-
-        const accountInformation = await this.loadAccountInformation(accountHash);
-        const accountState = accountInformation.state;
-        const balanceAvailability = new BalanceAvailability(
-            accountState.balance,
-            accountState.locks,
-        );
-        const stakedAmount = balanceAvailability.getNodeStakingLockAmount(objectIdentifier);
-        const newStakedAmount = stakedAmount - amount;
-
-        if (newStakedAmount < 0) {
-            throw new Error(`Cannot unstake more than ${stakedAmount} atomic units, got ${newStakedAmount}`);
-        }
-        if (newStakedAmount > 0 && newStakedAmount < minimumAmount) {
-            throw new Error(`The updated staked amount must be either 0 or greater than or equal to ${minimumAmount} atomic units, got ${newStakedAmount}`);
-        }
-        balanceAvailability.planNodeStakingUnlock(
-            amount,
-            plannedUnlockTimestamp,
-            objectIdentifier
-        );
-        accountState.balance = balanceAvailability.getBalanceAsAtomics();
-        accountState.locks = balanceAvailability.getLocks();
-
-        await this.saveState(accountHash, accountState);
+    async planUnstake(accountHash: Uint8Array, amount: number, objectType: number, objectIdentifier: Uint8Array, timestamp: number, protocolState: ProtocolInternalState) {
+        await this.accountUnstakeHandler.planUnstake(accountHash, amount, objectType, objectIdentifier, timestamp, protocolState);
     }
 
     /**

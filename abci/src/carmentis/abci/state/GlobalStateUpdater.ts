@@ -832,7 +832,7 @@ export class GlobalStateUpdater {
             if (sectionType === SectionType.ACCOUNT_UNSTAKE) {
                 const { amount, objectType, objectIdentifier } = section;
                 const protocolState = await globalState.getProtocolState();
-                await accountManager.declareUnstake(
+                await accountManager.planUnstake(
                     accountVb.getId(),
                     amount,
                     objectType,
