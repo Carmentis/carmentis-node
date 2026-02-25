@@ -61,6 +61,7 @@ export class GlobalStateUpdater {
     ) {
         const blockHeight = cometParameters.blockHeight;
         const database = globalState.getCachedDatabase();
+        const accountManager = globalState.getAccountManager();
         const existingBlock = await database.getBlockContent(blockHeight);
         if (existingBlock !== undefined) {
             if (blockHeight == 1) {
@@ -78,15 +79,23 @@ export class GlobalStateUpdater {
 
         // process misbehaviors
         for(const misbehavior of cometParameters.blockMisbehaviors) {
-            // retrieve node address and node hash
+            // retrieve node address
             if (misbehavior.validator === undefined) throw new Error(`Misbehavior of type ${misbehavior.type} detected, but no validator specified`);
             const validatorNodeAddress = misbehavior.validator.address;
             this.logger.error(`MISBEHAVIOR OF TYPE ${misbehavior.type} DETECTED FOR NODE '${Utils.binaryToHexa(validatorNodeAddress)}'`);
+
+            // retrieve node identifier
             const dataObject = await database.getValidatorNodeByAddress(validatorNodeAddress);
             if (dataObject === undefined) throw new Error(`Validator node with address ${Utils.binaryToHexa(validatorNodeAddress)} not found`);
             const validatorNodeHash = dataObject.validatorNodeHash;
+
+            // retrieve account identifier
             const validatorNode = await globalState.loadValidatorNodeVirtualBlockchain(new Hash(validatorNodeHash));
             const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+
+            // set slashing, planned in 30 days from now
+            const plannedSlashingTimestamp = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 30);
+            await accountManager.setSlashing(accountId.toBytes(), validatorNodeHash, plannedSlashingTimestamp);
         }
 
         // if this is the first block of the day, apply daily updates
@@ -96,6 +105,7 @@ export class GlobalStateUpdater {
             await this.updateVestingLocks(globalState, cometParameters);
             await this.updateEscrowLocks(globalState, cometParameters);
             await this.applyNodeStakingUnlocks(globalState, cometParameters);
+            await this.applyNodeSlashing(globalState, cometParameters);
             await this.purgeDataFileTable(globalState, cometParameters);
         }
     }
@@ -105,27 +115,13 @@ export class GlobalStateUpdater {
      */
     private async updateVestingLocks(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
         const database = globalState.getCachedDatabase();
+        const accountManager = globalState.getAccountManager();
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
         const accountsWithVestingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS);
 
         for(const accountHash of accountsWithVestingLocksIdentifiers) {
             this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(accountHash)}`);
-
-            const accountState = await this.getAccountStateOrFail(globalState, accountHash);
-            const balanceAvailability = new BalanceAvailability(
-                accountState.balance,
-                accountState.locks,
-            );
-
-            if(balanceAvailability.applyLinearVesting(currentBlockDayTs) > 0) {
-                accountState.locks = balanceAvailability.getLocks();
-                await database.putAccountState(accountHash, accountState);
-
-                if(!balanceAvailability.hasVestingLocks()) {
-                    this.logger.info(`No more vesting locks on account ${Utils.binaryToHexa(accountHash)}: removing entry from ACCOUNTS_WITH_VESTING_LOCKS`);
-                    await database.del(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, accountHash);
-                }
-            }
+            await accountManager.applyLinearVesting(accountHash, currentBlockDayTs);
         }
     }
 
@@ -134,50 +130,22 @@ export class GlobalStateUpdater {
      */
     private async updateEscrowLocks(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
         const database = globalState.getCachedDatabase();
+        const accountManager = globalState.getAccountManager();
         const blockHeight = cometParameters.blockHeight;
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
-        const accountManager = globalState.getAccountManager();
         const escrowIdentifiers = await database.getKeys(LevelDbTable.ESCROWS);
 
         for(const id of escrowIdentifiers) {
-            // TODO: it would be more efficient to have a method that directly returns all objects of a table
             const escrow = await database.getEscrow(id);
             if (escrow == null) {
                 throw new Error(`Escrow ${id.toString()} not found`);
             }
-
-            const accountState = await this.getAccountStateOrFail(globalState, escrow.payeeAccount);
-            const balanceAvailability = new BalanceAvailability(
-                accountState.balance,
-                accountState.locks,
-            );
-            const escrowLocks = balanceAvailability.getEscrowLocks();
-
-            for(const lock of escrowLocks) {
-                const isEscrowLockExpired = currentBlockDayTs > Utils.addDaysToTimestamp(
-                    lock.parameters.startTimestamp,
-                    lock.parameters.durationDays
-                );
-                if (isEscrowLockExpired) {
-                    // the escrow has expired: the funds are sent back from payee to payer
-                    this.logger.info(`Escrow has expired`);
-                    const tokenTransfer: Transfer = {
-                        type: ECO.BK_SENT_EXPIRED_ESCROW,
-                        payerAccount: escrow.payeeAccount,
-                        payeeAccount: escrow.payerAccount,
-                        amount: lock.lockedAmountInAtomics
-                    };
-                    const chainReference = {
-                        height: blockHeight
-                    };
-
-                    await accountManager.tokenTransfer(
-                        tokenTransfer,
-                        chainReference,
-                        cometParameters.blockTimestamp
-                    );
-                }
-            }
+            await accountManager.updateExpiredEscrows(
+                escrow.payeeAccount,
+                escrow.payerAccount,
+                currentBlockDayTs,
+                blockHeight,
+            )
         }
     }
 
@@ -188,32 +156,25 @@ export class GlobalStateUpdater {
         const database = globalState.getCachedDatabase();
         const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
         const accountsWithStakingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS);
+        const accountManager = globalState.getAccountManager();
 
         for(const accountHash of accountsWithStakingLocksIdentifiers) {
-            const accountState = await this.getAccountStateOrFail(globalState, accountHash);
-            const balanceAvailability = new BalanceAvailability(
-                accountState.balance,
-                accountState.locks,
-            );
-            if(balanceAvailability.applyNodeStakingUnlocks(currentBlockDayTs) > 0) {
-                accountState.locks = balanceAvailability.getLocks();
-                await database.putAccountState(accountHash, accountState);
-
-                if(!balanceAvailability.hasNodeStakingLocks()) {
-                    this.logger.info(`No more staking locks on account ${Utils.binaryToHexa(accountHash)}: removing entry from ACCOUNTS_WITH_STAKING_LOCKS`);
-                    await database.del(LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS, accountHash);
-                }
-            }
+            await accountManager.applyNodeStakingUnlocks(accountHash, currentBlockDayTs);
         }
     }
 
-    private async getAccountStateOrFail(globalState: GlobalState, accountHash: Uint8Array) {
+    /**
+     * Applies slashing of nodes for which the grace period has expired.
+     */
+    private async applyNodeSlashing(globalState: GlobalState, cometParameters: GlobalStateUpdateCometParameters) {
         const database = globalState.getCachedDatabase();
-        const state = await database.getAccountStateByAccountId(accountHash);
-        if (state == undefined) {
-            throw new Error(`Account state for account ${accountHash.toString()} not found`);
+        const currentBlockDayTs = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 0);
+        const accountsWithStakingLocksIdentifiers = await database.getKeys(LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS);
+        const accountManager = globalState.getAccountManager();
+
+        for(const accountHash of accountsWithStakingLocksIdentifiers) {
+            await accountManager.applyNodeSlashing(accountHash, currentBlockDayTs);
         }
-        return state;
     }
 
     /**

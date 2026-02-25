@@ -1,11 +1,18 @@
 import { AccountStateManager } from './AccountStateManager';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { Transfer } from './AccountManager';
-import { ECO, LockType, Utils } from '@cmts-dev/carmentis-sdk/server';
+import {
+    BalanceAvailability,
+    ECO,
+    LockType,
+    Utils
+} from '@cmts-dev/carmentis-sdk/server';
 import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
 import { DbInterface } from '../database/DbInterface';
+import {getLogger} from "@logtape/logtape";
 
 export class AccountEscrowHandler {
+    private logger = getLogger(['node', 'accounts', 'escrow']);
 
     private readonly db: DbInterface;
     constructor(
@@ -73,5 +80,44 @@ export class AccountEscrowHandler {
 
         // remove the escrow from the DB
         await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
+    }
+
+    async updateExpiredEscrows(payeeAccountHash: Uint8Array, payerAccountHash: Uint8Array, timestamp: number, blockHeight: number) {
+        const accountInformation = await this.accountStateManager.loadAccountInformation(payeeAccountHash);
+        const accountState = accountInformation.state;
+        const balanceAvailability = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+        const escrowLocks = balanceAvailability.getEscrowLocks();
+
+        for(const lock of escrowLocks) {
+            const isEscrowLockExpired = timestamp > Utils.addDaysToTimestamp(
+                lock.parameters.startTimestamp,
+                lock.parameters.durationDays
+            );
+            if (isEscrowLockExpired) {
+                // the escrow has expired: the funds are sent back from payee to payer
+                this.logger.info(`Escrow has expired`);
+                const tokenTransfer: Transfer = {
+                    type: ECO.BK_SENT_EXPIRED_ESCROW,
+                    payerAccount: payeeAccountHash,
+                    payeeAccount: payerAccountHash,
+                    amount: lock.lockedAmountInAtomics
+                };
+                const chainReference = {
+                    height: blockHeight
+                };
+
+                await this.accountTokenTransferHandler.tokenTransfer(
+                    tokenTransfer,
+                    chainReference,
+                    timestamp
+                );
+
+                // remove the escrow from the DB
+                await this.db.del(LevelDbTable.ESCROWS, lock.parameters.escrowIdentifier);
+            }
+        }
     }
 }

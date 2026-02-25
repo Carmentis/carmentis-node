@@ -5,8 +5,11 @@ import {
     Utils,
     VirtualBlockchainType,
 } from '@cmts-dev/carmentis-sdk/server';
+import {getLogger} from "@logtape/logtape";
 
 export class AccountUnstakeHandler {
+    private logger = getLogger(['node', 'accounts', 'unstake']);
+
     constructor(private readonly accountStateManager: AccountStateManager) {}
 
     /**
@@ -63,5 +66,23 @@ export class AccountUnstakeHandler {
         accountState.locks = balanceAvailability.getLocks();
 
         await this.accountStateManager.saveAccountState(accountHash, accountState);
+    }
+
+    async applyNodeStakingUnlocks(accountHash: Uint8Array, timestamp: number) {
+        const accountInformation = await this.accountStateManager.loadAccountInformation(accountHash);
+        const accountState = accountInformation.state;
+        const balanceAvailability = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+        if(balanceAvailability.applyNodeStakingUnlocks(timestamp) > 0) {
+            accountState.locks = balanceAvailability.getLocks();
+            await this.accountStateManager.saveAccountState(accountHash, accountState);
+
+            if(!balanceAvailability.hasNodeStakingLocks()) {
+                this.logger.info(`No more staking locks on account ${Utils.binaryToHexa(accountHash)}: removing entry from ACCOUNTS_WITH_STAKING_LOCKS`);
+                await this.accountStateManager.deleteAccountWithStakingLocks(accountHash);
+            }
+        }
     }
 }
