@@ -72,6 +72,14 @@ export class AccountStateManager {
         await this.db.putAccountWithStakingLocks(accountHash);
     }
 
+    async deleteAccountWithStakingLocks(accountHash: Uint8Array) {
+        await this.db.del(LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS, accountHash);
+    }
+
+    async deleteAccountWithVestingLocks(accountHash: Uint8Array) {
+        await this.db.del(LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS, accountHash);
+    }
+
     getDatabase() {
         return this.db;
     }

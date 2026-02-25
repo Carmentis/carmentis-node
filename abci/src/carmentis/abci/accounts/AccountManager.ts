@@ -29,6 +29,8 @@ import { AccountUnstakeHandler } from './AccountUnstakeHandler';
 import { AccountEscrowHandler } from './AccountEscrowHandler';
 import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
 import { AccountHistoryHandler } from './AccountHistoryHandler';
+import { AccountSlashingHandler } from './AccountSlashingHandler';
+import { AccountVestingHandler } from './AccountVestingHandler';
 import { ErrorMessages } from './ErrorMessages';
 
 export interface Transfer {
@@ -54,6 +56,8 @@ export class AccountManager {
     private readonly accountEscrowHandler: AccountEscrowHandler;
     private readonly accountTokenTransferHandler: AccountTokenTransferHandler;
     private readonly accountHistoryHandler: AccountHistoryHandler;
+    private readonly accountSlashingHandler: AccountSlashingHandler;
+    private readonly accountVestingHandler: AccountVestingHandler;
 
     constructor(db: DbInterface) {
         this.db = db;
@@ -74,6 +78,8 @@ export class AccountManager {
             this.accountStateManager,
             this.accountTokenTransferHandler,
         );
+        this.accountSlashingHandler = new AccountSlashingHandler(this.accountStateManager);
+        this.accountVestingHandler = new AccountVestingHandler(this.accountStateManager);
     }
 
     getAccountRootHash() {
@@ -145,6 +151,19 @@ export class AccountManager {
         );
     }
 
+    async updateExpiredEscrows(payeeAccountHash: Uint8Array, payerAccountHash: Uint8Array, timestamp: number, blockHeight: number) {
+        await this.accountEscrowHandler.updateExpiredEscrows(
+            payeeAccountHash,
+            payerAccountHash,
+            timestamp,
+            blockHeight
+        );
+    }
+
+    async applyLinearVesting(accountHash: Uint8Array, timestamp: number) {
+        await this.accountVestingHandler.applyLinearVesting(accountHash, timestamp);
+    }
+
     /**
      * Locks up a portion of the balance for staking on a given object.
      */
@@ -183,6 +202,18 @@ export class AccountManager {
             timestamp,
             protocolState,
         );
+    }
+
+    async applyNodeStakingUnlocks(accountHash: Uint8Array, timestamp: number) {
+        await this.accountUnstakeHandler.applyNodeStakingUnlocks(accountHash, timestamp);
+    }
+
+    async setSlashing(accountHash: Uint8Array, validatorNodeId: Uint8Array, timestamp: number) {
+        await this.accountSlashingHandler.setSlashing(accountHash, validatorNodeId, timestamp);
+    }
+
+    async applyNodeSlashing(accountHash: Uint8Array, timestamp: number) {
+        await this.accountSlashingHandler.applyNodeSlashing(accountHash, timestamp);
     }
 
     /**
