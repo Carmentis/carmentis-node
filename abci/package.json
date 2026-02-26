@@ -26,7 +26,7 @@
         "gen:config:md": "ts-node scripts/generate-config-doc.ts"
     },
     "dependencies": {
-        "@cmts-dev/carmentis-sdk": "1.20",
+        "@cmts-dev/carmentis-sdk": "^1.20.1",
         "@grpc/grpc-js": "^1.13.3",
         "@grpc/proto-loader": "^0.7.15",
         "@grpc/reflection": "^1.0.4",
