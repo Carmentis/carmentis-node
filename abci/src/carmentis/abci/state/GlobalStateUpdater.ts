@@ -378,6 +378,10 @@ export class GlobalStateUpdater {
             throw new Error(`The signatory of this block is not authorized to write on this VB`);
         }
 
+        if (!isAllowedToWrite) {
+            throw new Error(`The signatory of this block is not authorized to write on this VB`);
+        }
+
         if (virtualBlockchain instanceof AccountVb) {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
         } else if (virtualBlockchain instanceof ValidatorNodeVb) {
