@@ -546,12 +546,31 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 }
             }
 
-            // We reject the microblock if it declares a gas below the minimum gas accepted by the node.
+            // if the microblock does not contain signature, reject
+            if (!parsedMicroblock.isSigned()) {
+                return {
+                    code: CheckTxResponseCode.KO,
+                    log: '',
+                    data: new Uint8Array(),
+                    gas_wanted: 0,
+                    gas_used: 0,
+                    info: `Microblock rejected due to missing signature`,
+                    events: [],
+                    codespace: 'app',
+                };
+            }
+
+            // We reject the microblock if the declared gas is below the minimum gas accepted by the node.
             // The minimum accepted gas can be different for every node.
-            const declaredGas = parsedMicroblock.getGas().getAmountAsAtomic();
+            const state = this.getGlobalState();
+            const computedFees = await state.computeMicroblockFees(parsedMicroblock, {
+                referenceTimestampInSeconds: referenceTimestamp
+            })
             const minAcceptedGas = this.nodeConfig.getMinMicroblockGasInAtomicAccepted();
-            if (declaredGas < minAcceptedGas) {
-                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected due to gas below the minimum accepted gas: ${minAcceptedGas}`);
+            if (computedFees.getAmountAsAtomic() < minAcceptedGas) {
+                this.logger.info(
+                    `Microblock ${parsedMicroblock.getHash().encode()} rejected due to gas below the minimum accepted gas: ${minAcceptedGas}`,
+                );
                 return {
                     code: CheckTxResponseCode.KO,
                     log: '',
@@ -561,7 +580,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     info: `Microblock rejected due to gas below the minimum accepted gas ${minAcceptedGas}`,
                     events: [],
                     codespace: 'app',
-                }
+                };
             }
 
             this.logger.info(`Checking microblock ${parsedMicroblock.getHash().encode()}`);
@@ -579,7 +598,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 for (const section of parsedMicroblock.getAllSections()) {
                     const serializedSection = BlockchainUtils.encodeSection(section);
                     const sectionLabel = SectionLabel.getSectionLabelFromSection(section);
-                    //const sectionLabel = SECTIONS.DEF[vb.getType()][section.type].label;
                     const sectionLengthInBytes = serializedSection.length;
                     const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
                     this.logger.info(message);
@@ -681,6 +699,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         // Step 1: transaction decoding (and early rejection)
+        const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
         const txs = request.txs;
         const microblocks: { mb: Microblock, tx: Uint8Array, gasInAtomics: number }[] = [];
         for (const tx of txs) {
@@ -696,7 +715,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 }
 
                 // this microblock can proceed to the next steps
-                microblocks.push({ mb: parsedMicroblock, tx, gasInAtomics: parsedMicroblock.getGas().getAmountAsAtomic() });
+                const feesInAtomics = await workingState.computeMicroblockFees(parsedMicroblock, {
+                    referenceTimestampInSeconds: cometParameters.blockTimestamp,
+                })
+                microblocks.push({
+                    mb: parsedMicroblock,
+                    tx,
+                    gasInAtomics: feesInAtomics.getAmountAsAtomic(),
+                });
             } catch (e) {
                 if (e instanceof Error) {
                     this.logger.error(
@@ -710,14 +736,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         }
 
-        // Step 2: microblock ordering based on gas
+        // Step 2: microblock ordering based on gas in descending order
         const sortedMicroblocks = microblocks.sort((a, b) => {
             return b.gasInAtomics - a.gasInAtomics
         });
 
         // Step 3: check and verify microblocks until max size is reached
         const proposedTxs: Uint8Array[] = [];
-        const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
+
         const protocolVariables = await workingState.getProtocolState();
         const maxBlockSize = protocolVariables.getMaximumBlockSizeInBytes();
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
