@@ -5,6 +5,10 @@ import {
     VirtualBlockchainType,
 } from '@cmts-dev/carmentis-sdk/server';
 
+/**
+ * Handler for the account stake operations.
+ *
+ */
 export class AccountStakeHandler {
     constructor(private readonly accountStateManager: AccountStateManager) {}
 
