@@ -32,7 +32,6 @@ import { BlockIDFlag } from '../../../proto/tendermint/types/validator';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { FeesDispatcher } from '../accounts/FeesDispatcher';
 import { CometBFTUtils } from '../CometBFTUtils';
-import { StoragePriceManager } from '../storage/storagePriceManager';
 
 const KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',
@@ -375,20 +374,12 @@ export class GlobalStateUpdater {
 
         // case 2: The fees payer account does not have enough tokens to pay (fast case)
         const feesPayerAccountBalance = await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
-        const protocolState = await globalState.getProtocolState();
-        const feesCalculationVersion = protocolState.getFeesCalculationVersion();
-        const signatureSection = microblock.getLastSignatureSection();
-        const usedSignatureSchemeId = signatureSection.schemeId;
-        const usedFeesCalculationFormula =
-            FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(
-                feesCalculationVersion,
-            );
-        const baseFeesToPay: CMTSToken = await usedFeesCalculationFormula.computeFees(
-            usedSignatureSchemeId,
+        const feesToPay = await globalState.computeMicroblockFees(
             microblock,
-        );
-        const priceStructure = protocolState.getPriceStructure();
-        const storagePriceManager = new StoragePriceManager(priceStructure);
+            { referenceTimestampInSeconds: cometParameters.blockTimestamp }
+        )
+
+        // the expiration day is a timestamp in seconds
         const expirationDay = virtualBlockchain.getExpirationDay();
         if (expirationDay !== 0) {
             const virtualBlockchainType = virtualBlockchain.getType();
@@ -399,13 +390,8 @@ export class GlobalStateUpdater {
                 throw new Error(`This virtual blockchain has expired: no more microblock can be added`);
             }
         }
-        const numberOfDaysOfStorage = storagePriceManager.getNumberOfDaysOfStorage(
-            cometParameters.blockTimestamp,
-            expirationDay
-        );
-        const feesToPay = storagePriceManager.getStoragePrice(baseFeesToPay, numberOfDaysOfStorage);
         const hasEnoughTokensToPublish = feesPayerAccountBalance.isGreaterThan(feesToPay);
-        this.logger.debug(`Base fees: ${baseFeesToPay.toString()}, # of days: ${numberOfDaysOfStorage}, fees to pay: ${feesToPay.toString()}`);
+        this.logger.debug(`# of days: ${expirationDay}, fees to pay: ${feesToPay.toString()}`);
         if (!hasEnoughTokensToPublish) {
             throw new Error(
                 `Insufficient funds to publish microblock: expected at least ${feesToPay.toString()}, got ${feesPayerAccountBalance.toString()} on account`,
