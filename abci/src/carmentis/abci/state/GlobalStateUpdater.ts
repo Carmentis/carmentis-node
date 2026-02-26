@@ -374,6 +374,11 @@ export class GlobalStateUpdater {
             microblock,
             globalState
         );
+        if (!isAllowedToWrite) {
+            const errMsg = `Fees payer account ${Utils.binaryToHexa(feesPayerAccountId)} is not allowed to write on virtual blockchain ${virtualBlockchain.getType()}`;
+            this.logger.info(errMsg);
+            throw new Error(errMsg);
+        }
 
         if (!isAllowedToWrite) {
             throw new Error(`The signatory of this block is not authorized to write on this VB`);
