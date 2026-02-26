@@ -216,6 +216,10 @@ export class AccountManager {
         await this.accountSlashingHandler.applyNodeSlashing(accountHash, timestamp);
     }
 
+    async cancelSlashing(accountHash: Uint8Array, nodeId: Uint8Array) {
+        await this.accountSlashingHandler.cancelSlashing(accountHash, nodeId);
+    }
+
     /**
      * Loads the information about the account associated with the provided account hash.
      * @param accountHash - The hash of the account to load
