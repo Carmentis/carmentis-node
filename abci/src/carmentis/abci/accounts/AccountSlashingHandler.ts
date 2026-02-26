@@ -22,6 +22,19 @@ export class AccountSlashingHandler {
         await this.accountStateManager.saveAccountState(accountHash, accountState);
     }
 
+    async cancelSlashing(accountHash: Uint8Array, validatorNodeId: Uint8Array) {
+        const accountInformation = await this.accountStateManager.loadAccountInformation(accountHash);
+        const accountState = accountInformation.state;
+        const balanceAvailability = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+        balanceAvailability.cancelNodeSlashing(validatorNodeId);
+        accountState.locks = balanceAvailability.getLocks();
+
+        await this.accountStateManager.saveAccountState(accountHash, accountState);
+    }
+
     /**
      * Applies slashing on a node.
      */

@@ -15,6 +15,7 @@ import {
     ValidatorNodeCometbftPublicKeyDeclarationSection,
     ValidatorNodeVb,
     ValidatorNodeVotingPowerUpdateSection,
+    ValidatorNodeSlashingCancellationSection,
     VirtualBlockchain,
     BalanceAvailability,
     VirtualBlockchainType,
@@ -388,6 +389,10 @@ export class GlobalStateUpdater {
             globalState
         );
 
+        if (!isAllowedToWrite) {
+            throw new Error(`The signatory of this block is not authorized to write on this VB`);
+        }
+
         if (virtualBlockchain instanceof AccountVb) {
             await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
         } else if (virtualBlockchain instanceof ValidatorNodeVb) {
@@ -536,7 +541,11 @@ export class GlobalStateUpdater {
                 SectionType.VN_APPROVAL,
                 SectionType.SIGNATURE,
             ]);
-            if (isGovernanceAccount && isApproving) return true;
+            const isCancellingSlashing: boolean = mb.containsOnlyTheseSections([
+                SectionType.VN_SLASHING_CANCELLATION,
+                SectionType.SIGNATURE,
+            ]);
+            if (isGovernanceAccount && (isApproving || isCancellingSlashing)) return true;
         }
 
         // Case 3 (default) - The virtual blockchain decides
@@ -883,6 +892,12 @@ export class GlobalStateUpdater {
                     virtualBlockchain,
                     section,
                 );
+            } else if (sectionType === SectionType.VN_SLASHING_CANCELLATION) {
+                await this.validatorNodeSlashingCancellationCallback(
+                    globalState,
+                    virtualBlockchain,
+                    section,
+                );
             }
         }
     }
@@ -1004,6 +1019,17 @@ export class GlobalStateUpdater {
             cometPublicKeyType,
             cometPublicKeyBytes,
         );
+    }
+
+    private async validatorNodeSlashingCancellationCallback(
+        globalState: GlobalState,
+        validatorNode: ValidatorNodeVb,
+        section: ValidatorNodeSlashingCancellationSection,
+    ) {
+        const validatorNodeId = validatorNode.getId();
+        const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+        const accountManager = globalState.getAccountManager();
+        await accountManager.cancelSlashing(accountId.toBytes(), validatorNodeId);
     }
 
     private async getValidatorNodeStakingAmount(globalState: GlobalState, validatorNode: ValidatorNodeVb) {
