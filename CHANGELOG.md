@@ -1,3 +1,11 @@
+## [1.2.4](https://github.com/Carmentis/carmentis-node/compare/v1.2.3...v1.2.4) (2026-02-26)
+
+
+### Bug Fixes
+
+* add write permission check for fees payer account in `GlobalStateUpdater` ([c9eb5b3](https://github.com/Carmentis/carmentis-node/commit/c9eb5b3cb8464007359f3a8c5af389eeb7e9b490))
+* upgrade `@cmts-dev/carmentis-sdk` to v1.20 in `package.json` ([6cbc4b6](https://github.com/Carmentis/carmentis-node/commit/6cbc4b604470f9f479238963d03ec18bf347fc2d))
+
 ## [1.2.3](https://github.com/Carmentis/carmentis-node/compare/v1.2.2...v1.2.3) (2026-02-23)
 
 
