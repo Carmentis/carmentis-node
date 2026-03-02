@@ -1,3 +1,10 @@
+## [1.2.6](https://github.com/Carmentis/carmentis-node/compare/v1.2.5...v1.2.6) (2026-03-02)
+
+
+### Bug Fixes
+
+* add write permission check for fees payer account in `GlobalStateUpdater` ([76c5aa7](https://github.com/Carmentis/carmentis-node/commit/76c5aa7634f9823f4e86d81c6ab2640aacf84e7d))
+
 ## [1.2.5](https://github.com/Carmentis/carmentis-node/compare/v1.2.4...v1.2.5) (2026-02-26)
 
 
