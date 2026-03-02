@@ -3,8 +3,8 @@ const path = require('path');
 const TOML = require('@iarna/toml');
 
 const N_NODES = 4;
-const EMPTY_BLOCKS_INTERVAL = 30;
-const SNAPSHOT_BLOCK_PERIOD = 100;
+const EMPTY_BLOCKS_INTERVAL = 10;
+const SNAPSHOT_BLOCK_PERIOD = 5;
 const BLOCK_HISTORY_BEFORE_SNAPSHOT = 0;
 const MAX_SNAPSHOTS = 20;
 

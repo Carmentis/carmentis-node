@@ -255,7 +255,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 last_block_height: last_block_height,
             });
         } else {
-            const { appHash } = await this.getGlobalState().getApplicationHash();
+            const { appHash } = await this.getGlobalState().getRadixHashAndApplicationHash();
 
             const hex = EncoderFactory.bytesToHexEncoder();
             this.logger.info(`(Info) last_block_height: ${last_block_height}`);
@@ -329,7 +329,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
             genesisSnapshot,
         );
-        const { appHash } = await this.getGlobalState().getApplicationHash();
+        const { appHash } = await this.getGlobalState().getRadixHashAndApplicationHash();
         return appHash;
     }
 
@@ -955,15 +955,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 );
             }
         }
-        await globalStateUpdater.finalizeBlockApproval(workingState, request);
-        const { appHash, vbRadixHash, tokenRadixHash, radixHash, storageHash } =
-            await workingState.getApplicationHash();
 
-        this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
-        this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
-        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
-        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
-        this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
+        const appHash = await globalStateUpdater.finalizeBlockApproval(workingState, request);
 
         perfMeasure.end();
 

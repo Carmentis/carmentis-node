@@ -56,7 +56,7 @@ export class GenesisInitialTransactionsBuilder {
 
         await this.publishGenesisTransactions(runoffsTransactions, 1);
 
-        const { appHash } = await this.globalState.getApplicationHash();
+        const { appHash } = await this.globalState.getRadixHashAndApplicationHash();
         return appHash;
     }
 
@@ -91,7 +91,6 @@ export class GenesisInitialTransactionsBuilder {
                     parsedMicroblock,
                 );
                 if (checkResult.checked) {
-                    const vb = checkResult.vb;
                     // we now check the consistency of the working state with the global state
                     const updatedVirtualBlockchain = checkResult.vb;
                     await globalStateUpdater.updateGlobalStateOnMicroblockDuringGenesis(
@@ -120,7 +119,8 @@ export class GenesisInitialTransactionsBuilder {
         this.logger.info(
             `Finalizing publication of ${transactions.length} transactions at height ${publishedBlockHeight}`,
         );
-        await globalStateUpdater.finalizeBlockApproval(workingState, RequestFinalizeBlock.fromPartial({
+
+        const appHash = await globalStateUpdater.finalizeBlockApproval(workingState, RequestFinalizeBlock.fromPartial({
             hash: Utils.getNullHash(),
             height: publishedBlockHeight,
             misbehavior: [],
@@ -134,7 +134,6 @@ export class GenesisInitialTransactionsBuilder {
         this.logger.info(`Committing state at height ${publishedBlockHeight}`);
         await this.globalState.commit();
 
-        const { appHash } = await this.globalState.getApplicationHash();
         return appHash;
     }
 
