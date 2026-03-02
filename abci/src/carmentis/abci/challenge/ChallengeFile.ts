@@ -9,20 +9,11 @@ export class ChallengeFile {
     private logger = getLogger(['node', 'challenge', ChallengeFile.name])
     private filePath: string;
     private handle?: FileHandle;
-    private pendingData: Uint8Array;
     private size: number;
 
-    constructor(filePath: string, pendingTxs: Uint8Array[]) {
+    constructor(filePath: string) {
         this.filePath = filePath;
         this.size = 0;
-        const pendingDataSize = pendingTxs.reduce((sz, arr) => sz + arr.length, 0);
-        this.pendingData = new Uint8Array(pendingDataSize);
-        let ptr = 0;
-
-        pendingTxs.forEach(arr => {
-            this.pendingData.set(arr, ptr);
-            ptr += arr.length;
-        });
     }
 
     async open() {
@@ -39,33 +30,51 @@ export class ChallengeFile {
         }
     }
 
-    async read(buffer: Uint8Array, bufferOffset: number, size: number, fileOffset: number) {
-        let bytesRead = 0;
-        const sizeToReadFromDisk = Math.max(0, Math.min(fileOffset + size, this.size) - fileOffset);
+    checkSizeOrFail(expectedSize: number) {
+        if (this.size !== expectedSize) {
+            throw new Error(
+                `PANIC - Invalid size for '${this.filePath}': file size is ${this.size}, expected ${expectedSize}`
+            );
+        }
+    }
 
-        if(sizeToReadFromDisk) {
-            // reject if the handle is not open
-            if (!this.handle) {
-                this.logger.warn(`Attempt to read at file ${this.filePath} but handle is not defined: aborting`)
-                throw new Error(`Cannot read at ${this.filePath}: handle not open`)
+    /**
+     * Reads a file from a given offset in a circular way, writing the data to a buffer.
+     *
+     * @param buffer - the buffer to write the data to
+     * @param initialBufferOffset - the offset at which to write in the buffer
+     * @param totalSizeToRead - the total size to be read
+     * @param initialFileOffset - the offset from which to read the file
+     */
+    async readOrFail(buffer: Uint8Array, initialBufferOffset: number, totalSizeToRead: number, initialFileOffset: number) {
+        // reject if the handle is not open
+        if (!this.handle) {
+            throw new Error(`Cannot read ${this.filePath}: handle not open`)
+        }
+
+        let remainingBytes = totalSizeToRead;
+        let fileOffset = initialFileOffset;
+        let bufferOffset = initialBufferOffset;
+
+        while (remainingBytes) {
+            const sizeToRead = Math.min(this.size - fileOffset, remainingBytes);
+            const rd = await this.handle.read(buffer, bufferOffset, sizeToRead, fileOffset);
+
+            // NB: this makes the log very verbose
+            // this.logger.debug(`reading ${sizeToRead} bytes at offset ${fileOffset} in file, writing at offset ${bufferOffset} in buffer`);
+
+            if (rd.bytesRead < sizeToRead) {
+                throw new Error(
+                    `PANIC - Failed to read enough bytes from '${this.filePath}' during storage challenge: read ${rd.bytesRead}, expected ${sizeToRead}`
+                );
             }
 
-            const rd = await this.handle.read(buffer, bufferOffset, sizeToReadFromDisk, fileOffset);
-            bytesRead += rd.bytesRead;
-            bufferOffset += sizeToReadFromDisk;
-            fileOffset += sizeToReadFromDisk;
+            bufferOffset += sizeToRead;
+
+            // if there are more bytes to read, it means we've reached the end of the file and must restart at 0
+            fileOffset = 0;
+            remainingBytes -= sizeToRead;
         }
-
-        const sizeToReadFromPendingData = size - sizeToReadFromDisk;
-
-        if(sizeToReadFromPendingData) {
-            const pendingDataOffset = fileOffset - this.size;
-            const pendingDataSlice = this.pendingData.slice(pendingDataOffset, pendingDataOffset + sizeToReadFromPendingData);
-            buffer.set(pendingDataSlice, bufferOffset);
-            bytesRead += pendingDataSlice.length;
-        }
-
-        return { bytesRead };
     }
 
     async close() {

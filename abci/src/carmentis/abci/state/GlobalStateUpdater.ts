@@ -341,6 +341,10 @@ export class GlobalStateUpdater {
             { referenceTimestampInSeconds: cometParameters.blockTimestamp }
         )
 
+        if (feesToPay.isZero()) {
+            throw new Error(`Fees are set to zero, which is only allowed in genesis block`);
+        }
+
         // the expiration day is a timestamp in seconds
         const expirationDay = virtualBlockchain.getExpirationDay();
         if (expirationDay !== 0) {
@@ -443,15 +447,6 @@ export class GlobalStateUpdater {
         // Extract the votes of validators involved in the publishing of this block.
         // Then proceed to the payment of the validators.
         await this.dispatchFeesAmongValidators(globalState, request);
-        await this.storeBlockInformationInBuffer(
-            globalState,
-            blockHeight,
-            request.hash,
-            blockTimestamp,
-            request.proposer_address,
-            this.blockSizeInBytes,
-            request.txs.length,
-        );
 
         await this.storeBlockContentInBuffer(
             globalState,
@@ -497,6 +492,22 @@ export class GlobalStateUpdater {
             (count, ndx) => count + this.newObjectCounts[ndx],
         );
         await database.putChainInformation(chainInfoObject);
+
+        const { radixHash, appHash } = await globalState.getRadixHashAndApplicationHash();
+
+        await this.storeBlockInformationInBuffer(
+            globalState,
+            blockHeight,
+            request.hash,
+            blockTimestamp,
+            request.proposer_address,
+            appHash,
+            radixHash,
+            this.blockSizeInBytes,
+            request.txs.length,
+        );
+
+        return appHash;
     }
 
     /**
@@ -549,6 +560,8 @@ export class GlobalStateUpdater {
         hash: Uint8Array,
         timestamp: number,
         proposerAddress: Uint8Array,
+        applicationHash: Uint8Array,
+        radixHash: Uint8Array,
         size: number,
         microblockCount: number,
     ) {
@@ -559,6 +572,8 @@ export class GlobalStateUpdater {
                 hash,
                 timestamp,
                 proposerAddress,
+                applicationHash,
+                radixHash,
                 size,
                 microblockCount,
             }

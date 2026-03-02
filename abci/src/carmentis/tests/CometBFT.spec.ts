@@ -40,14 +40,17 @@ describe('CometBFT', () => {
         const feesCalculationVersion = protocolVariables.getFeesCalculationVersion();
         const feesFormula =
             FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(
+                provider,
                 feesCalculationVersion,
             );
         const fees = await feesFormula.computeFees(
             privateKeyHavingTokens.getSignatureSchemeId(),
             accountCreationMb,
+            0,
+            Math.floor(Date.now() / 1000),
         );
         console.log(`Fees: ${fees.toString()}`)
-        accountCreationMb.setGas(fees);
+        accountCreationMb.setMaxFees(fees);
         await accountCreationMb.seal(privateKeyHavingTokens, {
             feesPayerAccount: accountIdHavingTokens,
         });
