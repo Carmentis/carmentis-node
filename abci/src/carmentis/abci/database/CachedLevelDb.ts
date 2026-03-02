@@ -113,11 +113,11 @@ export class CachedLevelDb extends AbstractLevelDb {
         throw new Error(`query() is not implemented on CachedLevelDb`);
     }
 
-    async getFullTable(tableId: number): Promise<Uint8Array[][]> {
+    async getFullTable(tableId: number): Promise<[Uint8Array,Uint8Array][]> {
         const { cachedInsertions, cachedDeletions } = this.getCachedDataByTableIdOrFail(tableId);
 
         // fetch cached data
-        const cachedData = [...cachedInsertions.entries()].map(([key, value]) => {
+        const cachedData: [Uint8Array,Uint8Array][] = [...cachedInsertions.entries()].map(([key, value]) => {
             return [CachedLevelDb.decodeKey(key), value];
         });
 
@@ -149,7 +149,7 @@ export class CachedLevelDb extends AbstractLevelDb {
     }
 
     async getFullDataFileTable() {
-        this.logger.debug("Accessing all entries of data file table")
+        this.logger.debug("Fetching all entries of data file table")
         const encodedDataFileEntries = await this.getFullTable(LevelDbTable.DATA_FILE);
         const dataFileEntries = encodedDataFileEntries.map(
             ([dataFileKey, encodedDataFile]) => {

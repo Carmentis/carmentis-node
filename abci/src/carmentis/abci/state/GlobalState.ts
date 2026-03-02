@@ -194,32 +194,41 @@ export class GlobalState extends AbstractProvider {
         return result;
     }
 
-    async getApplicationHash() {
+    async getRadixHashAndApplicationHash() {
         //const perfMeasure = this.perf.start('computeApplicationHash');
+
+        const chainStatus = await this.db.getChainInformation();
+        const currentHeight = chainStatus.height;
+        let lastRadixHash: Uint8Array;
+        this.logger.info(`computing application hash`);
+        if (currentHeight > 0) {
+            const lastBlock = await this.db.getBlockInformation(currentHeight);
+            if (lastBlock === undefined) throw new Error(`unable to fetch last block information (height ${currentHeight})`);
+            lastRadixHash = lastBlock.radixHash;
+        }
+        else {
+            lastRadixHash = Utils.getNullHash();
+        }
+        this.logger.debug(`last radix hash is ${Utils.binaryToHexa(lastRadixHash)} (height ${currentHeight})`);
 
         const tokenRadixHash = await this.cachedAccountManager.getAccountRootHash();
         const vbRadixHash = await this.vbRadix.getRootHash();
         const radixHash = NodeCrypto.Hashes.sha256AsBinary(
             Utils.binaryFrom(vbRadixHash, tokenRadixHash),
         );
-        const challengeGenerator = new ChallengeManager(
-            this.cachedStorage,
-            this.cachedStorage.getCachedLevelDb(),
-        );
-        const storageHash = await challengeGenerator.processChallenge(radixHash);
+        const challengeGenerator = new ChallengeManager(this.storage, this.db);
+        const storageHash = await challengeGenerator.processChallenge(lastRadixHash);
         const appHash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(radixHash, storageHash));
 
         //perfMeasure.end();
 
-        return { tokenRadixHash, vbRadixHash, appHash, storageHash, radixHash };
-        /*
-        const { appHash } = await this.computeApplicationHash(
-            this.tokenRadix,
-            this.vbRadix,
-            new CachedStorage(this.storage, new CachedLevelDb(this.db))
-        );
+        this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
+        this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
+        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
+        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
+        this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
-         */
+        return { radixHash, appHash };
     }
 
     hasSomethingToCommit() {

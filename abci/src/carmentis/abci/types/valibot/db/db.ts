@@ -33,6 +33,8 @@ export const BlockInformationSchema = v.object({
     hash: uint8array(),
     timestamp: v.pipe(v.number(), v.integer(), v.minValue(0)),
     proposerAddress: uint8array(),
+    applicationHash: uint8array(),
+    radixHash: uint8array(),
     size: v.pipe(v.number(), v.integer(), v.minValue(0)),
     microblockCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
 })

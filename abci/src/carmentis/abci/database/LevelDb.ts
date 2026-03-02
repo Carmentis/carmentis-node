@@ -183,7 +183,7 @@ export class LevelDb extends AbstractLevelDb {
         }
     }
 
-    async getFullTable(tableId: number) {
+    async getFullTable(tableId: number): Promise<[Uint8Array,Uint8Array][]> {
         const iterator = await this.query(tableId);
         return await iterator.all();
     }

@@ -108,6 +108,16 @@ export class NodeEncoder {
         return v.parse(DataFileSchema, decoded);
     }
 
+    static decodeDataFileTable(dataFileTable: [Uint8Array, Uint8Array][]) {
+        const dataFileEntries = dataFileTable.map(
+            ([dataFileKey, encodedDataFile]) => {
+                const dataFile = NodeEncoder.decodeDataFile(encodedDataFile);
+                return {dataFileKey, dataFile};
+            }
+        );
+        return dataFileEntries;
+    }
+
     // VbRadix (DB_INDEX_FILE)
     static encodeVbRadix(vbRadix: VbRadix): Uint8Array {
         const validated = v.parse(VbRadixSchema, vbRadix);

@@ -1,5 +1,4 @@
 // This file contains the tests which emulates the CometBFT server.
-
 import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { RestABCIQueryModule } from '../rest-abci-query/RestABCIQueryModule';
@@ -37,8 +36,8 @@ import {
     AbciRequest,
     AccountByPublicKeyHashAbciResponseSchema,
     AccountStateAbciResponseSchema,
+    CMTSToken,
 } from '@cmts-dev/carmentis-sdk/server';
-//import { CheckTxResponse, CheckTxType, QueryRequest } from '../../proto-ts/cometbft/abci/v1/types';
 import { CheckTxType } from '../../proto/tendermint/abci/types';
 
 interface RunOffsAccountInterface {
@@ -54,6 +53,7 @@ describe('Abci', () => {
             grpc: {
                 port: 443,
             },
+            min_microblock_gas_in_atomic_accepted: 1,
         },
         cometbft: {
             exposed_rpc_endpoint: '',
@@ -143,15 +143,23 @@ describe('Abci', () => {
     });
 
     it('Should initialize as a genesis', async () => {
+        const time = TestScriptManager.getProtobufTimestamp(Math.floor(Date.now() / 1000));
         const response = await abci.InitChain({
+            time,
+            consensus_params: {
+                block: undefined,
+                evidence: undefined,
+                validator: undefined,
+                version: undefined,
+                abci: undefined,
+            },
             app_state_bytes: Utils.getNullHash(),
             chain_id: 'cmts:testchain',
             initial_height: 1,
             validators: [
                 {
                     power: 0,
-                    pub_key_bytes: pkBytes,
-                    pub_key_type: 'Ed25519',
+                    pub_key: { ed25519: pkBytes },
                 },
             ],
         });
@@ -263,11 +271,13 @@ class TestScriptManager {
 
     async addMicroblock(mb: Microblock, payerAccountHash: Uint8Array, payerSk: PrivateSignatureKey, elapsedHours: number) {
         const feesFormulaVersion = 1;
-        const feesFormula = FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(feesFormulaVersion);
+//      const feesFormula = FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(feesFormulaVersion);
+//      const maxFees = await feesFormula.computeFees(payerSk.getSignatureSchemeId(), mb);
+        const maxFees = CMTSToken.createCMTS(100);
         const timestampInSeconds = this.referenceTimestamp + elapsedHours * 3600;
 
         mb.setFeesPayerAccount(payerAccountHash);
-        mb.setGas(await feesFormula.computeFees(payerSk.getSignatureSchemeId(), mb));
+        mb.setMaxFees(maxFees);
         mb.setTimestamp(timestampInSeconds);
         await mb.seal(payerSk);
 
@@ -285,10 +295,7 @@ class TestScriptManager {
 
     async processCometConsensus(elapsedHours: number, misbehaviorType = -1) {
         const timestampInSeconds = this.referenceTimestamp + elapsedHours * 3600;
-        const time = {
-            seconds: timestampInSeconds,
-            nanos: 0
-        };
+        const time = TestScriptManager.getProtobufTimestamp(timestampInSeconds);
 
         this.blockTimestamp[this.height] = timestampInSeconds;
 
@@ -302,10 +309,7 @@ class TestScriptManager {
                     power: 100000000000
                 },
                 height: this.height - 1,
-                time: {
-                    seconds: this.blockTimestamp[this.height - 1],
-                    nanos: 0
-                },
+                time: TestScriptManager.getProtobufTimestamp(this.blockTimestamp[this.height - 1]),
                 total_voting_power: 100000000000
             });
         }
@@ -317,6 +321,7 @@ class TestScriptManager {
             height: this.height,
             proposer_address: new Uint8Array,
             next_validators_hash: new Uint8Array,
+            local_last_commit: undefined,
             time
         });
 
@@ -349,7 +354,6 @@ class TestScriptManager {
             proposer_address: new Uint8Array,
             next_validators_hash: new Uint8Array,
             time,
-            syncing_to_height: this.height
         });
 
         expect(finalizeBlockResponse.tx_results.length).toEqual(this.txs.length);
@@ -419,5 +423,12 @@ class TestScriptManager {
             throw new Error(`account '${id}' not found in runOffs file`);
         }
         return account;
+    }
+
+    static getProtobufTimestamp(seconds: number) {
+        return {
+            seconds,
+            nanos: 0,
+        };
     }
 }

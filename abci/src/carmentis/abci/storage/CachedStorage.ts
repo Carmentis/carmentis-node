@@ -5,6 +5,7 @@ import { FileIdentifier } from '../types/FileIdentifier';
 import { IStorage } from './IStorage';
 import { getLogger } from '@logtape/logtape';
 import {LevelDbTable} from "../database/LevelDbTable";
+import {NodeEncoder} from "../NodeEncoder";
 
 interface BufferedTransactions {
     transactionsToWrite: Uint8Array[];
@@ -33,9 +34,10 @@ export class CachedStorage implements IStorage {
      * @param {number} dayTimestamp - day timestamp of the block that triggered the call
      */
     async purgeDataFileTable(dayTimestamp: number): Promise<void> {
-        const dataFileTable = await this.db.getFullDataFileTable();
+        const dataFileTable = await this.db.getFullTable(LevelDbTable.DATA_FILE);
+        const dataFileEntries = NodeEncoder.decodeDataFileTable(dataFileTable);
 
-        for (const dataFileEntry of dataFileTable) {
+        for (const dataFileEntry of dataFileEntries) {
             const dataFileKey = dataFileEntry.dataFileKey;
             const fileIdentifier = dataFileKey.reduce((t, n) => t * 0x100 + n, 0);
             if (fileIdentifier < dayTimestamp) {
