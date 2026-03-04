@@ -215,8 +215,8 @@ export class GenesisRunoffTransactionsBuilder {
         const lastMicroblock = this.getLastMicroblockOfVirtualBlockchain(accountHash);
         microblock.setAsSuccessorOf(lastMicroblock);
         await microblock.seal(privateKey);
-        const { microblockData, microblockHash } = microblock.serialize();
-        await this.storeMicroblock(microblockHash, microblock, microblockData);
+        const { microblockData } = microblock.serialize();
+        await this.storeMicroblock(accountHash, microblock, microblockData);
     }
 
     /**
@@ -238,8 +238,8 @@ export class GenesisRunoffTransactionsBuilder {
         const lastMicroblock = this.getLastMicroblockOfVirtualBlockchain(nodeHash);
         microblock.setAsSuccessorOf(lastMicroblock);
         await microblock.seal(privateKey);
-        const { microblockData, microblockHash } = microblock.serialize();
-        await this.storeMicroblock(microblockHash, microblock, microblockData);
+        const { microblockData } = microblock.serialize();
+        await this.storeMicroblock(nodeHash, microblock, microblockData);
     }
 
     /**
@@ -332,7 +332,7 @@ export class GenesisRunoffTransactionsBuilder {
     private async storeMicroblock(vbId: Uint8Array, microblock: Microblock, serializedMicroblock: Uint8Array) {
         this.builtTransactions.push(serializedMicroblock);
         // we check that the microblock is coherent with the built ones
-        const mbs = this.createsMicroblocksByVbId.get(vbId)
+        const mbs = this.createsMicroblocksByVbId.get(vbId);
         if (mbs === undefined) {
             this.createsMicroblocksByVbId.set(vbId, [microblock]);
         } else {

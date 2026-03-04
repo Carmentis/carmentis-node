@@ -20,6 +20,11 @@
             "id": "genesis",
             "publicKey": "{{GENESIS_NODE_PUBLIC_KEY}}",
             "rpcEndpoint": "{{GENESIS_NODE_RPC_END_POINT}}"
+        },
+        {
+            "id": "node2",
+            "publicKey": "qlWqVapVqlWqVapVqlWqVapVqlWqVapVqlWqVapVqlU",
+            "rpcEndpoint": "https://this-goes-nowhere.com"
         }
     ],
     "vesting": [
@@ -91,7 +96,7 @@
             "type": "transfer",
             "source": "issuer",
             "destination": "governance",
-            "amount": 2000000
+            "amount": 2100000
         },
         {
             "type": "transfer",
@@ -126,6 +131,21 @@
         {
             "type": "nodeApproval",
             "node": "genesis",
+            "account": "governance"
+        },
+        {
+            "type": "nodeCreation",
+            "node": "node2",
+            "organization": "governance"
+        },
+        {
+            "type": "staking",
+            "node": "node2",
+            "amount": 1000000
+        },
+        {
+            "type": "nodeApproval",
+            "node": "node2",
             "account": "governance"
         },
         {

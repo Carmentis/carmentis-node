@@ -5,7 +5,6 @@ import {
     GenesisRunoffOrganizationType,
     GenesisRunoffNodeType,
     GenesisRunoffSchema,
-    GenesisRunoffTransferActionType,
     GenesisRunoffActionType,
     GenesisRunoffType,
 } from './types/GenesisRunoffType';
