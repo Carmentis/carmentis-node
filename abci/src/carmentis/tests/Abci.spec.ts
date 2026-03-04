@@ -27,24 +27,40 @@ import {
     VirtualBlockchainType,
     AbciQueryEncoder,
     Utils,
+    Hash,
     Sha256CryptographicHash,
     Secp256k1PrivateSignatureKey,
     PublicSignatureKey,
     PrivateSignatureKey,
     CryptoEncoderFactory,
-    FeesCalculationFormulaFactory,
     AbciRequest,
     AccountByPublicKeyHashAbciResponseSchema,
     AccountStateAbciResponseSchema,
+    VirtualBlockchainStateAbciResponseSchema,
+    ValidatorNodeByAddressAbciResponseSchema,
     CMTSToken,
+    CometBFTPublicKeyConverter, BlockchainUtils,
 } from '@cmts-dev/carmentis-sdk/server';
 import { CheckTxType } from '../../proto/tendermint/abci/types';
 
 interface RunOffsAccountInterface {
     id: string,
     publicKey: string,
-    privateKey?: string
+    privateKey?: string,
 }
+
+interface NodeMisbehavior {
+    type: number,
+    address: Uint8Array,
+}
+
+const GENESIS_NODE_PUBKEY = new Uint8Array(Array(32).keys());
+const GENESIS_NODE_ADDRESS = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(GENESIS_NODE_PUBKEY);
+const NODE2_PUBKEY = new Uint8Array([
+    0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55,
+    0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55
+]);
+const NODE2_ADDRESS = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(NODE2_PUBKEY);
 
 describe('Abci', () => {
     const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'node'));
@@ -75,7 +91,7 @@ describe('Abci', () => {
     };
     const nodeConfigService = NodeConfigService.createFromConfig(genesisNodeConfig);
 
-    const pkBytes = new Uint8Array([1, 2, 3]);
+    const pkBytes = GENESIS_NODE_PUBKEY;
     const encoder = EncoderFactory.bytesToBase64Encoder();
     const pk: TendermintPublicKey = {
         type: '',
@@ -88,7 +104,7 @@ describe('Abci', () => {
         initial_height: '',
         validators: [
             {
-                address: '123',
+                address: Utils.binaryToHexa(GENESIS_NODE_ADDRESS),
                 pub_key: pk,
                 power: '10',
                 name: 'genesis',
@@ -190,6 +206,8 @@ describe('Abci', () => {
         invest2AccountState = await scriptManager.getAccountState(invest2AccountId);
         console.log('invest2AccountState', Utils.binaryToHexa(invest2AccountId), invest2AccountState);
 
+        let hours = 0;
+
         // create a 1st account
         await (async () => {
             const mb = new Microblock(VirtualBlockchainType.ACCOUNT_VIRTUAL_BLOCKCHAIN);
@@ -208,7 +226,7 @@ describe('Abci', () => {
                     amount: 12,
                 },
             ]);
-            await scriptManager.addMicroblock(mb, sellerAccountId, sellerSk, 0);
+            await scriptManager.addMicroblock(mb, sellerAccountId, sellerSk, hours);
         })();
 
         // create a 2nd account
@@ -229,14 +247,15 @@ describe('Abci', () => {
                     amount: 0,
                 },
             ]);
-            await scriptManager.addMicroblock(mb, sellerAccountId, sellerSk, 0);
+            await scriptManager.addMicroblock(mb, sellerAccountId, sellerSk, hours);
         })();
 
         await scriptManager.processCometConsensus(0);
 
         // check linear vesting
         for(let n = 0; n <= 11; n++) {
-            await scriptManager.processCometConsensus(n * 24);
+            await scriptManager.processCometConsensus(hours);
+            hours += 24;
 
             invest1AccountState = await scriptManager.getAccountState(invest1AccountId);
             console.log(`invest1AccountState after ${n} days`, Utils.binaryToHexa(invest1AccountId), invest1AccountState);
@@ -247,8 +266,37 @@ describe('Abci', () => {
             expect(invest2AccountState.locks[0]?.lockedAmountInAtomics || 0).toEqual(Math.max(0, 2_000_000 - n * (2_000_000 / 10)));
         }
 
-        // simulate misbehavior
-        await scriptManager.processCometConsensus(12 * 24, 1);
+        // simulate misbehavior, followed by effective slashing
+        await scriptManager.processCometConsensus(hours, { type: 1, address: GENESIS_NODE_ADDRESS });
+        hours += 30 * 24;
+        await scriptManager.processCometConsensus(hours);
+        hours += 24;
+
+        // simulate misbehavior, followed by slashing cancellation
+        await scriptManager.processCometConsensus(hours, { type: 1, address: NODE2_ADDRESS });
+        hours += 24;
+
+        await (async () => {
+            const node2Id = (await scriptManager.getValidatorNodeIdByAddress(NODE2_ADDRESS)).validatorNodeHash;
+            const node2VbState = await scriptManager.getVirtualBlockchainState(node2Id);
+            const governanceAccountId = await scriptManager.getAccountHashByAccountId('governance')
+            const governanceAccount = scriptManager.getAccountFromRunOffs('governance');
+            if(governanceAccount.privateKey === undefined) throw new Error(`Cannot retrieve private key of governance account`);
+            const encodedGovernanceSk = governanceAccount.privateKey;
+            const governanceSk = await sigEncoder.decodePrivateKey(encodedGovernanceSk);
+            const mb = new Microblock(VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN);
+
+            mb.addSections([
+                {
+                    type: SectionType.VN_SLASHING_CANCELLATION,
+                    reason: 'This was a bug.',
+                },
+            ]);
+            mb.setPreviousHash(Hash.from(node2VbState.lastMicroblockHash));
+            mb.setHeight(node2VbState.height + 1);
+            await scriptManager.addMicroblock(mb, governanceAccountId, governanceSk, hours);
+        })();
+        await scriptManager.processCometConsensus(hours);
     }, 45000);
 });
 
@@ -293,7 +341,7 @@ class TestScriptManager {
         this.txs.push(mb.serialize().microblockData);
     }
 
-    async processCometConsensus(elapsedHours: number, misbehaviorType = -1) {
+    async processCometConsensus(elapsedHours: number, nodeMisbehavior: NodeMisbehavior|undefined = undefined) {
         const timestampInSeconds = this.referenceTimestamp + elapsedHours * 3600;
         const time = TestScriptManager.getProtobufTimestamp(timestampInSeconds);
 
@@ -301,11 +349,11 @@ class TestScriptManager {
 
         const misbehavior = [];
 
-        if (misbehaviorType != -1) {
+        if (nodeMisbehavior) {
             misbehavior.push({
-                type: misbehaviorType,
+                type: nodeMisbehavior.type,
                 validator: {
-                    address: new Uint8Array(20),
+                    address: nodeMisbehavior.address,
                     power: 100000000000
                 },
                 height: this.height - 1,
@@ -392,6 +440,27 @@ class TestScriptManager {
         });
 
         const response = v.parse(AccountStateAbciResponseSchema, answer);
+        return response;
+    }
+
+    async getVirtualBlockchainState(vbId: Uint8Array) {
+        const answer = await this.query({
+            requestType: AbciRequestType.GET_VIRTUAL_BLOCKCHAIN_STATE,
+            virtualBlockchainId: vbId,
+        });
+
+        const response = v.parse(VirtualBlockchainStateAbciResponseSchema, answer);
+        const state = BlockchainUtils.decodeVirtualBlockchainState(response.serializedVirtualBlockchainState);
+        return state;
+    }
+
+    async getValidatorNodeIdByAddress(address: Uint8Array) {
+        const answer = await this.query({
+            requestType: AbciRequestType.GET_VALIDATOR_NODE_BY_ADDRESS,
+            address: address
+        });
+
+        const response = v.parse(ValidatorNodeByAddressAbciResponseSchema, answer);
         return response;
     }
 

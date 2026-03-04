@@ -38,7 +38,7 @@ export class AccountStakeHandler {
             );
         }
 
-        // we recover the current account state to get the current stake for this objetc
+        // we recover the current account state to get the current stake for this object
         const accountInformation =
             await this.accountStateManager.loadAccountInformation(accountHash);
         const accountState = accountInformation.state;

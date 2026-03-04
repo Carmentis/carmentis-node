@@ -101,7 +101,7 @@ export class LevelDb extends AbstractLevelDb {
                     );
                 }
             } else {
-                // TODO: handle this case
+                this.logger.error(`table ${tableId} not found`);
             }
 
         } catch (e) {
