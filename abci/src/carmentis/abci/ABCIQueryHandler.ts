@@ -42,7 +42,7 @@ import {
     ValidatorNodeByAddressAbciResponse,
     VirtualBlockchainStateAbciResponse,
     VirtualBlockchainUpdateAbciResponse,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { LevelDb } from './database/LevelDb';
 import { AccountManager } from './accounts/AccountManager';
 import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
@@ -166,8 +166,7 @@ export class ABCIQueryHandler {
         const list: AccountUpdate[] = [];
         for (const requestedAccount of requestedAccounts) {
             const accountHash = requestedAccount.accountHash;
-            const currentState =
-                await this.db.getAccountStateByAccountId(accountHash);
+            const currentState = await this.db.getAccountStateByAccountId(accountHash);
             if (currentState === undefined) {
                 this.logger.warn(`account ${Utils.binaryToHexa(accountHash)} is undefined`);
             }
@@ -323,13 +322,16 @@ export class ABCIQueryHandler {
 
         return new Promise(async (resolve, reject) => {
             const test = async () => {
+                console.log("AWAIT ANCHORING - remaingingAttempts", remaingingAttempts);
                 const microblockInfo = await db.getMicroblockInformation(request.hash);
+                console.log("AWAIT ANCHORING - got microblockInfo", microblockInfo);
 
                 if (microblockInfo) {
                     const response: MicroblockAnchoringAbciResponse = {
                         responseType: AbciResponseType.MICROBLOCK_ANCHORING,
                         ...microblockInfo
                     }
+                    console.log("AWAIT ANCHORING - response is ready", response);
                     resolve(response);
                 } else {
                     if (--remaingingAttempts > 0) {

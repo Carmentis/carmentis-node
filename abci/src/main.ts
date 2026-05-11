@@ -15,6 +15,10 @@ import { SinkConfig } from './carmentis/config/types/NodeConfig';
 
 const logger = new Logger('Carmentis Node/ABCI');
 
+process.on('uncaughtException', (err) => {
+    logger.error('uncaughtException', err);
+});
+
 /**
  * Creates a Nest.js logger sink that integrates with the Nest.js logging system.
  */
@@ -62,6 +66,8 @@ function createSink(
 }
 
 async function bootstrap() {
+    logger.log(`UV_THREADPOOL_SIZE = ${process.env.UV_THREADPOOL_SIZE}`);
+
     // we start by instantiating the node config service handling the configuration for the node.
     const nodeConfigService = new NodeConfigService();
     nodeConfigService.loadConfigFile();

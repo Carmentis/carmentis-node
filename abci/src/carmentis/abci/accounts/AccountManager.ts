@@ -17,7 +17,7 @@ import {
     Sha256CryptographicHash,
     Utils,
     VestingParameters,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { getLogger, Logger } from '@logtape/logtape';
 import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
@@ -31,6 +31,7 @@ import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
 import { AccountHistoryHandler } from './AccountHistoryHandler';
 import { AccountSlashingHandler } from './AccountSlashingHandler';
 import { AccountVestingHandler } from './AccountVestingHandler';
+import { ModifiedAccounts } from "./ModifiedAccounts";
 import { ErrorMessages } from './ErrorMessages';
 
 export interface Transfer {
@@ -45,7 +46,7 @@ export interface Transfer {
 export class AccountManager {
     private readonly db: DbInterface;
     private readonly accountRadix: RadixTree;
-    private readonly modifiedAccounts: Set<string>;
+    private readonly modifiedAccounts: ModifiedAccounts;
     private readonly perf: Performance;
     private readonly logger: Logger;
     private readonly accountStateManager: AccountStateManager;
@@ -62,11 +63,11 @@ export class AccountManager {
     constructor(db: DbInterface) {
         this.db = db;
         this.accountRadix = new RadixTree(this.db, LevelDbTable.TOKEN_RADIX);
-        this.modifiedAccounts = new Set();
+        this.modifiedAccounts = new ModifiedAccounts();
         this.logger = getLogger(['node', 'accounts', AccountManager.name]);
         this.perf = new Performance(this.logger, true);
 
-        this.accountStateManager = new AccountStateManager(this.db, this.accountRadix);
+        this.accountStateManager = new AccountStateManager(this.db, this.accountRadix, this.modifiedAccounts);
         this.accountHistoryHandler = new AccountHistoryHandler(this.accountStateManager);
         this.accountTokenTransferHandler = new AccountTokenTransferHandler(
             this.accountStateManager,
@@ -91,7 +92,7 @@ export class AccountManager {
     }
 
     getModifiedAccounts() {
-        return [...this.modifiedAccounts].map((s) => Utils.binaryFromHexa(s));
+        return this.modifiedAccounts.get();
     }
 
     async transferToken(
@@ -411,7 +412,7 @@ export class AccountManager {
         const record = BlockchainUtils.encodeAccountState(accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
-        this.storeModifiedAccount(accountHash);
+        this.modifiedAccounts.store(accountHash);
         await this.accountRadix.set(accountHash, stateHash);
         await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
     }
@@ -434,9 +435,5 @@ export class AccountManager {
             );
         const balanceAvailability = new BalanceAvailability(0, accountState.locks);
         return balanceAvailability.getBreakdown().staked;
-    }
-
-    private storeModifiedAccount(accountHash: Uint8Array) {
-        this.modifiedAccounts.add(Utils.binaryToHexa(accountHash));
     }
 }

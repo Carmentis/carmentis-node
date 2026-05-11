@@ -9,7 +9,7 @@ import {Storage} from './storage/Storage';
 import {SnapshotDataCopyManager} from './SnapshotDataCopyManager';
 import {SnapshotChunksFile} from './SnapshotChunksFile';
 
-import {Utils} from '@cmts-dev/carmentis-sdk/server';
+import {Utils} from '@cmts-dev/carmentis-sdk-core';
 import {getLogger} from '@logtape/logtape';
 import {StoredSnapshot, StoredSnapshotSchema} from './types/valibot/snapshots/StoredSnapshot';
 import * as v from 'valibot';

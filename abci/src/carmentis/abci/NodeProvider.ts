@@ -4,7 +4,7 @@ import { NODE_SCHEMAS } from './constants/constants';
 import { DbInterface } from './database/DbInterface';
 import { Storage } from './storage/Storage';
 import {getLogger} from "@logtape/logtape";
-import { IInternalProvider, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { IInternalProvider, Utils } from '@cmts-dev/carmentis-sdk-core';
 import { CachedStorage } from './storage/CachedStorage';
 import { IStorage } from './storage/IStorage';
 

@@ -66,7 +66,7 @@ import {
     SectionLabel,
     SectionType,
     Utils
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { LevelDb } from './database/LevelDb';
 import { SnapshotsManager } from './SnapshotsManager';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
@@ -149,6 +149,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             return;
         }
         this.initialized = true;
+
+        setInterval(() => {
+            // @ts-ignore
+            const handles = process._getActiveHandles();
+
+            // @ts-ignore
+            const requests = process._getActiveRequests();
+
+            console.log({
+                handles: handles.length,
+                requests: requests.length,
+            });
+        }, 500);
 
         // define the paths where are stored the database, the storage and the snapshots.
         const {

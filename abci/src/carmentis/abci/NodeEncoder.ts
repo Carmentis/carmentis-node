@@ -40,7 +40,7 @@ import {
     AccountHistorySchema,
     AccountHistoryEntry,
     AccountHistoryEntrySchema,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 
 export class NodeEncoder {
     private static encoder = CryptoEncoderFactory.getCryptoBinaryEncoder();

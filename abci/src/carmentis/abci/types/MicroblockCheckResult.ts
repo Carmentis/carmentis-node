@@ -1,4 +1,4 @@
-import { VirtualBlockchain } from '@cmts-dev/carmentis-sdk/server';
+import { VirtualBlockchain } from '@cmts-dev/carmentis-sdk-core';
 
 /**
  * Represents the result of a microblock check operation, which can either

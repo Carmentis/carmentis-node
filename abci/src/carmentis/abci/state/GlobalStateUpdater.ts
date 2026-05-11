@@ -19,7 +19,7 @@ import {
     VirtualBlockchain,
     BalanceAvailability,
     VirtualBlockchainType,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
 import { AccountManager, Transfer } from '../accounts/AccountManager';
@@ -88,10 +88,12 @@ export class GlobalStateUpdater {
             const dataObject = await database.getValidatorNodeByAddress(validatorNodeAddress);
             if (dataObject === undefined) throw new Error(`Validator node with address ${Utils.binaryToHexa(validatorNodeAddress)} not found`);
             const validatorNodeHash = dataObject.validatorNodeHash;
+            this.logger.debug(`Node ID is ${Utils.binaryToHexa(validatorNodeHash)}`);
 
             // retrieve account identifier
             const validatorNode = await globalState.loadValidatorNodeVirtualBlockchain(new Hash(validatorNodeHash));
             const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+            this.logger.debug(`Account ID is ${Utils.binaryToHexa(accountId.toBytes())}`);
 
             // set slashing, planned in 30 days from now
             const plannedSlashingTimestamp = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 30);
@@ -357,7 +359,7 @@ export class GlobalStateUpdater {
             }
         }
         const hasEnoughTokensToPublish = feesPayerAccountBalance.isGreaterThan(feesToPay);
-        this.logger.debug(`# of days: ${expirationDay}, fees to pay: ${feesToPay.toString()}`);
+        this.logger.debug(`expiration day: ${expirationDay}, fees to pay: ${feesToPay.toString()}`);
         if (!hasEnoughTokensToPublish) {
             throw new Error(
                 `Insufficient funds to publish microblock: expected at least ${feesToPay.toString()}, got ${feesPayerAccountBalance.toString()} on account`,
@@ -592,7 +594,7 @@ export class GlobalStateUpdater {
         const db = state.getCachedDatabase();
         const accountManager = state.getAccountManager();
         const modifiedAccounts = accountManager.getModifiedAccounts();
-        this.logger.info(`${modifiedAccounts.length} accounts were modified`);
+        this.logger.info(`${modifiedAccounts.length} account(s) were modified`);
         await db.putBlockModifiedAccounts(height, { modifiedAccounts });
     }
 

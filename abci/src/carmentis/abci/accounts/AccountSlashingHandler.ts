@@ -1,7 +1,7 @@
 import { AccountStateManager } from './AccountStateManager';
 import {
     BalanceAvailability,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 
 export class AccountSlashingHandler {
     constructor(private readonly accountStateManager: AccountStateManager) {}

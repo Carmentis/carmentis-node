@@ -5,7 +5,7 @@ import {
     ProviderFactory,
     Secp256k1PrivateSignatureKey,
     SectionType,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 
 describe('CometBFT', () => {
     it('Should create an account for a randomly chosen key, signed with key having tokens', async () => {

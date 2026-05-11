@@ -9,7 +9,7 @@ import {
     PrivateSignatureKey,
     Provider,
     PublicSignatureKey, SectionType,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { getLogger, Logger } from '@logtape/logtape';
 import { GlobalState } from './state/GlobalState';
 

@@ -6,7 +6,7 @@ import {
     ECO,
     LockType,
     Utils
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
 import { DbInterface } from '../database/DbInterface';
 import {getLogger} from "@logtape/logtape";

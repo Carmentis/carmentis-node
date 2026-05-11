@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Microblock } from '@cmts-dev/carmentis-sdk/server';
+import { Microblock } from '@cmts-dev/carmentis-sdk-core';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { getLogger } from '@logtape/logtape';
 

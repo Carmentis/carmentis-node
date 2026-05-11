@@ -3,7 +3,7 @@ import {
     BalanceAvailability,
     ProtocolInternalState,
     VirtualBlockchainType,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 
 /**
  * Handler for the account stake operations.

@@ -9,7 +9,7 @@ import {
     ECO,
     SchemaSerializer,
     Utils,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { AccountStateManager } from './AccountStateManager';
 import { getLogger } from '@logtape/logtape';
 import { DbInterface } from '../database/DbInterface';

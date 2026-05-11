@@ -17,7 +17,7 @@ import {
     MicroblockInformation,
     Utils,
     AccountHistoryEntry,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { NodeEncoder } from '../NodeEncoder';
 import { LevelDb } from './LevelDb';
 import { ChainInformationObject } from '../types/ChainInformationObject';

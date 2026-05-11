@@ -1,4 +1,4 @@
-import { DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk/server';
+import { DATA, ECO, SCHEMAS } from '@cmts-dev/carmentis-sdk-core';
 
 /*
 export const DB_CHAIN_INFORMATION = 0x00;

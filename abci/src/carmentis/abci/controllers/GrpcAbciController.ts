@@ -1,6 +1,6 @@
 import { GrpcMethod } from '@nestjs/microservices';
 import { Controller, Logger } from '@nestjs/common';
-import { Utils } from '@cmts-dev/carmentis-sdk/server';
+import { Utils } from '@cmts-dev/carmentis-sdk-core';
 import { AbciService } from '../AbciService';
 import {
     RequestEcho,

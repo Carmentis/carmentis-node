@@ -1,7 +1,7 @@
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
-import { AccountState, AccountHistoryEntry } from '@cmts-dev/carmentis-sdk/server';
+import { AccountState, AccountHistoryEntry } from '@cmts-dev/carmentis-sdk-core';
 import {
     BlockContent,
     BlockInformation,

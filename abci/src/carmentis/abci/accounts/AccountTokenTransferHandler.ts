@@ -7,7 +7,7 @@ import {
     EscrowParameters,
     Utils,
     VestingParameters,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { getLogger } from '@logtape/logtape';
 import { AccountHistoryHandler } from './AccountHistoryHandler';
 import { DbInterface } from '../database/DbInterface';

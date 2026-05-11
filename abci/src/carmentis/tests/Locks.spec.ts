@@ -2,7 +2,7 @@ import {
     Secp256k1PrivateSignatureKey,
     Microblock,
     SectionType,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 /*
 async function run() {
     const sk = Secp256k1PrivateSignatureKey.gen();

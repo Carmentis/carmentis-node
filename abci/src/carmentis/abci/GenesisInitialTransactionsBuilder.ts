@@ -10,7 +10,7 @@ import {
     CryptoEncoderFactory,
     Base64,
     Utils,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 
 import { getLogger } from '@logtape/logtape';
 import { NodeConfigService } from '../config/services/NodeConfigService';
