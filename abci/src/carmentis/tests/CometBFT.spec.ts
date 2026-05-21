@@ -19,8 +19,6 @@ describe('CometBFT', () => {
         const randomPrivateKey = Secp256k1PrivateSignatureKey.gen();
         const randomPublicKey = await randomPrivateKey.getPublicKey();
 
-
-
         const accountCreationMb = Microblock.createGenesisAccountMicroblock();
         accountCreationMb.addSections([
             {
