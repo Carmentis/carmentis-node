@@ -1,3 +1,10 @@
+## [1.2.9](https://github.com/Carmentis/carmentis-node/compare/v1.2.8...v1.2.9) (2026-05-21)
+
+
+### Bug Fixes
+
+* Dockerfile ([8995e69](https://github.com/Carmentis/carmentis-node/commit/8995e6987933d270d2c3778b15e2c73d628eca29))
+
 ## [1.2.8](https://github.com/Carmentis/carmentis-node/compare/v1.2.7...v1.2.8) (2026-05-21)
 
 
