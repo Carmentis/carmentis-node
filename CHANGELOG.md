@@ -1,3 +1,10 @@
+## [1.2.8](https://github.com/Carmentis/carmentis-node/compare/v1.2.7...v1.2.8) (2026-05-21)
+
+
+### Bug Fixes
+
+* dummy ([7e3eb8f](https://github.com/Carmentis/carmentis-node/commit/7e3eb8fc84cf30fff079a83d8015fee8a4b0413a))
+
 ## [1.2.7](https://github.com/Carmentis/carmentis-node/compare/v1.2.6...v1.2.7) (2026-03-04)
 
 
