@@ -121,6 +121,8 @@ export class AccountManager {
      * @param transfer - The transfer details including type, payer, payee, and amount
      * @param chainReference - Reference to the blockchain context
      * @param timestamp - The timestamp of the transfer
+     * @param publicReference - The public reference of the transfer
+     * @param privateReference - The private reference of the transfer
      * @throws {Error} If account types are incompatible with transfer type
      * @throws {Error} If payer has insufficient funds
      * @throws {Error} If accounts don't exist when required
@@ -129,8 +131,16 @@ export class AccountManager {
         transfer: Transfer,
         chainReference: unknown,
         timestamp: number,
+        publicReference = "",
+        privateReference = "",
     ): Promise<void> {
-        await this.accountTokenTransferHandler.tokenTransfer(transfer, chainReference, timestamp);
+        await this.accountTokenTransferHandler.tokenTransfer(
+            transfer,
+            chainReference,
+            timestamp,
+            publicReference,
+            privateReference,
+        );
     }
 
     /**
@@ -291,6 +301,8 @@ export class AccountManager {
         amount: number,
         chainReference: unknown,
         timestamp: number,
+        publicReference = "",
+        privateReference = "",
     ): Promise<Uint8Array> {
         return await this.accountHistoryHandler.addHistoryEntry(
             state,
@@ -300,6 +312,8 @@ export class AccountManager {
             amount,
             chainReference,
             timestamp,
+            publicReference,
+            privateReference,
         );
     }
 

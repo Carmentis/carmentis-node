@@ -39,7 +39,10 @@ import {
     VirtualBlockchainStateAbciResponseSchema,
     ValidatorNodeByAddressAbciResponseSchema,
     CMTSToken,
-    CometBFTPublicKeyConverter, BlockchainUtils,
+    CometBFTPublicKeyConverter,
+    BlockchainUtils,
+    FeesCalculationFormulaFactory,
+    NetworkProvider, ProviderFactory,
 } from '@cmts-dev/carmentis-sdk-core';
 import { CheckTxType } from '../../proto/tendermint/abci/types';
 
@@ -69,7 +72,7 @@ describe('Abci', () => {
             grpc: {
                 port: 443,
             },
-            min_microblock_gas_in_atomic_accepted: 1,
+            min_microblock_gas_price_in_atomics: 1,
         },
         cometbft: {
             exposed_rpc_endpoint: '',
@@ -362,16 +365,12 @@ class TestScriptManager {
     }
 
     async addMicroblock(mb: Microblock, payerAccountHash: Uint8Array, payerSk: PrivateSignatureKey, elapsedHours: number) {
-        const feesFormulaVersion = 1;
-//      const feesFormula = FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(feesFormulaVersion);
-//      const maxFees = await feesFormula.computeFees(payerSk.getSignatureSchemeId(), mb);
-        const maxFees = CMTSToken.createCMTS(100);
+        const dummyProvider = ProviderFactory.createInMemoryProvider();
         const timestampInSeconds = this.referenceTimestamp + elapsedHours * 3600;
 
         mb.setFeesPayerAccount(payerAccountHash);
-        mb.setMaxFees(maxFees);
         mb.setTimestamp(timestampInSeconds);
-        await mb.seal(payerSk);
+        await mb.setGasAndSeal(dummyProvider, payerSk);
 
         const response = await this.abci.CheckTx(
             {

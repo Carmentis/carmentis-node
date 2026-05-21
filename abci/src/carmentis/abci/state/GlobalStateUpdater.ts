@@ -12,6 +12,9 @@ import {
     ProtocolVb,
     SectionType,
     Utils,
+    AccountEscrowSettlementSection,
+    EscrowParameters,
+    LockType,
     ValidatorNodeCometbftPublicKeyDeclarationSection,
     ValidatorNodeVb,
     ValidatorNodeVotingPowerUpdateSection,
@@ -338,12 +341,14 @@ export class GlobalStateUpdater {
 
         // case 2: The fees payer account does not have enough tokens to pay (fast case)
         const feesPayerAccountBalance = await accountManager.getAccountBalanceByAccountId(feesPayerAccountId);
-        const feesToPay = await globalState.computeMicroblockFees(
-            microblock,
-            { referenceTimestampInSeconds: cometParameters.blockTimestamp }
-        )
+        const gas = microblock.getGas();
+        const gasPrice = microblock.getGasPrice();
+        const feesToPay = gasPrice.mul(gas);
 
         if (feesToPay.isZero()) {
+            console.log("gas", gas);
+            console.log("gasPrice", gasPrice);
+            console.log("feesToPay", feesToPay);
             throw new Error(`Fees are set to zero, which is only allowed in genesis block`);
         }
 
@@ -514,36 +519,61 @@ export class GlobalStateUpdater {
      * @private
      */
     private async isAccountIdAllowedToWriteOnVirtualBlockchain(accountId: Uint8Array, vb: VirtualBlockchain, mb: Microblock, globalState: GlobalState) {
-        // Case 1 - Account creation
-        // Anyone can create an account, the only limitation is to have enough fees but this verification
-        // is not performed here.
         if (vb instanceof AccountVb) {
+            // Case 1 - Account creation
+            // Anyone can create an account, the only limitation is to have enough fees but this verification
+            // is not performed here.
             const containsAccountCreationSection = mb.hasSection(SectionType.ACCOUNT_CREATION);
             const isFirstBlock = mb.getHeight() == 1;
             if (containsAccountCreationSection && isFirstBlock) return true;
-            // other cases are handled by the following check
+
+            // Case 2 - Escrow settlement
+            // Only the agent is allowed to sign.
+            // NB: If there's a ACCOUNT_ESCROW_SETTLEMENT section, the microblock may only contain that section and
+            // the signature. This is enforced by AccountMicroblockStructureChecker.
+            const isSettlingEscrow = mb.hasSection(SectionType.ACCOUNT_ESCROW_SETTLEMENT);
+            if (isSettlingEscrow) {
+                const escrowSettlementSection =
+                    mb.getSection((section) =>
+                        section.type === SectionType.ACCOUNT_ESCROW_SETTLEMENT
+                    ) as AccountEscrowSettlementSection;
+                const escrowIdentifier = escrowSettlementSection.escrowIdentifier;
+                const accountManager = globalState.getAccountManager();
+                const ownerAccountId = vb.getId();
+                const account = await accountManager.loadAccountInformation(ownerAccountId);
+                const escrowLock = account.state.locks.find((lock) =>
+                    lock.type == LockType.Escrow &&
+                    Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier)
+                );
+                if (escrowLock === undefined) {
+                    // no one is authorized to sign the settlement of a non-existing escrow
+                    return false;
+                }
+                const escrowParameters = escrowLock.parameters as EscrowParameters;
+                const isAgentAccount = Utils.binaryIsEqual(escrowParameters.transferAuthorizerAccountId, accountId);
+                return isAgentAccount;
+            }
         }
 
-        // Case 2 - Validator node approval update
+        // Case 3 - Validator node approval update and slashing cancellation
+        // Only the governance is allowed to sign.
+        // NB: If there's a VN_APPROVAL or a VN_SLASHING_CANCELLATION section, the microblock may only contain that
+        // section and the signature. This is enforced by ValidatorNodeMicroblockStructureChecker.
         if (vb instanceof ValidatorNodeVb) {
-            const protocolState = await globalState.getProtocolState();
-            const protocolStateObject = protocolState.toObject();
-            const governanceOrgID = protocolStateObject.organizationId;
-            const governanceOrgVb = await globalState.loadOrganizationVirtualBlockchain(Hash.from(governanceOrgID));
-            const governanceAccountId = governanceOrgVb.getAccountId();
-            const isGovernanceAccount = Utils.binaryIsEqual(governanceAccountId.toBytes(), accountId);
-            const isApproving: boolean = mb.containsOnlyTheseSections([
-                SectionType.VN_APPROVAL,
-                SectionType.SIGNATURE,
-            ]);
-            const isCancellingSlashing: boolean = mb.containsOnlyTheseSections([
-                SectionType.VN_SLASHING_CANCELLATION,
-                SectionType.SIGNATURE,
-            ]);
-            if (isGovernanceAccount && (isApproving || isCancellingSlashing)) return true;
+            const isApproving: boolean = mb.hasSection(SectionType.VN_APPROVAL);
+            const isCancellingSlashing: boolean = mb.hasSection(SectionType.VN_SLASHING_CANCELLATION);
+            if (isApproving || isCancellingSlashing) {
+                const protocolState = await globalState.getProtocolState();
+                const protocolStateObject = protocolState.toObject();
+                const governanceOrgID = protocolStateObject.organizationId;
+                const governanceOrgVb = await globalState.loadOrganizationVirtualBlockchain(Hash.from(governanceOrgID));
+                const governanceAccountId = governanceOrgVb.getAccountId();
+                const isGovernanceAccount = Utils.binaryIsEqual(governanceAccountId.toBytes(), accountId);
+                return isGovernanceAccount;
+            }
         }
 
-        // Case 3 (default) - The virtual blockchain decides
+        // Case 4 (default) - The virtual blockchain decides
         return vb.isAccountIdAllowedToWrite(Hash.from(accountId))
     }
 
@@ -764,7 +794,7 @@ export class GlobalStateUpdater {
 
             // check token standard transfers
             if (sectionType === SectionType.ACCOUNT_TRANSFER) {
-                const { account, amount } = section;
+                const { account, amount, publicReference, privateReference } = section;
                 const accountIdSendingTokens = accountVb.getId();
                 this.logger.debug(`Transferring ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(accountIdSendingTokens)} to account ${Utils.binaryToHexa(account)}`)
                 await accountManager.tokenTransfer(
@@ -779,6 +809,8 @@ export class GlobalStateUpdater {
                         sectionIndex,
                     },
                     microblock.getTimestamp(),
+                    publicReference,
+                    privateReference,
                 );
             }
 
@@ -813,7 +845,15 @@ export class GlobalStateUpdater {
 
             // check token escrow transfers
             if (sectionType === SectionType.ACCOUNT_ESCROW_TRANSFER) {
-                const { account, amount, escrowIdentifier, agentAccount, durationDays } = section;
+                const {
+                    account,
+                    amount,
+                    escrowIdentifier,
+                    agentAccount,
+                    durationDays,
+                    publicReference,
+                    privateReference,
+                } = section;
                 await accountManager.tokenTransfer(
                     {
                         type: ECO.BK_SENT_ESCROW,
@@ -833,6 +873,8 @@ export class GlobalStateUpdater {
                         sectionIndex,
                     },
                     microblock.getTimestamp(),
+                    publicReference,
+                    privateReference,
                 );
             }
 
@@ -843,12 +885,25 @@ export class GlobalStateUpdater {
                     mbHash: microblock.getHash().toBytes(),
                     sectionIndex
                 };
-                await accountManager.escrowSettlement(accountVb.getId(), escrowIdentifier, confirmed, microblock.getTimestamp(), chainReference);
+                await accountManager.escrowSettlement(
+                    accountVb.getId(),
+                    escrowIdentifier,
+                    confirmed,
+                    microblock.getTimestamp(),
+                    chainReference
+                );
             }
 
             // check token vesting transfers
             if (sectionType === SectionType.ACCOUNT_VESTING_TRANSFER) {
-                const { account, amount, cliffDurationDays, vestingDurationDays } = section;
+                const {
+                    account,
+                    amount,
+                    cliffDurationDays,
+                    vestingDurationDays,
+                    publicReference,
+                    privateReference,
+                } = section;
                 await accountManager.tokenTransfer(
                     {
                         type: ECO.BK_SENT_VESTING,
@@ -867,6 +922,8 @@ export class GlobalStateUpdater {
                         sectionIndex,
                     },
                     microblock.getTimestamp(),
+                    publicReference,
+                    privateReference,
                 );
             }
         }

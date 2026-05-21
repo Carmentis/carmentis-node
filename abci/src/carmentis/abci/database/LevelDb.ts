@@ -92,11 +92,8 @@ export class LevelDb extends AbstractLevelDb {
         );
         try {
             const subTable = this.sub.get(tableId);
-            console.log("subTable", subTable);
             if (subTable) {
-                console.log("invoking subTable.get()");
                 const b = await subTable.get(key);
-                console.log("subTable.get() ->", b);
                 if (b !== undefined) {
                     this.logger.debug(`Returning ${b.length} bytes`);
                     return new Uint8Array(
