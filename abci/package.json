@@ -26,6 +26,7 @@
         "gen:config:md": "ts-node scripts/generate-config-doc.ts"
     },
     "dependencies": {
+        "@bufbuild/protobuf": "^2.12.0",
         "@cmts-dev/carmentis-sdk-core": "^1.0.0",
         "@grpc/grpc-js": "^1.14.3",
         "@grpc/proto-loader": "^0.8.0",
@@ -45,6 +46,7 @@
         "@nestjs/schedule": "^6.1.1",
         "@nestjs/websockets": "^11",
         "@noble/secp256k1": "^3.0.0",
+        "abstract-level": "^3.1.1",
         "cbor-x": "^1.6.4",
         "get-port": "^7.2.0",
         "level": "^10.0.0",

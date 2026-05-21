@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+keys.json
+config.toml
+.cometbft
+.output
+local-devnet-governance
+*config.toml
+genesisRunoffs.json
+genesisRunoffs-old.json
