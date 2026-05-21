@@ -1,3 +1,10 @@
+## [1.2.10](https://github.com/Carmentis/carmentis-node/compare/v1.2.9...v1.2.10) (2026-05-21)
+
+
+### Bug Fixes
+
+* docker build due to min publication age and approve-builds for pnpm ([aa2de5b](https://github.com/Carmentis/carmentis-node/commit/aa2de5b4692afcce3d0675668442f30ef8269786))
+
 ## [1.2.9](https://github.com/Carmentis/carmentis-node/compare/v1.2.8...v1.2.9) (2026-05-21)
 
 
