@@ -100,6 +100,7 @@ for(let n = 1; n <= N_NODES; n++) {
     cometConfig.p2p.persistent_peers = "";
   }
   else {
+    // ID obtained with `cometbft show_node_id`
     cometConfig.p2p.persistent_peers = `8f1eb7f72082b70d800da273791eceb3ecd848ef@127.0.0.1:26656`;
   }
 

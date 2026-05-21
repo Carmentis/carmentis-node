@@ -5,7 +5,7 @@ import {
     ProviderFactory,
     Secp256k1PrivateSignatureKey,
     SectionType,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 
 describe('CometBFT', () => {
     it('Should create an account for a randomly chosen key, signed with key having tokens', async () => {
@@ -18,8 +18,6 @@ describe('CometBFT', () => {
 
         const randomPrivateKey = Secp256k1PrivateSignatureKey.gen();
         const randomPublicKey = await randomPrivateKey.getPublicKey();
-
-
 
         const accountCreationMb = Microblock.createGenesisAccountMicroblock();
         accountCreationMb.addSections([

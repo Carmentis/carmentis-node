@@ -113,8 +113,8 @@ export class NodeConfigService implements OnModuleInit {
         return this.cometbftConfig.exposed_rpc_endpoint;
     }
 
-    getMinMicroblockGasInAtomicAccepted(): number {
-        return this.abciConfig.min_microblock_gas_in_atomic_accepted;
+    getMinMicroblockGasPriceInAtomics(): number {
+        return this.abciConfig.min_microblock_gas_price_in_atomics;
     }
 
     /**

@@ -1,5 +1,5 @@
 import { Level } from 'level';
-import { CHAIN, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk/server';
+import { CHAIN, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk-core';
 import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { getLogger } from '@logtape/logtape';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';

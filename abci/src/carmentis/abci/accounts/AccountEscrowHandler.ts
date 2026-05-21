@@ -6,7 +6,7 @@ import {
     ECO,
     LockType,
     Utils
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
 import { DbInterface } from '../database/DbInterface';
 import {getLogger} from "@logtape/logtape";
@@ -46,20 +46,12 @@ export class AccountEscrowHandler {
         // retrieve the lock from the payee account, get the amount, then remove the lock
         const accountInformation = await this.accountStateManager.loadAccountInformation(escrow.payeeAccount);
         const payeeAccountState = accountInformation.state;
-        const lockIndex = payeeAccountState.locks.findIndex(
-            (lock) =>
-                lock.type == LockType.Escrow &&
-                Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier),
+        const balanceAvailability = new BalanceAvailability(
+            payeeAccountState.balance,
+            payeeAccountState.locks,
         );
-
-        if (lockIndex === -1) {
-            throw new Error(`PANIC - unable to find the lock of the escrow to be settled`);
-        }
-
-        const amount = payeeAccountState.locks[lockIndex].lockedAmountInAtomics;
-
-        payeeAccountState.locks.splice(lockIndex, 1);
-
+        const amount = balanceAvailability.removeEscrowLock(escrowIdentifier);
+        payeeAccountState.locks = balanceAvailability.getLocks();
         await this.accountStateManager.saveAccountState(escrow.payeeAccount, payeeAccountState);
 
         // if the escrow is canceled, send the funds back to the payer
@@ -98,12 +90,13 @@ export class AccountEscrowHandler {
             );
             if (isEscrowLockExpired) {
                 // the escrow has expired: the funds are sent back from payee to payer
-                this.logger.info(`Escrow has expired`);
+                this.logger.info(`Escrow has expired: funds are sent back to payer`);
+                const amount = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
                 const tokenTransfer: Transfer = {
                     type: ECO.BK_SENT_EXPIRED_ESCROW,
                     payerAccount: payeeAccountHash,
                     payeeAccount: payerAccountHash,
-                    amount: lock.lockedAmountInAtomics
+                    amount,
                 };
                 const chainReference = {
                     height: blockHeight
@@ -119,5 +112,7 @@ export class AccountEscrowHandler {
                 await this.db.del(LevelDbTable.ESCROWS, lock.parameters.escrowIdentifier);
             }
         }
+        accountState.locks = balanceAvailability.getLocks();
+        await this.accountStateManager.saveAccountState(payeeAccountHash, accountState);
     }
 }

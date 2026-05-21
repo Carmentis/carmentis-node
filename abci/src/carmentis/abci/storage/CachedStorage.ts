@@ -1,5 +1,5 @@
 import { MicroblockReadingMode, Storage } from './Storage';
-import { Microblock, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { Microblock, Utils } from '@cmts-dev/carmentis-sdk-core';
 import { CachedLevelDb } from '../database/CachedLevelDb';
 import { FileIdentifier } from '../types/FileIdentifier';
 import { IStorage } from './IStorage';

@@ -18,7 +18,7 @@ import {
     VirtualBlockchain,
     VirtualBlockchainState,
     VirtualBlockchainStatus,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
 import { Performance } from '../Performance';

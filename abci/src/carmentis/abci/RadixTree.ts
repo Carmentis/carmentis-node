@@ -1,4 +1,4 @@
-import { RADIX_CST, RadixUtils, Utils } from '@cmts-dev/carmentis-sdk/server';
+import { RADIX_CST, RadixUtils, Utils } from '@cmts-dev/carmentis-sdk-core';
 import { NodeCrypto } from './crypto/NodeCrypto';
 import { LevelDb } from './database/LevelDb';
 import { DbInterface } from './database/DbInterface';

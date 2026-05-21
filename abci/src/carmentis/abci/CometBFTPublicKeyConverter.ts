@@ -1,4 +1,4 @@
-import { Crypto } from '@cmts-dev/carmentis-sdk/server';
+import { Crypto } from '@cmts-dev/carmentis-sdk-core';
 
 export class CometBFTPublicKeyConverter {
     public static convertRawPublicKeyIntoAddress(publicKey: Uint8Array): Uint8Array {

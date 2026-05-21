@@ -7,7 +7,7 @@ import {
     EscrowParameters,
     Utils,
     VestingParameters,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { getLogger } from '@logtape/logtape';
 import { AccountHistoryHandler } from './AccountHistoryHandler';
 import { DbInterface } from '../database/DbInterface';
@@ -31,6 +31,8 @@ export class AccountTokenTransferHandler {
      * @param transfer - The transfer details including type, payer, payee, and amount
      * @param chainReference - Reference to the blockchain context
      * @param timestamp - The timestamp of the transfer
+     * @param publicReference - The public reference of the transfer
+     * @param privateReference - The private reference of the transfer
      * @throws {Error} If account types are incompatible with transfer type
      * @throws {Error} If payer has insufficient funds
      * @throws {Error} If accounts don't exist when required
@@ -39,6 +41,8 @@ export class AccountTokenTransferHandler {
         transfer: Transfer,
         chainReference: unknown,
         timestamp: number,
+        publicReference = "",
+        privateReference = "",
     ): Promise<void> {
         this.logger.debug(
             `Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amount} at ${timestamp}`,
@@ -134,6 +138,8 @@ export class AccountTokenTransferHandler {
                 timestamp,
                 transfer.vestingParameters || null,
                 transfer.escrowParameters || null,
+                publicReference,
+                privateReference,
             );
         }
 
@@ -147,6 +153,8 @@ export class AccountTokenTransferHandler {
                 timestamp,
                 transfer.vestingParameters || null,
                 transfer.escrowParameters || null,
+                publicReference,
+                privateReference,
             );
         }
 
@@ -164,6 +172,8 @@ export class AccountTokenTransferHandler {
         timestamp: number,
         vestingParameters: VestingParameters | null = null,
         escrowParameters: EscrowParameters | null = null,
+        publicReference: string,
+        privateReference: string,
     ): Promise<void> {
         const accountInformation =
             await this.accountStateManager.loadAccountInformation(accountHash);
@@ -230,6 +240,8 @@ export class AccountTokenTransferHandler {
             amount,
             chainReference,
             timestamp,
+            publicReference,
+            privateReference,
         );
 
         await this.accountStateManager.saveAccountState(accountHash, accountState);

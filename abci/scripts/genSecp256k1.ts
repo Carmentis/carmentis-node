@@ -1,7 +1,7 @@
 import {
     Secp256k1PrivateSignatureKey,
     CryptoEncoderFactory,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 
 (async function(): Promise<void> {
     const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();

@@ -4,7 +4,7 @@ import {
     ProtocolInternalState,
     Utils,
     VirtualBlockchainType,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import {getLogger} from "@logtape/logtape";
 
 export class AccountUnstakeHandler {

@@ -66,7 +66,7 @@ import {
     SectionLabel,
     SectionType,
     Utils
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { LevelDb } from './database/LevelDb';
 import { SnapshotsManager } from './SnapshotsManager';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
@@ -560,16 +560,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 };
             }
 
-            // We reject the microblock if the declared gas is below the minimum gas accepted by the node.
-            // The minimum accepted gas can be different for every node.
-            const state = this.getGlobalState();
-            const computedFees = await state.computeMicroblockFees(parsedMicroblock, {
-                referenceTimestampInSeconds: referenceTimestamp
-            })
-            const minAcceptedGas = this.nodeConfig.getMinMicroblockGasInAtomicAccepted();
-            if (computedFees.getAmountAsAtomic() < minAcceptedGas) {
+            // We reject the microblock if the gas price is below the minimum gas price accepted by the node.
+            // The minimum accepted gas price is specific to each node.
+            const gasPrice = parsedMicroblock.getGasPrice();
+            const minAcceptedGasPrice = this.nodeConfig.getMinMicroblockGasPriceInAtomics();
+            if (gasPrice.getAmountAsAtomic() < minAcceptedGasPrice) {
                 this.logger.info(
-                    `Microblock ${parsedMicroblock.getHash().encode()} rejected due to gas below the minimum accepted gas: ${minAcceptedGas}`,
+                    `Microblock ${parsedMicroblock.getHash().encode()} rejected: gas price is below the accepted minimum (${minAcceptedGasPrice})`,
                 );
                 return {
                     code: CheckTxResponseCode.KO,
@@ -577,7 +574,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     data: new Uint8Array(),
                     gas_wanted: 0,
                     gas_used: 0,
-                    info: `Microblock rejected due to gas below the minimum accepted gas ${minAcceptedGas}`,
+                    info: `Microblock rejected due to gas price below the accepted minimum (${minAcceptedGasPrice})`,
                     events: [],
                     codespace: 'app',
                 };
@@ -701,7 +698,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Step 1: transaction decoding (and early rejection)
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
         const txs = request.txs;
-        const microblocks: { mb: Microblock, tx: Uint8Array, gasInAtomics: number }[] = [];
+        const microblocks: { mb: Microblock, tx: Uint8Array, feesInAtomics: number }[] = [];
         for (const tx of txs) {
             try {
                 // decoding
@@ -715,13 +712,13 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 }
 
                 // this microblock can proceed to the next steps
-                const feesInAtomics = await workingState.computeMicroblockFees(parsedMicroblock, {
-                    referenceTimestampInSeconds: cometParameters.blockTimestamp,
-                })
+                const gas = parsedMicroblock.getGas();
+                const gasPriceInAtomics = parsedMicroblock.getGasPrice().getAmountAsAtomic();
+                const feesInAtomics = gas * gasPriceInAtomics;
                 microblocks.push({
                     mb: parsedMicroblock,
                     tx,
-                    gasInAtomics: feesInAtomics.getAmountAsAtomic(),
+                    feesInAtomics,
                 });
             } catch (e) {
                 if (e instanceof Error) {
@@ -738,7 +735,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         // Step 2: microblock ordering based on gas in descending order
         const sortedMicroblocks = microblocks.sort((a, b) => {
-            return b.gasInAtomics - a.gasInAtomics
+            return b.feesInAtomics - a.feesInAtomics
         });
 
         // Step 3: check and verify microblocks until max size is reached

@@ -12,7 +12,7 @@ import {
     Secp256k1,
     Secp256k1PrivateSignatureKey,
     Utils,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { randomBytes } from 'node:crypto';
 
 export async function createTempLevel() {

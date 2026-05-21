@@ -39,8 +39,11 @@ import {
     VirtualBlockchainStateAbciResponseSchema,
     ValidatorNodeByAddressAbciResponseSchema,
     CMTSToken,
-    CometBFTPublicKeyConverter, BlockchainUtils,
-} from '@cmts-dev/carmentis-sdk/server';
+    CometBFTPublicKeyConverter,
+    BlockchainUtils,
+    FeesCalculationFormulaFactory,
+    NetworkProvider, ProviderFactory,
+} from '@cmts-dev/carmentis-sdk-core';
 import { CheckTxType } from '../../proto/tendermint/abci/types';
 
 interface RunOffsAccountInterface {
@@ -69,7 +72,7 @@ describe('Abci', () => {
             grpc: {
                 port: 443,
             },
-            min_microblock_gas_in_atomic_accepted: 1,
+            min_microblock_gas_price_in_atomics: 1,
         },
         cometbft: {
             exposed_rpc_endpoint: '',
@@ -204,7 +207,7 @@ describe('Abci', () => {
         let invest2AccountState;
 
         invest2AccountState = await scriptManager.getAccountState(invest2AccountId);
-        console.log('invest2AccountState', Utils.binaryToHexa(invest2AccountId), invest2AccountState);
+        console.error('invest2AccountState', Utils.binaryToHexa(invest2AccountId), invest2AccountState);
 
         let hours = 0;
 
@@ -258,19 +261,25 @@ describe('Abci', () => {
             hours += 24;
 
             invest1AccountState = await scriptManager.getAccountState(invest1AccountId);
-            console.log(`invest1AccountState after ${n} days`, Utils.binaryToHexa(invest1AccountId), invest1AccountState);
+            console.error(`invest1AccountState after ${n} days`, Utils.binaryToHexa(invest1AccountId), invest1AccountState);
             expect(invest1AccountState.locks[0]?.lockedAmountInAtomics || 0).toEqual(Math.max(0, 1_000_000 - Math.max(0, n - 6) * (1_000_000 / 5)));
 
             invest2AccountState = await scriptManager.getAccountState(invest2AccountId);
-            console.log(`invest2AccountState after ${n} days`, Utils.binaryToHexa(invest2AccountId), invest2AccountState);
+            console.error(`invest2AccountState after ${n} days`, Utils.binaryToHexa(invest2AccountId), invest2AccountState);
             expect(invest2AccountState.locks[0]?.lockedAmountInAtomics || 0).toEqual(Math.max(0, 2_000_000 - n * (2_000_000 / 10)));
         }
 
         // simulate misbehavior, followed by effective slashing
+        const governanceAccountId = await scriptManager.getAccountHashByAccountId('governance')
+        let governanceAccountState = await scriptManager.getAccountState(governanceAccountId);
+        console.error('governanceAccountState/initial', Utils.jsonPrettify(governanceAccountState));
+
         await scriptManager.processCometConsensus(hours, { type: 1, address: GENESIS_NODE_ADDRESS });
         hours += 30 * 24;
         await scriptManager.processCometConsensus(hours);
         hours += 24;
+        governanceAccountState = await scriptManager.getAccountState(governanceAccountId);
+        console.error('governanceAccountState/after slashing', Utils.jsonPrettify(governanceAccountState));
 
         // simulate misbehavior, followed by slashing cancellation
         await scriptManager.processCometConsensus(hours, { type: 1, address: NODE2_ADDRESS });
@@ -279,7 +288,6 @@ describe('Abci', () => {
         await (async () => {
             const node2Id = (await scriptManager.getValidatorNodeIdByAddress(NODE2_ADDRESS)).validatorNodeHash;
             const node2VbState = await scriptManager.getVirtualBlockchainState(node2Id);
-            const governanceAccountId = await scriptManager.getAccountHashByAccountId('governance')
             const governanceAccount = scriptManager.getAccountFromRunOffs('governance');
             if(governanceAccount.privateKey === undefined) throw new Error(`Cannot retrieve private key of governance account`);
             const encodedGovernanceSk = governanceAccount.privateKey;
@@ -297,6 +305,45 @@ describe('Abci', () => {
             await scriptManager.addMicroblock(mb, governanceAccountId, governanceSk, hours);
         })();
         await scriptManager.processCometConsensus(hours);
+        hours += 24;
+
+        governanceAccountState = await scriptManager.getAccountState(governanceAccountId);
+        console.error('governanceAccountState/after cancelled slashing', governanceAccountState);
+
+        // simulate unstaking
+        await (async () => {
+            const node2Id = (await scriptManager.getValidatorNodeIdByAddress(NODE2_ADDRESS)).validatorNodeHash;
+            const governanceAccount = scriptManager.getAccountFromRunOffs('governance');
+            const accountVbState = await scriptManager.getVirtualBlockchainState(governanceAccountId);
+            if(governanceAccount.privateKey === undefined) throw new Error(`Cannot retrieve private key of governance account`);
+            const encodedGovernanceSk = governanceAccount.privateKey;
+            const governanceSk = await sigEncoder.decodePrivateKey(encodedGovernanceSk);
+            const mb = new Microblock(VirtualBlockchainType.ACCOUNT_VIRTUAL_BLOCKCHAIN);
+
+            mb.addSections([
+                {
+                    type: SectionType.ACCOUNT_UNSTAKE,
+                    amount: CMTSToken.createCMTS(1_000_000).getAmountAsAtomic(),
+                    objectType: VirtualBlockchainType.NODE_VIRTUAL_BLOCKCHAIN,
+                    objectIdentifier: node2Id
+                },
+            ]);
+            mb.setPreviousHash(Hash.from(accountVbState.lastMicroblockHash));
+            mb.setHeight(accountVbState.height + 1);
+            await scriptManager.addMicroblock(mb, governanceAccountId, governanceSk, hours);
+        })();
+
+        await scriptManager.processCometConsensus(hours);
+        governanceAccountState = await scriptManager.getAccountState(governanceAccountId);
+        console.error('governanceAccountState/just after unstaking', governanceAccountState);
+        hours += 29 * 24;
+        await scriptManager.processCometConsensus(hours);
+        governanceAccountState = await scriptManager.getAccountState(governanceAccountId);
+        console.error('governanceAccountState/29 days after unstaking', governanceAccountState);
+        hours += 24;
+        await scriptManager.processCometConsensus(hours);
+        governanceAccountState = await scriptManager.getAccountState(governanceAccountId);
+        console.error('governanceAccountState/30 days after unstaking', governanceAccountState);
     }, 45000);
 });
 
@@ -318,16 +365,12 @@ class TestScriptManager {
     }
 
     async addMicroblock(mb: Microblock, payerAccountHash: Uint8Array, payerSk: PrivateSignatureKey, elapsedHours: number) {
-        const feesFormulaVersion = 1;
-//      const feesFormula = FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(feesFormulaVersion);
-//      const maxFees = await feesFormula.computeFees(payerSk.getSignatureSchemeId(), mb);
-        const maxFees = CMTSToken.createCMTS(100);
+        const dummyProvider = ProviderFactory.createInMemoryProvider();
         const timestampInSeconds = this.referenceTimestamp + elapsedHours * 3600;
 
         mb.setFeesPayerAccount(payerAccountHash);
-        mb.setMaxFees(maxFees);
         mb.setTimestamp(timestampInSeconds);
-        await mb.seal(payerSk);
+        await mb.setGasAndSeal(dummyProvider, payerSk);
 
         const response = await this.abci.CheckTx(
             {
@@ -476,8 +519,10 @@ class TestScriptManager {
         const abciResponse = AbciQueryEncoder.decodeAbciResponse(response.value);
 
         if (abciResponse.responseType == AbciResponseType.ERROR) {
-            const errorMsg = abciResponse.error;
-            throw new Error(errorMsg);
+//          const errorMsg = abciResponse.error;
+//          throw new Error(errorMsg);
+            console.error(abciResponse);
+            throw new Error("ABCI error");
         }
 
         return abciResponse;

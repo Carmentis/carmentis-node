@@ -3,7 +3,7 @@ import { access, readdir, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
 import { SnapshotDataCopyManager } from '../SnapshotDataCopyManager';
 import { DbInterface } from '../database/DbInterface';
-import {Microblock, Utils} from '@cmts-dev/carmentis-sdk/server';
+import {Microblock, Utils} from '@cmts-dev/carmentis-sdk-core';
 import { FileIdentifier } from '../types/FileIdentifier';
 import { getLogger } from '@logtape/logtape';
 import { IStorage } from './IStorage';

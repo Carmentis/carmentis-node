@@ -1,6 +1,6 @@
 import { LevelDb } from './LevelDb';
 import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
-import { Utils } from '@cmts-dev/carmentis-sdk/server';
+import { Utils } from '@cmts-dev/carmentis-sdk-core';
 import { getLogger } from '@logtape/logtape';
 import { AbstractLevelDb } from './AbstractLevelDb';
 import { LevelDbTable } from './LevelDbTable';

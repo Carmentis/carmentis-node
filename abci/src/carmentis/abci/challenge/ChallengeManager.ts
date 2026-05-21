@@ -1,4 +1,4 @@
-import { Utils } from '@cmts-dev/carmentis-sdk/server';
+import { Utils } from '@cmts-dev/carmentis-sdk-core';
 import { LevelDb } from '../database/LevelDb';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeFile } from './ChallengeFile';
@@ -23,6 +23,8 @@ export class ChallengeManager {
      * Processes a storage challenge for a given seed.
      */
     async processChallenge(seed: Uint8Array) {
+        this.logger.info(`Processing storage challenge`);
+
         const buffer = new Uint8Array(CHALLENGE_PARTS_PER_FILE * CHALLENGE_BYTES_PER_PART);
         let prngValue = seed;
         let prngCounter = 0;
@@ -46,6 +48,7 @@ export class ChallengeManager {
         const filesCount = fileEntries.length;
 
         if (!filesCount) {
+            this.logger.info(`No files yet: aborting challenge`);
             return hash;
         }
 
@@ -79,6 +82,8 @@ export class ChallengeManager {
             const newHash = NodeCrypto.Hashes.sha256AsBinary(buffer);
             hash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
         }
+
+        this.logger.info(`End of challenge - hash = ${Utils.binaryToHexa(hash)}`);
 
         return hash;
 

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { EncoderFactory } from '@cmts-dev/carmentis-sdk/server';
+import { EncoderFactory } from '@cmts-dev/carmentis-sdk-core';
 import { NodeConfigService } from '../config/services/NodeConfigService';
 import { StoredGenesisSnapshot, StoredGenesisSnapshotSchema } from './types/valibot/StoredGenesisSnapshot';
 import * as v from 'valibot';

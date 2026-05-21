@@ -9,7 +9,7 @@ import {
     ECO,
     SchemaSerializer,
     Utils,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { AccountStateManager } from './AccountStateManager';
 import { getLogger } from '@logtape/logtape';
 import { DbInterface } from '../database/DbInterface';
@@ -92,6 +92,8 @@ export class AccountHistoryHandler {
         amount: number,
         chainReference: unknown,
         timestamp: number,
+        publicReference: string,
+        privateReference: string,
     ): Promise<Uint8Array> {
         const serializer = new SchemaSerializer(
             NODE_SCHEMAS.ACCOUNT_REF_SCHEMAS[ECO.BK_REFERENCES[type]],
@@ -102,6 +104,8 @@ export class AccountHistoryHandler {
             height: state.height,
             previousHistoryHash: state.lastHistoryHash,
             type: type,
+            publicReference,
+            privateReference,
             timestamp: timestamp,
             linkedAccount: linkedAccountHash || Utils.getNullHash(),
             amount: amount,

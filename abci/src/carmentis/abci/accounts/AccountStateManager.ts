@@ -1,3 +1,4 @@
+import { ModifiedAccounts } from "./ModifiedAccounts";
 import { DbInterface } from '../database/DbInterface';
 import { RadixTree } from '../RadixTree';
 import { NodeCrypto } from '../crypto/NodeCrypto';
@@ -9,7 +10,7 @@ import {
     ECO,
     Economics,
     Utils,
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { getLogger } from '@logtape/logtape';
 
 const UNDEFINED_ACCOUNT_HASH = 'Cannot load information account: received undefined hash';
@@ -19,6 +20,7 @@ export class AccountStateManager {
     constructor(
         private readonly db: DbInterface,
         private readonly accountRadix: RadixTree,
+        private readonly modifiedAccounts: ModifiedAccounts,
     ) {}
 
     /**
@@ -33,11 +35,11 @@ export class AccountStateManager {
         //const record = this.db.serialize(LevelDbTable.ACCOUNT_STATE, accountState);
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(record);
 
+        this.modifiedAccounts.store(accountHash);
         await this.accountRadix.set(accountHash, stateHash);
         this.logger.debug(`Storing account state for account ${Utils.binaryToHexa(accountHash)}`);
         await this.db.putRaw(LevelDbTable.ACCOUNT_STATE, accountHash, record);
     }
-
 
     async loadAccountInformation(accountHash: Uint8Array): Promise<AccountInformation> {
         // defensive programming

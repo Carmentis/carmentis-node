@@ -8,7 +8,7 @@ import {
     VirtualBlockchainType,
     SectionType,
     Utils
-} from '@cmts-dev/carmentis-sdk/server';
+} from '@cmts-dev/carmentis-sdk-core';
 import { GenesisRunoff } from './GenesisRunoff';
 import {
     GenesisRunoffTokenIssuanceActionType,
