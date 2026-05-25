@@ -1,3 +1,10 @@
+## [1.2.11](https://github.com/Carmentis/carmentis-node/compare/v1.2.10...v1.2.11) (2026-05-25)
+
+
+### Bug Fixes
+
+* Dockerfile broken due to the build not producing main binary ([24d8109](https://github.com/Carmentis/carmentis-node/commit/24d8109ee71d7be9438354e0b9ae3e5b0d8b1dc2))
+
 ## [1.2.10](https://github.com/Carmentis/carmentis-node/compare/v1.2.9...v1.2.10) (2026-05-21)
 
 
