@@ -1,3 +1,10 @@
+## [1.2.12](https://github.com/Carmentis/carmentis-node/compare/v1.2.11...v1.2.12) (2026-05-27)
+
+
+### Bug Fixes
+
+* upgrade `@cmts-dev/carmentis-sdk-core` to v1.2.7 in `package.json` and `pnpm-lock.yaml` ([77b25d5](https://github.com/Carmentis/carmentis-node/commit/77b25d564533cfd0557471ac8b43cee700b1e620))
+
 ## [1.2.11](https://github.com/Carmentis/carmentis-node/compare/v1.2.10...v1.2.11) (2026-05-25)
 
 
