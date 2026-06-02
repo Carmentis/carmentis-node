@@ -521,7 +521,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     ): Promise<ResponseCheckTx> {
         const perfMeasure = this.perf.start('CheckTx');
         this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
-        this.logger.info(
+        this.logger.debug(
             `Size of transaction: ${request.tx.length} bytes / request type: ${request.type} (${typeof request.type})`,
         );
 
@@ -591,7 +591,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             );
             if (checkResult.checked) {
                 const vb = checkResult.vb;
-                this.logger.info(`Type: ${CHAIN.VB_NAME[vb.getType()]}`);
+                this.logger.debug(`Type: ${CHAIN.VB_NAME[vb.getType()]}`);
                 for (const section of parsedMicroblock.getAllSections()) {
                     const serializedSection = BlockchainUtils.encodeSection(section);
                     const sectionLabel = SectionLabel.getSectionLabelFromSection(section);
