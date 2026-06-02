@@ -1,3 +1,22 @@
+## [1.3.1](https://github.com/Carmentis/carmentis-node/compare/v1.3.0...v1.3.1) (2026-06-02)
+
+
+### Bug Fixes
+
+* addition of fallback at 50 for max microblocks per block ([f2125fe](https://github.com/Carmentis/carmentis-node/commit/f2125fe53583dbad90da9f17226729461cb6fca6))
+
+# [1.3.0](https://github.com/Carmentis/carmentis-node/compare/v1.2.13...v1.3.0) (2026-06-02)
+
+
+### Bug Fixes
+
+* missing dependancies in the build ([c4faddf](https://github.com/Carmentis/carmentis-node/commit/c4faddfbf38e1699c76028280a35a5a2c5c5b502))
+
+
+### Features
+
+* addition of max microblocks per block config ([f35289e](https://github.com/Carmentis/carmentis-node/commit/f35289ec1584e72eec981034bc1676b233c3f8ca))
+
 ## [1.2.13](https://github.com/Carmentis/carmentis-node/compare/v1.2.12...v1.2.13) (2026-05-27)
 
 
