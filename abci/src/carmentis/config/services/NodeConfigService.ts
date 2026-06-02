@@ -121,7 +121,7 @@ export class NodeConfigService implements OnModuleInit {
      * Returns the maximum number of microblocks allowed per block.
      * If not specified, returns undefined.
      */
-    getMaxMicroblocksPerBlock(): number | undefined {
+    getMaxMicroblocksPerBlock(): number {
         return this.abciConfig.max_microblocks_per_block;
     }
 
