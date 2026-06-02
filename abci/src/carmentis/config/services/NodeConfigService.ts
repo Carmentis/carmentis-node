@@ -118,6 +118,14 @@ export class NodeConfigService implements OnModuleInit {
     }
 
     /**
+     * Returns the maximum number of microblocks allowed per block.
+     * If not specified, returns undefined.
+     */
+    getMaxMicroblocksPerBlock(): number | undefined {
+        return this.abciConfig.max_microblocks_per_block;
+    }
+
+    /**
      * Retrieves various storage paths configured for the application.
      *
      * @return {Object} An object containing the following paths:

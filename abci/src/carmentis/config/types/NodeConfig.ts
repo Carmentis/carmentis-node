@@ -90,6 +90,7 @@ export const ConfigSchema = v.object({
             }),
         ),
         min_microblock_gas_price_in_atomics: v.fallback(v.number(), 0),
+        max_microblocks_per_block: v.optional(v.number()),
     }),
     paths: v.object({
         cometbft_home: v.string(),
