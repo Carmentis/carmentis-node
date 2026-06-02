@@ -55,7 +55,7 @@ import {
     AbciResponse,
     AbciResponseType,
     BlockchainUtils,
-    CHAIN,
+    CHAIN, CMTSToken,
     ECO,
     EncoderFactory,
     GenesisSnapshotAbciResponse,
@@ -166,6 +166,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         } else {
             this.logger.info('No genesis runoff file specified, using no runoff');
         }
+
+        // display the node configuration
+        const maxMicroblocksPerBlock = this.nodeConfig.getMaxMicroblocksPerBlock();
+        const minMicroblockGasPriceInAtomics = this.nodeConfig.getMinMicroblockGasPriceInAtomics();
+        this.logger.info(`Max microblocks per block: ${maxMicroblocksPerBlock}`)
+        this.logger.info(`Min microblock gas price in atomics: ${minMicroblockGasPriceInAtomics}`)
 
         this.logger.info(`ABCI storage at ${abciStoragePath}`);
 
@@ -743,8 +749,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         const protocolVariables = await workingState.getProtocolState();
         const maxBlockSize = protocolVariables.getMaximumBlockSizeInBytes();
+        const maxMicroblocksPerBlock = this.nodeConfig.getMaxMicroblocksPerBlock() ?? -1;
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
-        let currentBlockSize = 0;
+
+        let currentBlockSizeInBytes = 0;
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
         for (const entry of sortedMicroblocks) {
@@ -752,9 +760,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const parsedMicroblock = entry.mb;
             const tx = entry.tx;
 
+            // we break the proposal creation early if the maximum number of microblocks per block is reached.
+            if (maxMicroblocksPerBlock <= proposedTxs.length) {
+                this.logger.info(
+                    `Block size in microblocks limit reached. Stopping proposal creation with ${proposedTxs.length} transactions.`,
+                );
+                break;
+            }
+
             // we break the proposal creation early if this transaction would make the block exceeding
             // the max block size.
-            if ( currentBlockSize + tx.length > maxBlockSize ) {
+            if ( currentBlockSizeInBytes + tx.length > maxBlockSize ) {
                 this.logger.info(`Block size limit reached. Stopping proposal creation with ${proposedTxs.length} transactions.`);
                 break;
             }
@@ -782,7 +798,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
                     // the transaction is valid and respects the block, accept it in the block
                     proposedTxs.push(tx);
-                    currentBlockSize += tx.length;
+                    currentBlockSizeInBytes += tx.length;
                 } else {
                     // we rejected, the microblock goes back to the mempool
                     this.logger.info(
