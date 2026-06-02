@@ -1,34 +1,12 @@
-# Étape 1 : build de l'application NestJS
-FROM node:20-alpine AS builder
+FROM node:22-slim AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 
-# Création du dossier de travail
+RUN corepack enable
+COPY . /app
 WORKDIR /app
 
-# Copie des fichiers nécessaires
-COPY package*.json ./
-
-# Installation des dépendances
-RUN npm install --force
-
-# Copie du reste des fichiers de l'application
-COPY . .
-
-# Build de l'application
-RUN npm run build
-
-# Étape 2 : image finale pour l'exécution
-FROM node:20-alpine AS runner
-
-# Répertoire de travail
-WORKDIR /app
-
-# Copie uniquement les fichiers nécessaires à l'exécution
-COPY package*.json ./
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-
-# Port exposé (ajuste si nécessaire)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --dangerously-allow-all-builds
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm run build
 EXPOSE 3000
-
-# Commande de lancement
-CMD ["node", "dist/src/main.js"]
+CMD [ "pnpm", "start" ]

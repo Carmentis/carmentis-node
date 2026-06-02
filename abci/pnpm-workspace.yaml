@@ -1,0 +1,7 @@
+minimumReleaseAge: 0
+onlyBuiltDependencies:
+  - "@nestjs/core"
+  - cbor-extract
+  - classic-level
+  - protobufjs
+  - unrs-resolver

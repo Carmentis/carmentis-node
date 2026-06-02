@@ -3,6 +3,10 @@
 /cometbft/
 .cometbft*
 .carmentis
+node_modules
+**/node_modules
+**/local-*gov*
+output
 .idea
 abci/package-lock.json
 *.bat

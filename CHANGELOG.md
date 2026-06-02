@@ -1,3 +1,69 @@
+## [1.2.13](https://github.com/Carmentis/carmentis-node/compare/v1.2.12...v1.2.13) (2026-05-27)
+
+
+### Bug Fixes
+
+* upgrade `@cmts-dev/carmentis-sdk-core` to v1.2.9 in `package.json` and `pnpm-lock.yaml` ([491e03f](https://github.com/Carmentis/carmentis-node/commit/491e03f72f6958b82e7c4088ccaed66f6cfdc652))
+
+## [1.2.12](https://github.com/Carmentis/carmentis-node/compare/v1.2.11...v1.2.12) (2026-05-27)
+
+
+### Bug Fixes
+
+* upgrade `@cmts-dev/carmentis-sdk-core` to v1.2.7 in `package.json` and `pnpm-lock.yaml` ([77b25d5](https://github.com/Carmentis/carmentis-node/commit/77b25d564533cfd0557471ac8b43cee700b1e620))
+
+## [1.2.11](https://github.com/Carmentis/carmentis-node/compare/v1.2.10...v1.2.11) (2026-05-25)
+
+
+### Bug Fixes
+
+* Dockerfile broken due to the build not producing main binary ([24d8109](https://github.com/Carmentis/carmentis-node/commit/24d8109ee71d7be9438354e0b9ae3e5b0d8b1dc2))
+
+## [1.2.10](https://github.com/Carmentis/carmentis-node/compare/v1.2.9...v1.2.10) (2026-05-21)
+
+
+### Bug Fixes
+
+* docker build due to min publication age and approve-builds for pnpm ([aa2de5b](https://github.com/Carmentis/carmentis-node/commit/aa2de5b4692afcce3d0675668442f30ef8269786))
+
+## [1.2.9](https://github.com/Carmentis/carmentis-node/compare/v1.2.8...v1.2.9) (2026-05-21)
+
+
+### Bug Fixes
+
+* Dockerfile ([8995e69](https://github.com/Carmentis/carmentis-node/commit/8995e6987933d270d2c3778b15e2c73d628eca29))
+
+## [1.2.8](https://github.com/Carmentis/carmentis-node/compare/v1.2.7...v1.2.8) (2026-05-21)
+
+
+### Bug Fixes
+
+* dummy ([7e3eb8f](https://github.com/Carmentis/carmentis-node/commit/7e3eb8fc84cf30fff079a83d8015fee8a4b0413a))
+
+## [1.2.7](https://github.com/Carmentis/carmentis-node/compare/v1.2.6...v1.2.7) (2026-03-04)
+
+
+### Bug Fixes
+
+* add write permission check for fees payer account in `GlobalStateUpdater` ([13529f1](https://github.com/Carmentis/carmentis-node/commit/13529f1ed5e10b3680c53b8d42fc8d30d3f97151))
+* upgrade `@cmts-dev/carmentis-sdk` to v1.20 in `package.json` ([8e6d069](https://github.com/Carmentis/carmentis-node/commit/8e6d069b3bc59826cb0aea6afbcb20d66ec95b04))
+* upgrade `@cmts-dev/carmentis-sdk` to v1.20.1 in `package.json` and `package-lock.json` ([a8665d1](https://github.com/Carmentis/carmentis-node/commit/a8665d1ffd5d1dfbe939b40032b88f1c919563ef))
+
+## [1.2.6](https://github.com/Carmentis/carmentis-node/compare/v1.2.5...v1.2.6) (2026-03-02)
+
+
+### Bug Fixes
+
+* add write permission check for fees payer account in `GlobalStateUpdater` ([76c5aa7](https://github.com/Carmentis/carmentis-node/commit/76c5aa7634f9823f4e86d81c6ab2640aacf84e7d))
+
+## [1.2.5](https://github.com/Carmentis/carmentis-node/compare/v1.2.4...v1.2.5) (2026-02-26)
+
+
+### Bug Fixes
+
+* add write permission check for fees payer account in `GlobalStateUpdater` ([2066022](https://github.com/Carmentis/carmentis-node/commit/2066022ed8b32c78decec4176be51da6025a9b6b))
+* upgrade `@cmts-dev/carmentis-sdk` to v1.20.1 in `package.json` and `package-lock.json` ([0e922df](https://github.com/Carmentis/carmentis-node/commit/0e922dfa2000a9055b491d98bceb366e7b756267))
+
 ## [1.2.4](https://github.com/Carmentis/carmentis-node/compare/v1.2.3...v1.2.4) (2026-02-26)
 
 
