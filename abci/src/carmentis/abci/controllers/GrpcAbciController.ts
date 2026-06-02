@@ -36,10 +36,11 @@ import {
     RequestQuery,
     ResponseQuery,
 } from '../../../proto/tendermint/abci/types';
+import { getLogger } from '@logtape/logtape';
 
 @Controller()
 export class GrpcAbciController {
-    private logger = new Logger('AbciController');
+    private logger = getLogger(['node', 'abci']);
 
     constructor(private readonly abciService: AbciService) {}
 

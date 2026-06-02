@@ -23,7 +23,7 @@ export class ChallengeManager {
      * Processes a storage challenge for a given seed.
      */
     async processChallenge(seed: Uint8Array) {
-        this.logger.info(`Processing storage challenge`);
+        this.logger.debug(`Processing storage challenge`);
 
         const buffer = new Uint8Array(CHALLENGE_PARTS_PER_FILE * CHALLENGE_BYTES_PER_PART);
         let prngValue = seed;
@@ -83,7 +83,7 @@ export class ChallengeManager {
             hash = NodeCrypto.Hashes.sha256AsBinary(Utils.binaryFrom(hash, newHash));
         }
 
-        this.logger.info(`End of challenge - hash = ${Utils.binaryToHexa(hash)}`);
+        this.logger.debug(`End of challenge - hash = ${Utils.binaryToHexa(hash)}`);
 
         return hash;
 

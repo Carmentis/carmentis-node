@@ -200,7 +200,7 @@ export class GlobalState extends AbstractProvider {
         const chainStatus = await this.db.getChainInformation();
         const currentHeight = chainStatus.height;
         let lastRadixHash: Uint8Array;
-        this.logger.info(`computing application hash`);
+        this.logger.debug(`computing application hash`);
         if (currentHeight > 0) {
             const lastBlock = await this.db.getBlockInformation(currentHeight);
             if (lastBlock === undefined) throw new Error(`unable to fetch last block information (height ${currentHeight})`);

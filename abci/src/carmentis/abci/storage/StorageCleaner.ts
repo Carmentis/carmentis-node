@@ -28,12 +28,12 @@ export class StorageCleaner {
         this.logger.debug(`dayTimestamp = ${dayTimestamp}, earliestSnapshotFileTimestamp = ${earliestSnapshotFileTimestamp}`);
         const minimumTimestamp = Math.min(dayTimestamp, earliestSnapshotFileTimestamp);
         const minimumDate = new Date(minimumTimestamp * 1000).toISOString();
-        this.logger.info(`looking for data files to delete with expiration before ${minimumDate}`);
+        this.logger.debug(`looking for data files to delete with expiration before ${minimumDate}`);
         const fileList = await this.storage.getFilesWithExpirationDayBefore(minimumTimestamp);
-        this.logger.info(`found ${fileList.length} data file(s) to delete`);
+        this.logger.debug(`found ${fileList.length} data file(s) to delete`);
 
         for (const file of fileList) {
-            this.logger.info(`deleting data file ${file}`);
+            this.logger.info(`Deleting ${file} expired data file`);
             await rm(file);
         }
     }
