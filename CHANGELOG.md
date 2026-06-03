@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/Carmentis/carmentis-node/compare/v1.4.0...v1.5.0) (2026-06-03)
+
+
+### Features
+
+* improve token transfer log with payer balance details ([f6bcf67](https://github.com/Carmentis/carmentis-node/commit/f6bcf67e989520a0ac82df73ae0296df94621542))
+
 # [1.4.0](https://github.com/Carmentis/carmentis-node/compare/v1.3.1...v1.4.0) (2026-06-02)
 
 
