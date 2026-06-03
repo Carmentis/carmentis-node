@@ -158,8 +158,25 @@ export class AccountTokenTransferHandler {
             );
         }
 
+        // compute the new formatted payer account balance to log
+        let formattedPayerAccountBalance = '';
+        if (transfer.payerAccount !== null) {
+            const updatedPayerInfo = await this.accountStateManager.loadAccountInformation(transfer.payerAccount);
+            payerBalance = updatedPayerInfo.state.balance;
+            const balanceAvailability = new BalanceAvailability(
+                payerBalance,
+                updatedPayerInfo.state.locks,
+            );
+            const spendableTokens = balanceAvailability.getBreakdown().spendable;
+            formattedPayerAccountBalance = `(Spendable now: ${spendableTokens / ECO.TOKEN} ${ECO.TOKEN_NAME})`;
+        }
+
+        // compute the log of the transferred amount
+        const formattedTransferred = `${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME}`;
+
+        // display the log
         this.logger.info(
-            `${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
+            `${formattedTransferred} transferred from ${shortPayerAccountString} ${formattedPayerAccountBalance} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
         );
     }
 

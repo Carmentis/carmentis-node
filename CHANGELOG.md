@@ -1,3 +1,25 @@
+# [1.5.0](https://github.com/Carmentis/carmentis-node/compare/v1.4.0...v1.5.0) (2026-06-03)
+
+
+### Features
+
+* improve token transfer log with payer balance details ([f6bcf67](https://github.com/Carmentis/carmentis-node/commit/f6bcf67e989520a0ac82df73ae0296df94621542))
+
+# [1.4.0](https://github.com/Carmentis/carmentis-node/compare/v1.3.1...v1.4.0) (2026-06-02)
+
+
+### Bug Fixes
+
+* addition of fallback at 50 for max microblocks per block ([728f436](https://github.com/Carmentis/carmentis-node/commit/728f436cfdb98d11fbb8b8e90f4f39ac4c4d8ede))
+* missing dependancies in the build ([99f395b](https://github.com/Carmentis/carmentis-node/commit/99f395bc3ef6a131da06a03a52d9e1ffc55a0b41))
+* upgrade @cmts-dev/carmentis-sdk-core to 1.2.12 ([b265508](https://github.com/Carmentis/carmentis-node/commit/b26550866bea232391e1be6ea5701ada445a3ace))
+* upgrade @cmts-dev/carmentis-sdk-core to 1.2.12 ([9093e66](https://github.com/Carmentis/carmentis-node/commit/9093e665f33046a52b91a9ecefd8c4d8c0d3c1c7))
+
+
+### Features
+
+* addition of max microblocks per block config ([16f765c](https://github.com/Carmentis/carmentis-node/commit/16f765ce35f1afbd9125b275c533c8cea52dd925))
+
 ## [1.3.1](https://github.com/Carmentis/carmentis-node/compare/v1.3.0...v1.3.1) (2026-06-02)
 
 
