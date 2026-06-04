@@ -45,7 +45,7 @@ export class AccountTokenTransferHandler {
         privateReference = "",
     ): Promise<void> {
         this.logger.debug(
-            `Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amount} at ${timestamp}`,
+            `Adding token transfer (type ${transfer.type}: Amount (in atomics): ${transfer.amountAsAtomics} at ${timestamp}`,
         );
         this.logger.debug(
             `Transfer from: ${transfer.payerAccount instanceof Uint8Array ? Utils.binaryToHexa(transfer.payerAccount) : 'Unknown'}`,
@@ -84,12 +84,16 @@ export class AccountTokenTransferHandler {
                 payerBalance,
                 payerInfo.state.locks,
             );
-            const spendableTokens = balanceAvailability.getBreakdown().spendable;
 
-            if (spendableTokens < transfer.amount) {
+            const spendableTokens = balanceAvailability.getBreakdown().spendable;
+            const totalAmountToBeSpent = transfer.amountAsAtomics + transfer.feesAsAtomics;
+
+            if (spendableTokens < totalAmountToBeSpent) {
                 throw new Error(
                     ErrorMessages.INSUFFICIENT_FUNDS(
-                        transfer.amount / ECO.TOKEN,
+                        transfer.amountAsAtomics / ECO.TOKEN,
+                        transfer.feesAsAtomics / ECO.TOKEN,
+                        totalAmountToBeSpent / ECO.TOKEN,
                         ECO.TOKEN_NAME,
                         shortPayerAccountString,
                         shortPayeeAccountString,
@@ -133,7 +137,7 @@ export class AccountTokenTransferHandler {
                 transfer.type,
                 transfer.payerAccount,
                 transfer.payeeAccount,
-                transfer.amount,
+                transfer.amountAsAtomics,
                 chainReference,
                 timestamp,
                 transfer.vestingParameters || null,
@@ -148,7 +152,7 @@ export class AccountTokenTransferHandler {
                 transfer.type ^ 1,
                 transfer.payeeAccount,
                 transfer.payerAccount,
-                transfer.amount,
+                transfer.amountAsAtomics,
                 chainReference,
                 timestamp,
                 transfer.vestingParameters || null,
@@ -158,25 +162,8 @@ export class AccountTokenTransferHandler {
             );
         }
 
-        // compute the new formatted payer account balance to log
-        let formattedPayerAccountBalance = '';
-        if (transfer.payerAccount !== null) {
-            const updatedPayerInfo = await this.accountStateManager.loadAccountInformation(transfer.payerAccount);
-            payerBalance = updatedPayerInfo.state.balance;
-            const balanceAvailability = new BalanceAvailability(
-                payerBalance,
-                updatedPayerInfo.state.locks,
-            );
-            const spendableTokens = balanceAvailability.getBreakdown().spendable;
-            formattedPayerAccountBalance = `(Spendable now: ${spendableTokens / ECO.TOKEN} ${ECO.TOKEN_NAME})`;
-        }
-
-        // compute the log of the transferred amount
-        const formattedTransferred = `${transfer.amount / ECO.TOKEN} ${ECO.TOKEN_NAME}`;
-
-        // display the log
         this.logger.info(
-            `${formattedTransferred} transferred from ${shortPayerAccountString} ${formattedPayerAccountBalance} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
+            `${transfer.amountAsAtomics / ECO.TOKEN} ${ECO.TOKEN_NAME} transferred from ${shortPayerAccountString} to ${shortPayeeAccountString} (${ECO.BK_NAMES[transfer.type]})`,
         );
     }
 

@@ -236,6 +236,12 @@ export class GlobalState extends AbstractProvider {
         return true;
     }
 
+    clearCaches() {
+        this.cachedDb.resetCache();
+        this.cachedStorage.clear();
+        this.getAccountManager().clearModifiedAccounts();
+    }
+
     async commit() {
         await this.cachedDb.commit();
         await this.cachedStorage.flush();

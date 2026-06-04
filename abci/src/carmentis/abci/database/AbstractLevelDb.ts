@@ -321,4 +321,19 @@ export abstract class AbstractLevelDb implements DbInterface {
         return NodeEncoder.decodeAccountHistoryEntry(serializedAccountHistoryEntry);
         //return result as AccountHistoryEntry;
     }
+
+    async getMerkleNode(key: Uint8Array): Promise<Uint8Array | undefined> {
+        return await this.getRaw(
+            LevelDbTable.MERKLE_NODE,
+            key,
+        );
+    }
+
+    async putMerkleNode(key: Uint8Array, nodeHash: Uint8Array): Promise<boolean> {
+        return await this.putRaw(
+            LevelDbTable.MERKLE_NODE,
+            key,
+            nodeHash,
+        );
+    }
 }

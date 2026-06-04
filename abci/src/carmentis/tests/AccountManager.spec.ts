@@ -14,6 +14,7 @@ import {
     Utils,
 } from '@cmts-dev/carmentis-sdk-core';
 import { randomBytes } from 'node:crypto';
+import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 export async function createTempLevel() {
     const rand = Math.random().toString(36);
@@ -99,7 +100,7 @@ describe('AccountManager', () => {
             const randomBalance = CMTSToken.createCMTS(
                 Number.parseInt((Math.random() * 100).toString())
             )
-            await accountManager.transferToken(issuerAccountId, accountId, randomBalance.getAmountAsAtomic())
+            await accountManager.transferToken(issuerAccountId, accountId, randomBalance.getAmountAsAtomic(), 0)
             balanceForAccounts.set(accountId, randomBalance);
 
             // each account should have the specified balance

@@ -1,4 +1,5 @@
 import { LevelDbTable } from './LevelDbTable';
+import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 describe('', () => {
     it("test", () => {

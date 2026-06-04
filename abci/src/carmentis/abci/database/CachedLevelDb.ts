@@ -18,15 +18,17 @@ export class CachedLevelDb extends AbstractLevelDb {
         this.cachedUpdatedByTableId = new Map();
         this.cachedDeletedEntriesByTableId = new Map();
 
-        // init the structure of the cache
-        this.resetCache()
+        for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
+            this.cachedUpdatedByTableId.set(tableId, new Map());
+            this.cachedDeletedEntriesByTableId.set(tableId, new Set());
+        }
     }
 
     resetCache() {
         this.logger.debug(`Clearing cache tables`);
         for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
-            this.cachedUpdatedByTableId.set(tableId, new Map());
-            this.cachedDeletedEntriesByTableId.set(tableId, new Set());
+            this.cachedUpdatedByTableId.get(tableId)?.clear();
+            this.cachedDeletedEntriesByTableId.get(tableId)?.clear();
         }
     }
 

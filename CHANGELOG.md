@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/Carmentis/carmentis-node/compare/v1.5.0...v1.5.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* fixed check of transfer+fees, added PersistentMerkleTree ([6d5e0b2](https://github.com/Carmentis/carmentis-node/commit/6d5e0b280869a3c181da70d9bbd6510833d10b65))
+
 # [1.5.0](https://github.com/Carmentis/carmentis-node/compare/v1.4.0...v1.5.0) (2026-06-03)
 
 

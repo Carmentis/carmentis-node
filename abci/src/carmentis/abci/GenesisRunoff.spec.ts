@@ -1,6 +1,7 @@
 import { GenesisRunoff } from './GenesisRunoff';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
+import {describe, it, expect, afterEach} from 'vitest'
 
 describe('GenesisRunoff', () => {
     const testFilePath = join(__dirname, 'test-genesis-runoff.json');

@@ -38,7 +38,8 @@ export interface Transfer {
     type: number;
     payerAccount: Uint8Array | null;
     payeeAccount: Uint8Array | null;
-    amount: number;
+    amountAsAtomics: number;
+    feesAsAtomics: number;
     vestingParameters?: VestingParameters;
     escrowParameters?: EscrowParameters;
 }
@@ -95,16 +96,21 @@ export class AccountManager {
         return this.modifiedAccounts.get();
     }
 
+    /**
+     * @deprecated
+     */
     async transferToken(
         fromAccountId: Uint8Array,
         toAccountId: Uint8Array,
         amountInAtomics: number,
+        feesAsAtomics: number,
     ) {
         const tokenTransfer: Transfer = {
             type: ECO.BK_SALE,
             payerAccount: fromAccountId,
             payeeAccount: toAccountId,
-            amount: amountInAtomics,
+            amountAsAtomics: amountInAtomics,
+            feesAsAtomics,
         };
         const chainReference = {
             mbHash: Utils.getNullHash(),
