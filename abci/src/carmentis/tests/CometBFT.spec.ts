@@ -6,6 +6,7 @@ import {
     Secp256k1PrivateSignatureKey,
     SectionType,
 } from '@cmts-dev/carmentis-sdk-core';
+import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 describe('CometBFT', () => {
     it('Should create an account for a randomly chosen key, signed with key having tokens', async () => {
@@ -33,25 +34,13 @@ describe('CometBFT', () => {
             },
         ]);
 
-        // compute the fees
-        const protocolVariables = await provider.getProtocolState();
-        const feesCalculationVersion = protocolVariables.getFeesCalculationVersion();
-        const feesFormula =
-            FeesCalculationFormulaFactory.getFeesCalculationFormulaByVersion(
-                provider,
-                feesCalculationVersion,
-            );
-        const fees = await feesFormula.computeFees(
-            privateKeyHavingTokens.getSignatureSchemeId(),
-            accountCreationMb,
-            0,
-            Math.floor(Date.now() / 1000),
+        await accountCreationMb.setGasAndSeal(
+            provider,
+            privateKeyHavingTokens,
+            {
+                feesPayerAccount: accountIdHavingTokens,
+            }
         );
-        console.log(`Fees: ${fees.toString()}`)
-        accountCreationMb.setMaxFees(fees);
-        await accountCreationMb.seal(privateKeyHavingTokens, {
-            feesPayerAccount: accountIdHavingTokens,
-        });
         await provider.publishMicroblock(accountCreationMb);
     });
 });

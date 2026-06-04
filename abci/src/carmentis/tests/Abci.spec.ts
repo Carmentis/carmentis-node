@@ -45,6 +45,7 @@ import {
     NetworkProvider, ProviderFactory,
 } from '@cmts-dev/carmentis-sdk-core';
 import { CheckTxType } from '../../proto/tendermint/abci/types';
+import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 interface RunOffsAccountInterface {
     id: string,
@@ -73,6 +74,7 @@ describe('Abci', () => {
                 port: 443,
             },
             min_microblock_gas_price_in_atomics: 1,
+            max_microblocks_per_block: 50,
         },
         cometbft: {
             exposed_rpc_endpoint: '',

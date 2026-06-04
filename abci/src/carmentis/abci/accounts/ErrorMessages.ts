@@ -7,12 +7,14 @@ export const ErrorMessages = {
         `account of type '${accountType}' not allowed for transfer of type '${transferType}'`,
     INSUFFICIENT_FUNDS: (
         amount: number,
+        fees: number,
+        total: number,
         tokenName: string,
         from: string,
         to: string,
         balance: number,
     ) =>
-        `insufficient funds to transfer ${amount} ${tokenName} from ${from} to ${to}: the current payer balance is ${balance} ${tokenName}`,
+        `insufficient funds to transfer ${amount} ${tokenName} from ${from} to ${to}: fees are ${fees} ${tokenName}, total amount is ${total} ${tokenName}, the current payer balance is ${balance} ${tokenName}`,
     ACCOUNT_ALREADY_EXISTS: 'account already exists',
     INVALID_PAYEE: 'invalid payee',
     HISTORY_ENTRY_NOT_FOUND: 'Internal error: account history entry not found',

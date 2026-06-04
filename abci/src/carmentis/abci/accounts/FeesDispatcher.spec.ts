@@ -1,4 +1,5 @@
 import { FeesDispatcher } from './FeesDispatcher';
+import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 describe("fees dispatch", () => {
 

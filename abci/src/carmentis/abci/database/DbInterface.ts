@@ -84,4 +84,7 @@ export interface DbInterface {
     // chain information
     getChainInformation(): Promise<ChainInformation>;
     putChainInformation(chainInfo: ChainInformation): Promise<boolean>;
+
+    getMerkleNode(key: Uint8Array): Promise<Uint8Array | undefined>;
+    putMerkleNode(key: Uint8Array, nodeHash: Uint8Array): Promise<boolean>;
 }

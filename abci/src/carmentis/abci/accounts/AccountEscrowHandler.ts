@@ -50,7 +50,7 @@ export class AccountEscrowHandler {
             payeeAccountState.balance,
             payeeAccountState.locks,
         );
-        const amount = balanceAvailability.removeEscrowLock(escrowIdentifier);
+        const amountAsAtomics = balanceAvailability.removeEscrowLock(escrowIdentifier);
         payeeAccountState.locks = balanceAvailability.getLocks();
         await this.accountStateManager.saveAccountState(escrow.payeeAccount, payeeAccountState);
 
@@ -60,7 +60,8 @@ export class AccountEscrowHandler {
                 type: ECO.BK_SENT_ESCROW_REFUND,
                 payerAccount: escrow.payeeAccount,
                 payeeAccount: escrow.payerAccount,
-                amount,
+                amountAsAtomics,
+                feesAsAtomics: 0,
             };
 
             await this.accountTokenTransferHandler.tokenTransfer(
@@ -91,12 +92,13 @@ export class AccountEscrowHandler {
             if (isEscrowLockExpired) {
                 // the escrow has expired: the funds are sent back from payee to payer
                 this.logger.info(`Escrow has expired: funds are sent back to payer`);
-                const amount = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
+                const amountAsAtomics = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
                 const tokenTransfer: Transfer = {
                     type: ECO.BK_SENT_EXPIRED_ESCROW,
                     payerAccount: payeeAccountHash,
                     payeeAccount: payerAccountHash,
-                    amount,
+                    amountAsAtomics,
+                    feesAsAtomics: 0,
                 };
                 const chainReference = {
                     height: blockHeight

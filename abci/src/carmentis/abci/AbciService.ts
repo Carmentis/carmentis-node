@@ -854,7 +854,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         for (const tx of request.txs) {
             try {
-                // we attempt to parse the received microblock and check its consistency with
+                // we attempt to parse the received microblock and check its consistency
                 // with the local state of the virtual blockchain where it is attached
                 const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
                 const localStateConsistentWithMicroblock =
@@ -913,7 +913,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         const workingState = this.getGlobalState();
-        workingState.getAccountManager().clearModifiedAccounts();
+        workingState.clearCaches();
         const txResults: ExecTxResult[] = [];
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 
@@ -921,7 +921,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         for (const tx of request.txs) {
             try {
-                // we attempt to parse the received microblock and check its consistency with
+                // we attempt to parse the received microblock and check its consistency
                 // with the local state of the virtual blockchain where it is attached
                 const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
                 const localStateConsistentWithMicroblock =

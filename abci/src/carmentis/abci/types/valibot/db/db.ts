@@ -108,6 +108,12 @@ export const ValidatorNodeByAddressSchema = v.object({
 });
 export type ValidatorNodeByAddress = v.InferOutput<typeof ValidatorNodeByAddressSchema>;
 
+// (0x11) MERKLE_NODE - MerkleNode
+export const MerkleNodeSchema = v.object({
+    nodeHash: uint8array(),
+});
+export type MerkleNode = v.InferOutput<typeof MerkleNodeSchema>;
+
 // Account history references
 
 // AccountBlockReference

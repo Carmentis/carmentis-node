@@ -212,7 +212,7 @@ export class GlobalStateUpdater {
             }
 
             // we handle other cases using the shared account update method
-            await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
+            await this.handleAccountUpdate(globalState, virtualBlockchain, microblock, 0);
         } else if (virtualBlockchain instanceof ValidatorNodeVb) {
             await this.handleValidatorNodeUpdate(globalState, virtualBlockchain, microblock);
         }
@@ -275,7 +275,8 @@ export class GlobalStateUpdater {
                 type: ECO.BK_SENT_ISSUANCE,
                 payerAccount: null,
                 payeeAccount: accountId,
-                amount,
+                amountAsAtomics: amount,
+                feesAsAtomics: 0,
             };
             const chainReference = {
                 mbHash: microblock.getHash().toBytes(),
@@ -371,6 +372,8 @@ export class GlobalStateUpdater {
             );
         }
 
+        const feesToPayAsAtomics = feesToPay.getAmountAsAtomic();
+
         // Case 3: The fees payer account does not have signed the microblock (possibly slower case)
         const feesPayerAccountPublicKey = await globalState.getAccountPublicKeyByAccountId(feesPayerAccountId);
         const hasFeesPayerAccountSignedMicroblock = await microblock.verify(feesPayerAccountPublicKey);
@@ -392,7 +395,7 @@ export class GlobalStateUpdater {
         }
 
         if (virtualBlockchain instanceof AccountVb) {
-            await this.handleAccountUpdate(globalState, virtualBlockchain, microblock);
+            await this.handleAccountUpdate(globalState, virtualBlockchain, microblock, feesToPayAsAtomics);
         } else if (virtualBlockchain instanceof ValidatorNodeVb) {
             await this.handleValidatorNodeUpdate(globalState, virtualBlockchain, microblock);
         } else if (virtualBlockchain instanceof ProtocolVb) {
@@ -411,7 +414,8 @@ export class GlobalStateUpdater {
                 type: ECO.BK_PAID_TX_FEES,
                 payerAccount: feesPayerAccountId,
                 payeeAccount: feesPayeeAccount,
-                amount: feesToPay.getAmountAsAtomic(),
+                amountAsAtomics: feesToPay.getAmountAsAtomic(),
+                feesAsAtomics: 0,
             },
             {
                 mbHash: microblock.getHash().toBytes(),
@@ -710,9 +714,6 @@ export class GlobalStateUpdater {
             return;
         }
 
-
-        //const feesRest = pendingFees % nValidators;
-        //const feesQuotient = (pendingFees - feesRest) / nValidators;
         const blockHeight: number = Number(request.height);
         this.logger.info(
             `${pendingFees} to be dispatched among ${nValidators} validators (height=${blockHeight})`,
@@ -741,7 +742,8 @@ export class GlobalStateUpdater {
                     type: ECO.BK_PAID_BLOCK_FEES,
                     payerAccount: feesAccountIdentifier,
                     payeeAccount: validatorAccounts[index],
-                    amount: feesToSendToThisValidator,
+                    amountAsAtomics: feesToSendToThisValidator,
+                    feesAsAtomics: 0,
                 },
                 {
                     height: blockHeight - 1,
@@ -760,6 +762,7 @@ export class GlobalStateUpdater {
         globalState: GlobalState,
         accountVb: AccountVb,
         microblock: Microblock,
+        feesAsAtomics: number,
     ): Promise<void> {
         const accountManager = globalState.getAccountManager();
 
@@ -782,7 +785,8 @@ export class GlobalStateUpdater {
                         type: ECO.BK_SALE,
                         payerAccount: sellerAccount,
                         payeeAccount: createdAccountId,
-                        amount,
+                        amountAsAtomics: amount,
+                        feesAsAtomics,
                     },
                     {
                         mbHash: microblock.getHash().toBytes(),
@@ -807,7 +811,8 @@ export class GlobalStateUpdater {
                         type: ECO.BK_SENT_PAYMENT,
                         payerAccount: accountVb.getId(),
                         payeeAccount: account,
-                        amount,
+                        amountAsAtomics: amount,
+                        feesAsAtomics,
                     },
                     {
                         mbHash: microblock.getHash().toBytes(),
@@ -864,7 +869,8 @@ export class GlobalStateUpdater {
                         type: ECO.BK_SENT_ESCROW,
                         payerAccount: accountVb.getId(),
                         payeeAccount: account,
-                        amount,
+                        amountAsAtomics: amount,
+                        feesAsAtomics,
                         escrowParameters: {
                             escrowIdentifier,
                             fundEmitterAccountId: account,
@@ -914,7 +920,8 @@ export class GlobalStateUpdater {
                         type: ECO.BK_SENT_VESTING,
                         payerAccount: accountVb.getId(),
                         payeeAccount: account,
-                        amount,
+                        amountAsAtomics: amount,
+                        feesAsAtomics,
                         vestingParameters: {
                             initialVestedAmountInAtomics: amount,
                             cliffStartTimestamp: microblock.getTimestamp(),
