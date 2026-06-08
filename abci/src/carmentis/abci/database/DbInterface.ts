@@ -1,7 +1,13 @@
 import { AbstractIterator, AbstractIteratorOptions } from 'abstract-level';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
 import { Level } from 'level';
-import { AccountState, AccountHistoryEntry } from '@cmts-dev/carmentis-sdk-core';
+import {
+    AccountState,
+    AccountHistoryEntry,
+    Microblock,
+    MicroblockInformation,
+    BlockchainUtils
+} from '@cmts-dev/carmentis-sdk-core';
 import {
     BlockContent,
     BlockInformation,
@@ -11,6 +17,7 @@ import {
     ValidatorNodeByAddress,
     MicroblockStorage,
 } from '../types/valibot/db/db';
+import {LevelDbTable} from "./LevelDbTable";
 
 export type LevelQueryIteratorOptions = AbstractIteratorOptions<Uint8Array, Uint8Array>;
 
@@ -77,9 +84,17 @@ export interface DbInterface {
     getBlockContent(blockHeight: number): Promise<BlockContent | undefined>;
     putBlockContent(height: number, blockContent: BlockContent): Promise<boolean>;
 
+    // microblock information
+    setMicroblockInformation(microblock: Microblock, info: MicroblockInformation): Promise<boolean>;
+    getMicroblockInformation(microblockHash: Uint8Array): Promise<MicroblockInformation | undefined>;
+
     // block information
     getBlockInformation(blockHeight: number): Promise<BlockInformation | undefined>;
     putBlockInformation(blockHeight: number, info: BlockInformation): Promise<boolean>;
+
+    // serialized VB state
+    getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array): Promise<Uint8Array | undefined>;
+    setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array): Promise<boolean>;
 
     // chain information
     getChainInformation(): Promise<ChainInformation>;

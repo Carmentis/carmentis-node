@@ -26,6 +26,44 @@ export class PersistentMerkleTree {
     }
 
     /**
+     * A static helper to set a leaf of a tree.
+     * @param db - The database.
+     * @param treeId - The tree identifier.
+     * @param index - The 0-based leaf index.
+     * @param hash - The hash of the leaf.
+     * @returns {Uint8Array} - The new root hash.
+     */
+    static async addTreeLeaf(db: DbInterface, treeId: Uint8Array, index: number, hash: Uint8Array): Promise<Uint8Array> {
+        const tree = new PersistentMerkleTree(db, treeId);
+        return await tree.addLeaf(index, hash);
+    }
+
+    /**
+     * A static helper to get a leaf of a tree.
+     * @param db - The database.
+     * @param treeId - The tree identifier.
+     * @param index - The 0-based leaf index.
+     * @returns {Uint8Array} - The leaf hash.
+     */
+    static async getTreeLeaf(db: DbInterface, treeId: Uint8Array, index: number): Promise<Uint8Array> {
+        const tree = new PersistentMerkleTree(db, treeId);
+        return await tree.getNode(0, index);
+    }
+
+    /**
+     * A static helper to get a proof from a tree.
+     * @param db - The database.
+     * @param treeId - The tree identifier.
+     * @param index - The 0-based leaf index.
+     * @param size - The current size of the tree.
+     * @returns {MerkleProof} - The proof.
+     */
+    static async getTreeProof(db: DbInterface, treeId: Uint8Array, index: number, size: number): Promise<MerkleProof> {
+        const tree = new PersistentMerkleTree(db, treeId);
+        return await tree.getProof(index, size);
+    }
+
+    /**
      * Verifies a Merkle proof.
      * @param proof - The proof to verify.
      * @returns {boolean} - True if the proof is valid, false otherwise.
@@ -131,7 +169,7 @@ export class PersistentMerkleTree {
      * @returns {Uint8Array} - The hash stored at that node.
      * @throws {Error} - If the node does not exist.
      */
-    private async getNode(row: number, col: number): Promise<Uint8Array> {
+    async getNode(row: number, col: number): Promise<Uint8Array> {
         const key = this.getNodeKey(row, col);
         const node = await this.db.getMerkleNode(key);
         if (node === undefined) {

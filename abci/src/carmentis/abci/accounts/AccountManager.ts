@@ -21,7 +21,7 @@ import {
 import { getLogger, Logger } from '@logtape/logtape';
 import { Performance } from '../Performance';
 import { DbInterface } from '../database/DbInterface';
-import { RadixTree } from '../RadixTree';
+import { RadixTree } from '../radixTree/RadixTree';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { AccountStateManager } from './AccountStateManager';
 import { AccountStakeHandler } from './AccountStakeHandler';

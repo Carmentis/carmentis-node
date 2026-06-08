@@ -69,16 +69,16 @@ export abstract class AbstractLevelDb implements DbInterface {
         return protocolVirtualBlockchainIdentifiers[0];
     }
 
-    async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array) {
+    async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array): Promise<Uint8Array | undefined> {
         return this.getRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
     }
 
-    async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array) {
+    async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array): Promise<boolean> {
         this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
             identifier: Utils.binaryToHexa(identifier),
             dataLength: serializedState.length,
         }));
-        await this.putRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
+        return await this.putRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
     }
 
     async getChainInformation(): Promise<ChainInformation> {
@@ -127,13 +127,13 @@ export abstract class AbstractLevelDb implements DbInterface {
         );
     }
 
-    async setMicroblockInformation(microblock: Microblock, info: MicroblockInformation) {
+    async setMicroblockInformation(microblock: Microblock, info: MicroblockInformation): Promise<boolean> {
         this.logger.debug(
             `Setting microblock information for microblock ${microblock.getHash().encode()}`,
         );
         const hash = microblock.getHashAsBytes();
         const serializedInfo = BlockchainUtils.encodeMicroblockInformation(info);
-        await this.putRaw(LevelDbTable.MICROBLOCK_VB_INFORMATION, hash, serializedInfo);
+        return await this.putRaw(LevelDbTable.MICROBLOCK_VB_INFORMATION, hash, serializedInfo);
     }
 
     async getMicroblockInformation(

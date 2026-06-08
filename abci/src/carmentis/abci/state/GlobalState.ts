@@ -3,8 +3,9 @@ import { LevelDb } from '../database/LevelDb';
 import { CachedLevelDb } from '../database/CachedLevelDb';
 import { Storage } from '../storage/Storage';
 import { CachedStorage } from '../storage/CachedStorage';
-import { RadixTree } from '../RadixTree';
+import { RadixTree } from '../radixTree/RadixTree';
 import { AccountManager } from '../accounts/AccountManager';
+import { ApplicationStateHashes } from '../types/valibot/ApplicationStateHashes';
 import {
     AbstractProvider,
     BlockchainUtils,
@@ -23,6 +24,7 @@ import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
 import { Performance } from '../Performance';
 import { LevelDbTable } from '../database/LevelDbTable';
+import { PersistentMerkleTree } from '../persistentMerkleTree/PersistentMerkleTree';
 
 export class GlobalState extends AbstractProvider {
     private readonly logger: Logger;
@@ -65,42 +67,14 @@ export class GlobalState extends AbstractProvider {
 
     async getVirtualBlockchainStatus(
         virtualBlockchainId: Uint8Array,
-    ): Promise<VirtualBlockchainStatus | null> {
-        // first search for the state
+    ): Promise<VirtualBlockchainState | null> {
         const vbState = await this.getVirtualBlockchainState(virtualBlockchainId);
         if (vbState === null) {
             this.logger.debug(`Virtual Blockchain with id ${Utils.binaryToHexa(virtualBlockchainId)} not found: returning null`);
             return null;
         }
 
-        // we now search for the microblock hashes contained in the virtual blockchain
-        const latestMicroblockHash = vbState.lastMicroblockHash;
-        const latestMicroblockHeader = await this.getMicroblockHeader(Hash.from(latestMicroblockHash));
-        if (latestMicroblockHeader === null) {
-            this.logger.warn(`Microblock ${Utils.binaryToHexa(latestMicroblockHash)} not found in database: returning null`);
-            return null;
-        }
-
-        let currentMicroblockHeader = latestMicroblockHeader;
-        const microblockHashes = [ latestMicroblockHash ]
-        for (let currentMicroblockHeight = currentMicroblockHeader.height; currentMicroblockHeight > 1; currentMicroblockHeight--) {
-            const previousMicrolockHash = currentMicroblockHeader.previousHash;
-            microblockHashes.unshift(previousMicrolockHash);
-
-            // obtain the previous microblock header
-            const previousMicroblockHeader= await this.getMicroblockHeader(Hash.from(previousMicrolockHash));
-            if (previousMicroblockHeader === null) {
-                this.logger.warn(`Microblock ${Utils.binaryToHexa(previousMicrolockHash)} not found in database during chain recovery (highly corrupted storage): returning null`);
-                return null;
-            }
-            currentMicroblockHeader = previousMicroblockHeader;
-        }
-
-        const status: VirtualBlockchainStatus = {
-            microblockHashes: microblockHashes,
-            state: vbState
-        };
-        return status;
+        return vbState;
     }
 
     async getProtocolState(): Promise<ProtocolInternalState> {
@@ -156,6 +130,23 @@ export class GlobalState extends AbstractProvider {
         return serializedMicroblock || null;
     }
 
+    async getSerializedMicroblockByHeight(virtualBlockchainId: Uint8Array, height: number): Promise<Uint8Array | null> {
+        // get the hash of the microblock from the Merkle tree
+        const microblockHash = await PersistentMerkleTree.getTreeLeaf(
+            this.cachedDb,
+            virtualBlockchainId,
+            height - 1,
+        );
+        // get the serialized content of the microblock from the cached storage
+        // we disable the sanity check to bypass the deserialization and speed up the process
+        // it is the caller's responsibility to verify the content
+        const serializedMicroblock = await this.cachedStorage.readFullMicroblock(
+            microblockHash,
+            false,
+        );
+        return serializedMicroblock || null;
+    }
+
     async getMicroblockBody(microblockHash: Hash): Promise<MicroblockBody | null> {
         const serializedBody = await this.cachedStorage.readSerializedMicroblockBody(
             microblockHash.toBytes(),
@@ -194,7 +185,7 @@ export class GlobalState extends AbstractProvider {
         return result;
     }
 
-    async getRadixHashAndApplicationHash() {
+    async getApplicationStateHashes(): Promise<ApplicationStateHashes> {
         //const perfMeasure = this.perf.start('computeApplicationHash');
 
         const chainStatus = await this.db.getChainInformation();
@@ -204,7 +195,7 @@ export class GlobalState extends AbstractProvider {
         if (currentHeight > 0) {
             const lastBlock = await this.db.getBlockInformation(currentHeight);
             if (lastBlock === undefined) throw new Error(`unable to fetch last block information (height ${currentHeight})`);
-            lastRadixHash = lastBlock.radixHash;
+            lastRadixHash = lastBlock.applicationStateHashes.radixHash;
         }
         else {
             lastRadixHash = Utils.getNullHash();
@@ -228,7 +219,13 @@ export class GlobalState extends AbstractProvider {
         this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
         this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
 
-        return { radixHash, appHash };
+        return {
+            vbRadixHash,
+            tokenRadixHash,
+            radixHash,
+            storageHash,
+            appHash,
+        };
     }
 
     hasSomethingToCommit() {
@@ -261,6 +258,19 @@ export class GlobalState extends AbstractProvider {
 
     getCachedStorage() {
         return this.cachedStorage;
+    }
+
+    async storeMicroblockHashInMerkleTree(virtualBlockchain: VirtualBlockchain, microblock: Microblock) {
+        const vbId = virtualBlockchain.getId();
+        const microblockHeight = microblock.getHeight();
+        const microblockHash = microblock.getHash().toBytes();
+        const newRootHash = await PersistentMerkleTree.addTreeLeaf(
+            this.cachedDb,
+            vbId,
+            microblockHeight - 1,
+            microblockHash,
+        )
+        virtualBlockchain.setMerkleRootHash(newRootHash);
     }
 
     /**

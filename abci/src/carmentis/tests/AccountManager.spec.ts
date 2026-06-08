@@ -1,34 +1,13 @@
 import { AccountManager } from '../abci/accounts/AccountManager';
-import { CachedLevelDb } from '../abci/database/CachedLevelDb';
-
-import { mkdtemp, rm } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { LevelDb } from '../abci/database/LevelDb';
+import { createTempLevel } from "../abci/database/TempLevel";
 import {
     CMTSToken,
-    PrivateSignatureKey,
     PublicSignatureKey,
-    Secp256k1,
     Secp256k1PrivateSignatureKey,
     Utils,
 } from '@cmts-dev/carmentis-sdk-core';
 import { randomBytes } from 'node:crypto';
-import {describe, it, expect, beforeAll, afterAll} from 'vitest'
-
-export async function createTempLevel() {
-    const rand = Math.random().toString(36);
-    const dir = await mkdtemp(join(tmpdir(), `level-test-${rand}`))
-    const level = new LevelDb(dir);
-    const cachedDb = new CachedLevelDb(level);
-
-    return {
-        cachedDb,
-        async cleanup() {
-            await rm(dir, { recursive: true, force: true })
-        }
-    }
-}
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 let temp: Awaited<ReturnType<typeof createTempLevel>>;
 describe('AccountManager', () => {
@@ -39,7 +18,6 @@ describe('AccountManager', () => {
     afterAll(async () => {
         await temp.cleanup();
     });
-
 
     it("Should manipulate accounts correctly", async () => {
         const db = temp.cachedDb;
@@ -91,7 +69,6 @@ describe('AccountManager', () => {
                 .toBeFalsy();
         }
 
-
         // feeds accounts randomly
         const balanceForAccounts = new Map<Uint8Array, CMTSToken>([
             [issuerAccountId, issuerAccountBalance]
@@ -106,7 +83,6 @@ describe('AccountManager', () => {
             // each account should have the specified balance
             const balance = await accountManager.getAccountBalanceByAccountId(accountId)
             expect(balance.getAmountAsAtomic()).toEqual(randomBalance.getAmountAsAtomic());
-
         }
 
         // we now perform the stake
@@ -122,11 +98,7 @@ describe('AccountManager', () => {
                 dumbType,
                 dumbId,
                 );
-
-             */
+            */
         }
-
-
-
     })
 })

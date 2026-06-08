@@ -3,6 +3,7 @@
 /cometbft/
 .cometbft*
 .carmentis
+.vs
 node_modules
 **/node_modules
 **/local-*gov*

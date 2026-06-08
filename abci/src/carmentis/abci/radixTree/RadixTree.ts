@@ -1,37 +1,36 @@
-import { RADIX_CST, RadixUtils, Utils } from '@cmts-dev/carmentis-sdk-core';
-import { NodeCrypto } from './crypto/NodeCrypto';
-import { LevelDb } from './database/LevelDb';
-import { DbInterface } from './database/DbInterface';
+import {RADIX_CST, RadixUtils, Utils} from '@cmts-dev/carmentis-sdk-core';
+import {NodeCrypto} from '../crypto/NodeCrypto';
+import {DbInterface} from '../database/DbInterface';
 
 function debug(array: any) {
     return [...array].map((n) => n.toString(16).toUpperCase().padStart(2, 0)).join('');
 }
 
 /**
-  Radix tree
+ Radix tree
 
-  This structure is used to:
-  - store the hash of the last state of each virtual blockchain, given the hash of the genesis block as the key
-  - store the hash of the state of each account (from DB_ACCOUNT_STATE), given the hash of the account virtual blockchain as
-    the key
+ This structure is used to:
+ - store the hash of the last state of each virtual blockchain, given the hash of the genesis block as the key
+ - store the hash of the state of each account (from DB_ACCOUNT_STATE), given the hash of the account virtual blockchain as
+ the key
 
-  The key hash is split into nibbles. So, each node may have up to 16 children. Each node in the tree is identified by its
-  hash. We use an 'early leaf node' when there's only one remaining path.
+ The key hash is split into nibbles. So, each node may have up to 16 children. Each node in the tree is identified by its
+ hash. We use an 'early leaf node' when there's only one remaining path.
 
-  Standard node:
-    BITMASK (2 bytes) : non-zero bit-mask of active child nodes
-    for each active child (from LSB to MSB):
-      HASH (32 bytes) : hash of child node, or target value if this is the deepest level (*)
-    end
+ Standard node:
+ BITMASK (2 bytes) : non-zero bit-mask of active child nodes
+ for each active child (from LSB to MSB):
+ HASH (32 bytes) : hash of child node, or target value if this is the deepest level (*)
+ end
 
-  Early leaf node:
-    BITMASK (2 bytes)       : set to 0x0000
-    TRAILING_PATH (N bytes) : the remaining nibbles in the path, packed in the nearest number of bytes
-    VALUE (32 bytes)        : target value
+ Early leaf node:
+ BITMASK (2 bytes)       : set to 0x0000
+ TRAILING_PATH (N bytes) : the remaining nibbles in the path, packed in the nearest number of bytes
+ VALUE (32 bytes)        : target value
 
-  (*) Although this case is supported, it will never happen in practice. (For it would mean that we have two hashes that are
-      identical up to the penultimate nibble, which is almost as unlikely as a full hash collision.)
-*/
+ (*) Although this case is supported, it will never happen in practice. (For it would mean that we have two hashes that are
+ identical up to the penultimate nibble, which is almost as unlikely as a full hash collision.)
+ */
 export class RadixTree {
     db: DbInterface;
     tableId: number;
@@ -42,9 +41,9 @@ export class RadixTree {
     }
 
     /**
-    Sets a (key, value) pair
-  */
-    async set(key: any, value: Uint8Array) {
+     * Sets a (key, value) pair
+     */
+    async set(key: Uint8Array, value: Uint8Array) {
         const rootHash = await this.getRootHash();
         const newRootHash = await this.write(key, value, rootHash, 0);
 
@@ -52,23 +51,23 @@ export class RadixTree {
     }
 
     /**
-    Given a key, returns the corresponding value.*
-  */
-    async get(key: any) {
+     * Given a key, returns the corresponding value.
+     */
+    async get(key: Uint8Array) {
         const rootHash = await this.getRootHash();
-        const proof: any = [];
+        const proof: Uint8Array[] = [];
         const value = await this.read(key, rootHash, 0, proof);
 
         return { value, proof };
     }
 
-    async getFromStorage(depth: number, hash: any) {
+    async getFromStorage(hash: Uint8Array) {
         let value = await this.db.getRaw(this.tableId, hash);
 
         if (!value) {
-            if (hash.some((v: any) => v)) {
+            if (hash.some((v) => v)) {
                 console.log(value);
-                throw `failed to get hash ${Utils.binaryToHexa(hash)} from storage`;
+                throw new Error(`failed to get hash ${Utils.binaryToHexa(hash)} from storage`);
             } else {
                 value = RADIX_CST.ROOT_ANCHORING_HASH;
             }
@@ -76,31 +75,31 @@ export class RadixTree {
         return value;
     }
 
-    async setToStorage(depth: number, hash: any, value: any) {
+    async setToStorage(hash: Uint8Array, value: Uint8Array) {
         return await this.db.putRaw(this.tableId, hash, value);
     }
 
-    async removeFromStorage(depth: number, hash: any) {
+    async removeFromStorage(hash: Uint8Array) {
         return await this.db.del(this.tableId, hash);
     }
 
     /**
-    Returns the root hash of the tree.
-  */
+     * Returns the root hash of the tree.
+     */
     async getRootHash() {
-        return await this.getFromStorage(-1, RADIX_CST.ROOT_ANCHORING_HASH);
+        return await this.getFromStorage(RADIX_CST.ROOT_ANCHORING_HASH);
     }
 
     /**
-    Sets the root hash of the tree.
-  */
-    async setRootHash(rootHash: any) {
-        await this.setToStorage(-1, RADIX_CST.ROOT_ANCHORING_HASH, rootHash);
+     * Sets the root hash of the tree.
+     */
+    async setRootHash(rootHash: Uint8Array) {
+        await this.setToStorage(RADIX_CST.ROOT_ANCHORING_HASH, rootHash);
     }
 
     /**
-    Debugging method.
-  */
+     * Debugging method.
+     */
     async getEntries() {
         /*
         function hexa(a: any) {
@@ -136,17 +135,15 @@ export class RadixTree {
          */
     }
 
-    async write(key: any, value: any, nodeHash: any, depth: any) {
+    async write(key: Uint8Array, value: Uint8Array, nodeHash: Uint8Array | null, depth: number) {
         if (depth == RADIX_CST.HASH_SIZE * 2) {
             return value;
         }
 
-        let node = nodeHash && (await this.getFromStorage(depth, nodeHash));
+        let node = nodeHash && (await this.getFromStorage(nodeHash));
         const len = (RADIX_CST.HASH_SIZE * 2 + 1 - depth) >> 1;
 
-        //console.log('node', nodeHash && debug(nodeHash));
         if (node) {
-            //console.log('node exists');
             // the node already exists
             let msk = (node[0] << 8) | node[1];
             const nibble = (key[depth >> 1] >> (4 * (depth & 1))) & 0xf;
@@ -154,15 +151,14 @@ export class RadixTree {
             let hashList: Uint8Array[] = [];
 
             if (msk) {
-                //console.log('already standard');
-                // this is already a standard node --> get the list of hashes of child nodes and update the node
+                // this is already a standard node: get the list of hashes of child nodes and update the node
                 hashList = RadixUtils.getHashList(msk, node);
                 update = 1;
             } else {
-                // this is an early leaf node --> test whether this is the same key
+                // this is an early leaf node: test whether this is the same key
                 if (RadixUtils.keyDifference(depth, key, node)) {
-                    //console.log('early leaf / different key');
-                    // this is not the same key --> turn this node into a standard node with a single child and update the node
+                    // this is not the same key: turn this node into a standard node with a single child and
+                    // update the node
                     const prevKey = new Uint8Array(RADIX_CST.HASH_SIZE);
                     const prevValue = node.slice(2 + len, 2 + RADIX_CST.HASH_SIZE + len);
                     const index = (node[2] >> (4 * (depth & 1))) & 0xf;
@@ -174,8 +170,7 @@ export class RadixTree {
                     msk = 1 << index;
                     update = 1;
                 } else {
-                    //console.log('early leaf / same key');
-                    // this is the same key --> just update the target hash
+                    // this is the same key: just update the target hash
                     node.set(value, 2 + len);
                 }
             }
@@ -184,7 +179,10 @@ export class RadixTree {
                 // the node is now guaranteed to be a standard one and an update is required
                 hashList[nibble] = await this.write(key, value, hashList[nibble], depth + 1);
 
-                const nHash = hashList.reduce((p: any, c: any) => p + (c != null), 0);
+                const nHash = hashList.reduce((p, c) =>
+                        c === null ? p : p + 1,
+                    0
+                );
 
                 node = new Uint8Array(2 + RADIX_CST.HASH_SIZE * nHash);
 
@@ -202,14 +200,15 @@ export class RadixTree {
                 }
             }
         } else {
-            //console.log('node does not exist -> new early leaf');
-            // the node does not exist --> create an early leaf node
+            // the node does not exist: create an early leaf node
             node = new Uint8Array(2 + RADIX_CST.HASH_SIZE + len);
             node.set(key.slice(depth >> 1), 2);
 
             if (depth & 1) {
-                // odd depth --> because we may get an exact copy of a previous early leaf node that was just turned into a standard
-                // node at depth - 1, we XOR the unused nibble in the key with 0xF to make sure that we'll get a different hash
+                // odd depth:
+                // because we may get an exact copy of a previous early leaf node that was just turned into a
+                // standard node at depth - 1, we XOR the unused nibble in the key with 0xF to make sure that
+                // we'll get a different hash
                 node[2] ^= 0xf;
             }
 
@@ -218,25 +217,24 @@ export class RadixTree {
 
         // remove the previous entry / save the new one
         if (nodeHash) {
-            await this.removeFromStorage(depth, nodeHash);
+            await this.removeFromStorage(nodeHash);
         }
 
         const newHash = NodeCrypto.Hashes.sha256AsBinary(node).slice(0, RADIX_CST.HASH_SIZE);
-        //console.log('hash', debug(newHash), debug(node));
-        await this.setToStorage(depth, newHash, node);
+        await this.setToStorage(newHash, node);
 
         return newHash;
     }
 
-    async read(key: any, nodeHash: any, depth: any, proof: any): Promise<Uint8Array | boolean> {
+    async read(key: Uint8Array, nodeHash: Uint8Array, depth: number, proof: Uint8Array[]): Promise<Uint8Array | null> {
         if (depth == RADIX_CST.HASH_SIZE * 2) {
             return nodeHash;
         }
 
-        const node = nodeHash && (await this.getFromStorage(depth, nodeHash));
+        const node = nodeHash && (await this.getFromStorage(nodeHash));
 
         if (!node) {
-            throw `missing node in radix tree`;
+            throw new Error(`missing node in radix tree`);
         }
 
         proof.push(node);
@@ -249,11 +247,11 @@ export class RadixTree {
 
             return msk & (1 << nibble)
                 ? await this.read(key, hashList[nibble], depth + 1, proof)
-                : false;
+                : null;
         }
 
         if (RadixUtils.keyDifference(depth, key, node)) {
-            return false;
+            return null;
         }
 
         const len = (RADIX_CST.HASH_SIZE * 2 + 1 - depth) >> 1;
