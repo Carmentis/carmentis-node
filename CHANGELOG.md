@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/Carmentis/carmentis-node/compare/v1.5.1...v1.5.2) (2026-06-08)
+
+
+### Bug Fixes
+
+* now using the new Merkle tree to serve microblocks by height ([34f33d6](https://github.com/Carmentis/carmentis-node/commit/34f33d6226a62409f83dce1ba05d78a0e91f7346))
+
 ## [1.5.1](https://github.com/Carmentis/carmentis-node/compare/v1.5.0...v1.5.1) (2026-06-04)
 
 

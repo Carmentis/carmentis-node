@@ -1,24 +1,6 @@
-import {PersistentMerkleTree} from "./PersistentMerkleTree";
-import {LevelDb} from "../database/LevelDb";
-import {mkdtemp, rm} from "fs/promises";
-import {join} from "path";
-import {tmpdir} from "os";
-import {CachedLevelDb} from "../database/CachedLevelDb";
-import {describe, it, expect, beforeAll, afterAll} from 'vitest'
-
-export async function createTempLevel() {
-    const rand = Math.random().toString(36);
-    const dir = await mkdtemp(join(tmpdir(), `level-test-${rand}`))
-    const level = new LevelDb(dir);
-    const cachedDb = new CachedLevelDb(level);
-
-    return {
-        cachedDb,
-        async cleanup() {
-            await rm(dir, {recursive: true, force: true})
-        }
-    }
-}
+import { PersistentMerkleTree } from "./PersistentMerkleTree";
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { createTempLevel } from "../database/TempLevel";
 
 let temp: Awaited<ReturnType<typeof createTempLevel>>;
 

@@ -46,31 +46,31 @@ export class CachedStorage implements IStorage {
         }
     }
 
-    async readFullMicroblock(hash: Uint8Array): Promise<Uint8Array | undefined> {
+    async readFullMicroblock(hash: Uint8Array, doSanityCheck = true): Promise<Uint8Array | undefined> {
         this.logger.debug(`Reading serialized microblock ${Utils.binaryToHexa(hash)}`);
-        return await this.readMicroblock(hash, MicroblockReadingMode.READ_FULL);
+        return await this.readMicroblock(hash, MicroblockReadingMode.READ_FULL, doSanityCheck);
     }
 
     /**
      * Reads a microblock header from its hash.
      */
-    async readSerializedMicroblockHeader(hash: Uint8Array): Promise<Uint8Array | undefined> {
+    async readSerializedMicroblockHeader(hash: Uint8Array, doSanityCheck = true): Promise<Uint8Array | undefined> {
         this.logger.debug(`Reading serialized header of microblock ${Utils.binaryToHexa(hash)}`);
-        return await this.readMicroblock(hash, MicroblockReadingMode.READ_HEADER);
+        return await this.readMicroblock(hash, MicroblockReadingMode.READ_HEADER, doSanityCheck);
     }
 
     /**
      * Reads a microblock body from its hash.
      */
-    async readSerializedMicroblockBody(hash: Uint8Array): Promise<Uint8Array|undefined> {
+    async readSerializedMicroblockBody(hash: Uint8Array, doSanityCheck = true): Promise<Uint8Array|undefined> {
         this.logger.debug(`Reading serialized body of microblock ${Utils.binaryToHexa(hash)}`);
-        return await this.readMicroblock(hash, MicroblockReadingMode.READ_BODY);
+        return await this.readMicroblock(hash, MicroblockReadingMode.READ_BODY, doSanityCheck);
     }
 
     /**
      * Reads a full microblock, microblock header or microblock body from its hash.
      */
-    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode): Promise<Uint8Array | undefined> {
+    private async readMicroblock(hash: Uint8Array, partType: MicroblockReadingMode, doSanityCheck: boolean): Promise<Uint8Array | undefined> {
         // we first search in the cache
         const stringHash = Utils.binaryToHexa(hash);
         let returnedSerializedMicroblock: Uint8Array;
@@ -90,33 +90,38 @@ export class CachedStorage implements IStorage {
             }
         }
 
-        // perform a sanity check to ensure the microblock is not corrupted or incomplete
-        const microblock = Microblock.loadFromSerializedMicroblock(
-            returnedSerializedMicroblock,
-        );
-        const expectedMicroblockHash = hash;
-        const computedHash = microblock.getHashAsBytes();
-        if (!Utils.binaryIsEqual(computedHash, expectedMicroblockHash)) {
-            this.logger.warn(`/!\\ Returned microblock contains a mismatch between computed and expected hash: expected ${Utils.binaryToHexa(expectedMicroblockHash)} but got ${Utils.binaryToHexa(computedHash)}`)
+        let microblock: Microblock;
+
+        if (doSanityCheck) {
+            // perform a sanity check to ensure the microblock is not corrupted or incomplete
+            microblock = Microblock.loadFromSerializedMicroblock(
+                returnedSerializedMicroblock,
+            );
+            const expectedMicroblockHash = hash;
+            const computedHash = microblock.getHashAsBytes();
+            if (!Utils.binaryIsEqual(computedHash, expectedMicroblockHash)) {
+                this.logger.warn(`/!\\ Returned microblock contains a mismatch between computed and expected hash: expected ${Utils.binaryToHexa(expectedMicroblockHash)}, got ${Utils.binaryToHexa(computedHash)}`)
+            }
         }
 
         //this.logger.debug(`Showing details on recovered microblock ${Utils.binaryToHexa(computedHash)}:`);
         //this.logger.debug(microblock.toString());
+
         if (partType === MicroblockReadingMode.READ_FULL) {
             return returnedSerializedMicroblock;
+        }
+
+        microblock ||= Microblock.loadFromSerializedMicroblock(
+            returnedSerializedMicroblock,
+        );
+        const {
+            headerData: cachedSerializedMicroblockHeader,
+            bodyData: cachedSerializedMicroblockBody,
+        } = microblock.serialize();
+        if (partType === MicroblockReadingMode.READ_HEADER) {
+            return cachedSerializedMicroblockHeader;
         } else {
-            const microblock = Microblock.loadFromSerializedMicroblock(
-                returnedSerializedMicroblock,
-            );
-            const {
-                headerData: cachedSerializedMicroblockHeader,
-                bodyData: cachedSerializedMicroblockBody,
-            } = microblock.serialize();
-            if (partType === MicroblockReadingMode.READ_HEADER) {
-                return cachedSerializedMicroblockHeader;
-            } else {
-                return cachedSerializedMicroblockBody;
-            }
+            return cachedSerializedMicroblockBody;
         }
     }
 

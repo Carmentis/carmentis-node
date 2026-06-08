@@ -1,7 +1,7 @@
 import { CachedLevelDb } from '../database/CachedLevelDb';
 import { Storage } from '../storage/Storage';
 import { AccountManager } from '../accounts/AccountManager';
-import { RadixTree } from '../RadixTree';
+import { RadixTree } from '../radixTree/RadixTree';
 import { Provider } from '@cmts-dev/carmentis-sdk-core';
 import { CachedStorage } from '../storage/CachedStorage';
 import { ValidatorSetUpdate } from './ValidatorSetUpdate';

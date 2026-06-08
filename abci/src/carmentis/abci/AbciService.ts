@@ -3,7 +3,6 @@ import {
     ResponseApplySnapshotChunk,
     RequestCheckTx,
     ResponseCheckTx,
-    CheckTxType,
     RequestCommit,
     ResponseCommit,
     RequestEcho,
@@ -55,8 +54,7 @@ import {
     AbciResponse,
     AbciResponseType,
     BlockchainUtils,
-    CHAIN, CMTSToken,
-    ECO,
+    CHAIN,
     EncoderFactory,
     GenesisSnapshotAbciResponse,
     Microblock,
@@ -64,13 +62,11 @@ import {
     NetworkProvider,
     PrivateSignatureKey,
     SectionLabel,
-    SectionType,
     Utils
 } from '@cmts-dev/carmentis-sdk-core';
 import { LevelDb } from './database/LevelDb';
 import { SnapshotsManager } from './SnapshotsManager';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
-import { CometBFTPublicKeyConverter } from './CometBFTPublicKeyConverter';
 import { AbciHandlerInterface } from './AbciHandlerInterface';
 import { NodeConfigService } from '../config/services/NodeConfigService';
 import { MicroblockCheckResult } from './types/MicroblockCheckResult';
@@ -261,7 +257,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 last_block_height: last_block_height,
             });
         } else {
-            const { appHash } = await this.getGlobalState().getRadixHashAndApplicationHash();
+            const { appHash } = await this.getGlobalState().getApplicationStateHashes();
 
             const hex = EncoderFactory.bytesToHexEncoder();
             this.logger.info(`(Info) last_block_height: ${last_block_height}`);
@@ -335,7 +331,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
             genesisSnapshot,
         );
-        const { appHash } = await this.getGlobalState().getRadixHashAndApplicationHash();
+        const { appHash } = await this.getGlobalState().getApplicationStateHashes();
         return appHash;
     }
 

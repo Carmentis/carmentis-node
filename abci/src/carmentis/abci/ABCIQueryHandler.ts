@@ -8,7 +8,6 @@ import {
     AccountStateAbciResponse,
     AccountUpdatesAbciResponse,
     AccountUpdate,
-    AccountHistory,
     AwaitMicroblockAnchoringAbciRequest,
     BlockchainUtils,
     BlockContentAbciResponse,
@@ -27,6 +26,8 @@ import {
     GetGenesisSnapshotAbciRequest,
     GetMicroblockBodysAbciRequest,
     GetMicroblockInformationAbciRequest,
+    GetMicroblockInformationByHeightAbciRequest,
+    GetSerializedMicroblockByHeightAbciRequest,
     GetRawBlockContentAbciRequest,
     GetObjectListAbciRequest,
     GetValidatorNodeByAddressAbciRequest,
@@ -36,6 +37,7 @@ import {
     MicroblockAnchoringAbciResponse,
     MicroblockBodysAbciResponse,
     MicroblockInformationAbciResponse,
+    SerializedMicroblockByHeightAbciResponse,
     RawBlockContentAbciResponse,
     ObjectListAbciResponse,
     Utils,
@@ -43,11 +45,13 @@ import {
     VirtualBlockchainStateAbciResponse,
     VirtualBlockchainUpdateAbciResponse,
 } from '@cmts-dev/carmentis-sdk-core';
-import { LevelDb } from './database/LevelDb';
-import { AccountManager } from './accounts/AccountManager';
-import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
-import { GlobalState } from './state/GlobalState';
-import { Logger, getLogger } from '@logtape/logtape';
+import {LevelDb} from './database/LevelDb';
+import {AccountManager} from './accounts/AccountManager';
+import {GenesisSnapshotStorageService} from './GenesisSnapshotStorageService';
+import {GlobalState} from './state/GlobalState';
+import {Logger, getLogger} from '@logtape/logtape';
+import {PersistentMerkleTree} from './persistentMerkleTree/PersistentMerkleTree';
+import {NodeCrypto} from "./crypto/NodeCrypto";
 
 const MAX_RAW_BLOCK_PART_SIZE = 2 * 1024 * 1024;
 
@@ -93,6 +97,8 @@ export class ABCIQueryHandler {
                 return this.getVirtualBlockchainUpdate(request);
             case AbciRequestType.GET_MICROBLOCK_INFORMATION:
                 return this.getMicroblockInformation(request);
+            case AbciRequestType.GET_MICROBLOCK_INFORMATION_BY_HEIGHT:
+                return this.getMicroblockInformationByHeight(request);
             case AbciRequestType.GET_BLOCK_INFORMATION:
                 return this.getBlockInformation(request);
             case AbciRequestType.GET_BLOCK_CONTENT:
@@ -105,6 +111,8 @@ export class ABCIQueryHandler {
                 return this.getRawBlockContent(request);
             case AbciRequestType.GET_CHAIN_INFORMATION:
                 return this.getChainInformation(request);
+            case AbciRequestType.GET_SERIALIZED_MICROBLOCK_BY_HEIGHT:
+                return this.getSerializedMicroblockByHeight(request);
             default:
                 throw new Error(`Unsupported request`);
         }
@@ -169,8 +177,7 @@ export class ABCIQueryHandler {
             const currentState = await this.db.getAccountStateByAccountId(accountHash);
             if (currentState === undefined) {
                 this.logger.warn(`account ${Utils.binaryToHexa(accountHash)} is undefined`);
-            }
-            else {
+            } else {
                 const historyUpdate =
                     await this.accountManager.getHistoryRange(
                         currentState.lastHistoryHash,
@@ -251,60 +258,56 @@ export class ABCIQueryHandler {
     }
 
     async getVirtualBlockchainUpdate(request: GetVirtualBlockchainUpdateAbciRequest): Promise<VirtualBlockchainUpdateAbciResponse> {
-        const knownHeight = request.knownHeight;
         const virtualBlockchainId: Uint8Array = request.virtualBlockchainId;
         this.logger.info(
             `Request update for virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`,
         );
-        const vbStatus = await this.provider.getVirtualBlockchainStatus(
+        const vbState = await this.provider.getVirtualBlockchainStatus(
             virtualBlockchainId
         );
 
         // return empty response if virtual blockchain does not exist
-        if (vbStatus === null) {
+        if (vbState === null) {
             this.logger.warn(`Cannot load virtual blockchain update: Virtual blockchain with id ${Utils.binaryToHexa(virtualBlockchainId)} not found`);
             return {
                 responseType: AbciResponseType.VIRTUAL_BLOCKCHAIN_UPDATE,
                 exists: false,
                 changed: false,
                 serializedVirtualBlockchainState: Utils.getNullHash(),
-                serializedHeaders: [],
             }
         }
 
-        // search missing headers
-        const vbState = vbStatus.state;
-        const vbHashes = vbStatus.microblockHashes;
-        const changed = vbStatus.state.height !== knownHeight;
-        const headers: Uint8Array[] = []
-        for (let currentHeight = knownHeight + 1; currentHeight <= vbState.height; currentHeight++ ) {
-            this.logger.debug(`Requesting header for height ${currentHeight}/${vbHashes.length} of virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`)
-            const microblockHash = vbHashes[currentHeight - 1];
-            const header = await this.provider.getMicroblockHeader(
-                Hash.from(microblockHash)
-            );
-            if (!header) throw new Error('Cannot recover all the headers of the virtual blockchain.')
-            this.logger.debug(
-                `Found header body hash: ${Utils.binaryToHexa(header.bodyHash)}`,
-            );
-            headers.push(BlockchainUtils.encodeMicroblockHeader(header));
-        }
+        const serializedVirtualBlockchainState = BlockchainUtils.encodeVirtualBlockchainState(vbState);
+        const stateHash = NodeCrypto.Hashes.sha256AsBinary(serializedVirtualBlockchainState);
+        const changed = !Utils.binaryIsEqual(request.knownStateHash, stateHash);
 
         this.logger.info(
-            `Virtual blockchain update request for id ${Utils.binaryToHexa(virtualBlockchainId)}: done`,
+            `Virtual blockchain update request for id ${Utils.binaryToHexa(virtualBlockchainId)}: ${changed ? 'changed' : 'unchanged'}`,
         );
-        return  {
+        return {
             responseType: AbciResponseType.VIRTUAL_BLOCKCHAIN_UPDATE,
             exists: true,
             changed,
-            serializedVirtualBlockchainState: BlockchainUtils.encodeVirtualBlockchainState(vbState),
-            serializedHeaders: headers,
+            serializedVirtualBlockchainState: changed ? serializedVirtualBlockchainState : Utils.getNullHash(),
         };
-
     }
 
     async getMicroblockInformation(request: GetMicroblockInformationAbciRequest): Promise<MicroblockInformationAbciResponse> {
         const microblockHash: Uint8Array = request.hash;
+        return this.getMicroblockInformationByHash(microblockHash);
+    }
+
+    async getMicroblockInformationByHeight(request: GetMicroblockInformationByHeightAbciRequest): Promise<MicroblockInformationAbciResponse> {
+        const db = this.provider.getDatabase();
+        const microblockHash = await PersistentMerkleTree.getTreeLeaf(
+            db,
+            request.virtualBlockchainId,
+            request.height - 1,
+        );
+        return this.getMicroblockInformationByHash(microblockHash);
+    }
+
+    async getMicroblockInformationByHash(microblockHash: Uint8Array): Promise<MicroblockInformationAbciResponse> {
         const db = this.provider.getDatabase();
         const microblockInfo = await db.getMicroblockInformation(microblockHash);
         if (microblockInfo === undefined) throw new Error(`Microblock with hash ${Utils.binaryToHexa(microblockHash)} not found`);
@@ -313,6 +316,18 @@ export class ABCIQueryHandler {
         return {
             responseType: AbciResponseType.MICROBLOCK_INFORMATION,
             ...microblockInfo
+        }
+    }
+
+    async getSerializedMicroblockByHeight(request: GetSerializedMicroblockByHeightAbciRequest): Promise<SerializedMicroblockByHeightAbciResponse> {
+        const serializedContent = await this.provider.getSerializedMicroblockByHeight(
+            request.virtualBlockchainId,
+            request.height,
+        );
+        if (serializedContent === null) throw new Error(`microblock not found`);
+        return {
+            responseType: AbciResponseType.SERIALIAZED_MICROBLOCK_BY_HEIGHT,
+            serializedContent,
         }
     }
 

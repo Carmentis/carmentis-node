@@ -56,7 +56,7 @@ export class GenesisInitialTransactionsBuilder {
 
         await this.publishGenesisTransactions(runoffsTransactions, 1);
 
-        const { appHash } = await this.globalState.getRadixHashAndApplicationHash();
+        const { appHash } = await this.globalState.getApplicationStateHashes();
         return appHash;
     }
 

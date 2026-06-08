@@ -1,6 +1,7 @@
 minimumReleaseAge: 0
+
 onlyBuiltDependencies:
-  - "@nestjs/core"
+  - '@nestjs/core'
   - cbor-extract
   - classic-level
   - protobufjs

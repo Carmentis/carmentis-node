@@ -6,7 +6,6 @@ import {
     CMTSToken,
     ECO,
     Economics,
-    FeesCalculationFormulaFactory,
     Hash,
     Microblock,
     ProtocolVb,
@@ -30,9 +29,9 @@ import { GlobalState } from './GlobalState';
 import { RequestFinalizeBlock } from '../../../proto/tendermint/abci/types';
 import { GlobalStateUpdateCometParameters } from '../types/GlobalStateUpdateCometParameters';
 import { ProcessedMicroblock } from '../types/ProcessBlockResult';
+import { ApplicationStateHashes } from '../types/valibot/ApplicationStateHashes';
 import { LevelDb } from '../database/LevelDb';
 import { CometValidatorSetUpdate, ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
-import { BlockIDFlag } from '../../../proto/tendermint/types/validator';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { FeesDispatcher } from '../accounts/FeesDispatcher';
 import { CometBFTUtils } from '../CometBFTUtils';
@@ -239,6 +238,7 @@ export class GlobalStateUpdater {
         });
 
         // store the virtual blockchain local state and microblock in buffer
+        await globalState.storeMicroblockHashInMerkleTree(virtualBlockchain, microblock);
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
             virtualBlockchain.getExpirationDay(),
@@ -441,6 +441,7 @@ export class GlobalStateUpdater {
         });
 
         // store the virtual blockchain local state and microblock in buffer
+        await globalState.storeMicroblockHashInMerkleTree(virtualBlockchain, microblock);
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
             virtualBlockchain.getExpirationDay(),
@@ -504,7 +505,7 @@ export class GlobalStateUpdater {
         );
         await database.putChainInformation(chainInfoObject);
 
-        const { radixHash, appHash } = await globalState.getRadixHashAndApplicationHash();
+        const applicationStateHashes = await globalState.getApplicationStateHashes();
 
         await this.storeBlockInformationInBuffer(
             globalState,
@@ -512,13 +513,12 @@ export class GlobalStateUpdater {
             request.hash,
             blockTimestamp,
             request.proposer_address,
-            appHash,
-            radixHash,
+            applicationStateHashes,
             this.blockSizeInBytes,
             request.txs.length,
         );
 
-        return appHash;
+        return applicationStateHashes.appHash;
     }
 
     /**
@@ -596,8 +596,7 @@ export class GlobalStateUpdater {
         hash: Uint8Array,
         timestamp: number,
         proposerAddress: Uint8Array,
-        applicationHash: Uint8Array,
-        radixHash: Uint8Array,
+        applicationStateHashes: ApplicationStateHashes,
         size: number,
         microblockCount: number,
     ) {
@@ -608,8 +607,7 @@ export class GlobalStateUpdater {
                 hash,
                 timestamp,
                 proposerAddress,
-                applicationHash,
-                radixHash,
+                applicationStateHashes,
                 size,
                 microblockCount,
             }

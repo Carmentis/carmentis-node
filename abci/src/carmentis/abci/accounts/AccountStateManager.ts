@@ -1,6 +1,6 @@
 import { ModifiedAccounts } from "./ModifiedAccounts";
 import { DbInterface } from '../database/DbInterface';
-import { RadixTree } from '../RadixTree';
+import { RadixTree } from '../radixTree/RadixTree';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import { LevelDbTable } from '../database/LevelDbTable';
 import {
