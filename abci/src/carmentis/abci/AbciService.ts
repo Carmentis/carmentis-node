@@ -700,7 +700,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Step 1: transaction decoding (and early rejection)
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
         const txs = request.txs;
-        const microblocks: { mb: Microblock, tx: Uint8Array, feesInAtomics: number }[] = [];
+        const microblocks: { tx: Uint8Array, feesInAtomics: number }[] = [];
         for (const tx of txs) {
             try {
                 // decoding
@@ -718,7 +718,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 const gasPriceInAtomics = parsedMicroblock.getGasPrice().getAmountAsAtomic();
                 const feesInAtomics = gas * gasPriceInAtomics;
                 microblocks.push({
-                    mb: parsedMicroblock,
+                    //mb: parsedMicroblock,
                     tx,
                     feesInAtomics,
                 });
@@ -743,6 +743,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // Step 3: check and verify microblocks until max size is reached
         const proposedTxs: Uint8Array[] = [];
 
+
         const protocolVariables = await workingState.getProtocolState();
         const maxBlockSize = protocolVariables.getMaximumBlockSizeInBytes();
         const maxMicroblocksPerBlock = this.nodeConfig.getMaxMicroblocksPerBlock() ?? -1;
@@ -753,8 +754,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
         for (const entry of sortedMicroblocks) {
             // recover the parsed microblock
-            const parsedMicroblock = entry.mb;
             const tx = entry.tx;
+            const parsedMicroblock = Microblock.loadFromSerializedMicroblock(tx);
 
             // we break the proposal creation early if the maximum number of microblocks per block is reached.
             if (maxMicroblocksPerBlock <= proposedTxs.length) {

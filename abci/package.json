@@ -54,6 +54,7 @@
         "ws": "^8.20.0"
     },
     "devDependencies": {
+        "@faker-js/faker": "^10.4.0",
         "@nestjs/cli": "^11.0.17",
         "@nestjs/testing": "^11",
         "@protobuf-ts/plugin": "^2.11.1",

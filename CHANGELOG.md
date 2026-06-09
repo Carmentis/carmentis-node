@@ -1,3 +1,15 @@
+# [1.6.0](https://github.com/Carmentis/carmentis-node/compare/v1.5.2...v1.6.0) (2026-06-09)
+
+
+### Bug Fixes
+
+* move microblock parsing logic to limit memory usage ([75043f9](https://github.com/Carmentis/carmentis-node/commit/75043f9532533dc5c1dc7667b1d8fc686d13e966))
+
+
+### Features
+
+* add @faker-js/faker and implement PrepareProposal test with transaction data generation ([369d7f2](https://github.com/Carmentis/carmentis-node/commit/369d7f2feff8cdbe582b2fe1894eecb60431fda7))
+
 ## [1.5.2](https://github.com/Carmentis/carmentis-node/compare/v1.5.1...v1.5.2) (2026-06-08)
 
 
