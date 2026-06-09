@@ -12,6 +12,7 @@ import { mkdtempSync, readFileSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as v from 'valibot';
+import { fa, faker } from '@faker-js/faker';
 import {
     CometBFTNodeConfigService,
     Genesis,
@@ -46,6 +47,7 @@ import {
 } from '@cmts-dev/carmentis-sdk-core';
 import { CheckTxType } from '../../proto/tendermint/abci/types';
 import {describe, it, expect, beforeAll, afterAll} from 'vitest'
+import { undefined } from 'valibot';
 
 interface RunOffsAccountInterface {
     id: string,
@@ -186,6 +188,58 @@ describe('Abci', () => {
         });
         expect(response.app_hash).toBeDefined()
     }, 45000);
+
+    it("Should execute the PrepareProposal", async () => {
+        // we construct many transcations
+        const transactions = [];
+        const nbTransactions = 6000;
+        for (let i = 0; i < nbTransactions; i++) {
+            const sk = Secp256k1PrivateSignatureKey.gen();
+            const pk = await sk.getPublicKey();
+            const mb = Microblock.createGenesisAccountMicroblock();
+            mb.addSection({
+                type: SectionType.ACCOUNT_PUBLIC_KEY,
+                publicKey: await pk.getPublicKeyAsBytes(),
+                schemeId: pk.getSignatureSchemeId(),
+            });
+            mb.addSection({
+                type: SectionType.ACCOUNT_CREATION,
+                amount: 0,
+                sellerAccount: Utils.getNullHash(),
+            });
+            mb.addSection({
+                type: SectionType.CUSTOM,
+                test: faker.lorem.paragraph(1000),
+            });
+            mb.addSection({
+                type: SectionType.CUSTOM,
+                test: faker.lorem.lines(10000),
+            });
+            const {microblockData} = mb.serialize();
+            console.log("Microblock size:", microblockData.length);
+            transactions.push(microblockData);
+        }
+
+        // execute prepare approval
+        const before = process.memoryUsage().heapUsed;
+        await abci.PrepareProposal({
+            height: 118,
+            // @ts-ignore
+            local_last_commit: undefined,
+            max_tx_bytes: 500,
+            misbehavior: [],
+            next_validators_hash: Utils.getNullHash(),
+            proposer_address: Utils.getNullHash(),
+            time: {
+                seconds: 1,
+                nanos: 1
+            },
+            txs: transactions
+        })
+        const after = process.memoryUsage().heapUsed;
+        const deltaMB = ((after - before) / 1024 / 1024).toFixed(3);
+        console.log(`Memory used: ${deltaMB} MB`);
+    }, 300000)
 
     it('Script', async () => {
         const scriptManager = new TestScriptManager(
