@@ -1,3 +1,10 @@
+## [1.6.3](https://github.com/Carmentis/carmentis-node/compare/v1.6.2...v1.6.3) (2026-06-10)
+
+
+### Bug Fixes
+
+* fixed pnpm-lock ([dc7bef3](https://github.com/Carmentis/carmentis-node/commit/dc7bef3a197ba5b85b0016433b1b62b9908b9340))
+
 ## [1.6.2](https://github.com/Carmentis/carmentis-node/compare/v1.6.1...v1.6.2) (2026-06-10)
 
 
