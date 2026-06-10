@@ -846,6 +846,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+        let status = ResponseProcessProposal_ProposalStatus.ACCEPT;
 
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
 
@@ -878,16 +879,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     );
                 }
             } catch (e) {
-                // TODO: reject case
+                status = ResponseProcessProposal_ProposalStatus.REJECT;
                 this.logger.error(`Microblock rejected due to the following raised error: ${e}`);
+                break;
             }
         }
 
         perfMeasure.end();
 
-        return ResponseProcessProposal.create({
-            status: ResponseProcessProposal_ProposalStatus.ACCEPT,
-        });
+        return ResponseProcessProposal.create({ status });
     }
 
     ExtendVote(request: RequestExtendVote) {
@@ -917,6 +917,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
 
         for (const tx of request.txs) {
+            // set a non-zero (invalid) tx_result code by default, then set it to 0 if everything is OK
+            let code = 1;
             try {
                 // we attempt to parse the received microblock and check its consistency
                 // with the local state of the virtual blockchain where it is attached
@@ -938,21 +940,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         cometParameters,
                         tx,
                     );
-
+                    code = 0;
                     perfMeasure.event('fees');
-
-                    txResults.push(
-                        ExecTxResult.create({
-                            code: 0,
-                            data: new Uint8Array(),
-                            log: '',
-                            info: '',
-                            gas_wanted: 0,
-                            gas_used: 0,
-                            events: [],
-                            codespace: 'app',
-                        }),
-                    );
                 } else {
                     this.logger.fatal(
                         `Microblock ${parsedMicroblock.getHash().encode()} has been rejected during FinalizeBlock`,
@@ -962,6 +951,19 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                 this.logger.fatal(
                     `A transaction has been rejected during FinalizeBlock: ${errorMessage}`,
+                );
+            } finally {
+                txResults.push(
+                    ExecTxResult.create({
+                        code,
+                        data: new Uint8Array(),
+                        log: '',
+                        info: '',
+                        gas_wanted: 0,
+                        gas_used: 0,
+                        events: [],
+                        codespace: 'app',
+                    }),
                 );
             }
         }

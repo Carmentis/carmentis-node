@@ -219,6 +219,14 @@ export class AccountTokenTransferHandler {
                     );
                 }
 
+                // the escrow identifier must be unique
+                const escrow = await this.db.getEscrow(escrowParameters.escrowIdentifier);
+                if (escrow !== undefined) {
+                    throw new Error(
+                        'The escrow identifier must be unique. An escrow this this identifier already exists.',
+                    );
+                }
+
                 balanceAvailability.addEscrowedTokens(signedAmount, escrowParameters);
                 await this.db.putEscrow(escrowParameters.escrowIdentifier, {
                     payerAccount: linkedAccountHash,

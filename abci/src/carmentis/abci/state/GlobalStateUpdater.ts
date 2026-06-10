@@ -99,7 +99,13 @@ export class GlobalStateUpdater {
 
             // set slashing, planned in 30 days from now
             const plannedSlashingTimestamp = Utils.addDaysToTimestamp(cometParameters.blockTimestamp, 30);
-            await accountManager.setSlashing(accountId.toBytes(), validatorNodeHash, plannedSlashingTimestamp);
+            try {
+                await accountManager.setSlashing(accountId.toBytes(), validatorNodeHash, plannedSlashingTimestamp);
+            }
+            catch (error) {
+                this.logger.error(`setSlashing() failed with the following error:`);
+                this.logger.error(String(error));
+            }
         }
 
         // if this is the first block of the day, apply daily updates
@@ -140,16 +146,11 @@ export class GlobalStateUpdater {
         const escrowIdentifiers = await database.getKeys(LevelDbTable.ESCROWS);
 
         for(const id of escrowIdentifiers) {
-            const escrow = await database.getEscrow(id);
-            if (escrow == null) {
-                throw new Error(`Escrow ${id.toString()} not found`);
-            }
-            await accountManager.updateExpiredEscrows(
-                escrow.payeeAccount,
-                escrow.payerAccount,
+            await accountManager.updateExpiredEscrow(
+                id,
                 currentBlockDayTs,
                 blockHeight,
-            )
+            );
         }
     }
 
@@ -246,7 +247,6 @@ export class GlobalStateUpdater {
             microblock,
             transaction,
         );
-        await globalState.indexVirtualBlockchain(virtualBlockchain);
     }
 
     /**
@@ -449,7 +449,6 @@ export class GlobalStateUpdater {
             microblock,
             transaction,
         );
-        await globalState.indexVirtualBlockchain(virtualBlockchain);
     }
 
     async finalizeBlockApproval(globalState: GlobalState, request: RequestFinalizeBlock) {
@@ -672,36 +671,37 @@ export class GlobalStateUpdater {
                     continue;
                 }
 
-                // TODO: clean
                 const address = Utils.bufferToUint8Array(vote.validator.address);
                 const nodeByAddress = await stateDb.getValidatorNodeByAddress(address);
-                if(nodeByAddress == undefined) throw new Error('Invalid validator address');
+
+                if(nodeByAddress === undefined) {
+                    this.logger.error(`Unknown validator address ${Utils.binaryToHexa(address)}`);
+                    continue;
+                }
+
                 const validatorNodeHash = nodeByAddress.validatorNodeHash;
-//              const validatorNodeHash = await stateDb.getRaw(
-//                  LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
-//                  address,
-//              );
 
                 if (!validatorNodeHash) {
                     this.logger.error(`unknown validator address ${Utils.binaryToHexa(address)}`);
-                } else if (Utils.binaryIsEqual(validatorNodeHash, Utils.getNullHash())) {
+                    continue;
+                }
+                if (Utils.binaryIsEqual(validatorNodeHash, Utils.getNullHash())) {
                     this.logger.warn(
                         `validator address ${Utils.binaryToHexa(address)} is not yet linked to a validator node VB`,
                     );
-                } else {
-                    const validatorNode = await state.loadValidatorNodeVirtualBlockchain(
-                        new Hash(validatorNodeHash),
-                    );
-
-                    //const validatorPublicKey: PublicSignatureKey = await validatorNode.getOrganizationPublicKey();
-                    const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
-                    this.logger.debug(`adding validator node with account ${accountId.encode()}`);
-                    //const validatorAccountHash = accountManager.loadAccountByPublicKey(validatorPublicKey);
-
-                    const validatorId = accountId.toBytes();
-                    validatorAccounts.push(validatorId);
-                    validatorStakes.push(await accountManager.getStakedAmount(accountId))
+                    continue;
                 }
+
+                const validatorNode = await state.loadValidatorNodeVirtualBlockchain(
+                    new Hash(validatorNodeHash),
+                );
+
+                const accountId = await this.getAccountIdFromValidatorNode(validatorNode);
+                this.logger.debug(`adding validator node with account ${accountId.encode()}`);
+
+                const validatorId = accountId.toBytes();
+                validatorAccounts.push(validatorId);
+                validatorStakes.push(await accountManager.getStakedAmount(accountId))
             }
         }
 

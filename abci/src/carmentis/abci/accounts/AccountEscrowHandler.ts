@@ -75,46 +75,57 @@ export class AccountEscrowHandler {
         await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
     }
 
-    async updateExpiredEscrows(payeeAccountHash: Uint8Array, payerAccountHash: Uint8Array, timestamp: number, blockHeight: number) {
-        const accountInformation = await this.accountStateManager.loadAccountInformation(payeeAccountHash);
+    async updateExpiredEscrow(escrowIdentifier: Uint8Array, timestamp: number, blockHeight: number) {
+        const escrow = await this.db.getEscrow(escrowIdentifier);
+        if (escrow === undefined) {
+            throw new Error(`Escrow ${escrowIdentifier.toString()} not found`);
+        }
+
+        const accountInformation = await this.accountStateManager.loadAccountInformation(escrow.payeeAccount);
         const accountState = accountInformation.state;
         const balanceAvailability = new BalanceAvailability(
             accountState.balance,
             accountState.locks,
         );
         const escrowLocks = balanceAvailability.getEscrowLocks();
-
-        for(const lock of escrowLocks) {
-            const isEscrowLockExpired = timestamp > Utils.addDaysToTimestamp(
-                lock.parameters.startTimestamp,
-                lock.parameters.durationDays
-            );
-            if (isEscrowLockExpired) {
-                // the escrow has expired: the funds are sent back from payee to payer
-                this.logger.info(`Escrow has expired: funds are sent back to payer`);
-                const amountAsAtomics = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
-                const tokenTransfer: Transfer = {
-                    type: ECO.BK_SENT_EXPIRED_ESCROW,
-                    payerAccount: payeeAccountHash,
-                    payeeAccount: payerAccountHash,
-                    amountAsAtomics,
-                    feesAsAtomics: 0,
-                };
-                const chainReference = {
-                    height: blockHeight
-                };
-
-                await this.accountTokenTransferHandler.tokenTransfer(
-                    tokenTransfer,
-                    chainReference,
-                    timestamp
-                );
-
-                // remove the escrow from the DB
-                await this.db.del(LevelDbTable.ESCROWS, lock.parameters.escrowIdentifier);
-            }
+        const lock = escrowLocks.find((lock) =>
+            Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier)
+        );
+        if (lock === undefined) {
+            throw new Error(`Lock of escrow ${escrowIdentifier.toString()} not found`);
         }
+
+        const isEscrowLockExpired = timestamp > Utils.addDaysToTimestamp(
+            lock.parameters.startTimestamp,
+            lock.parameters.durationDays
+        );
+
+        if (isEscrowLockExpired) {
+            // the escrow has expired: the funds are sent back from payee to payer
+            this.logger.info(`Escrow has expired: funds are sent back to payer`);
+            const amountAsAtomics = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
+            const tokenTransfer: Transfer = {
+                type: ECO.BK_SENT_EXPIRED_ESCROW,
+                payerAccount: escrow.payeeAccount,
+                payeeAccount: escrow.payerAccount,
+                amountAsAtomics,
+                feesAsAtomics: 0,
+            };
+            const chainReference = {
+                height: blockHeight
+            };
+
+            await this.accountTokenTransferHandler.tokenTransfer(
+                tokenTransfer,
+                chainReference,
+                timestamp,
+            );
+
+            // remove the escrow from the DB
+            await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
+        }
+
         accountState.locks = balanceAvailability.getLocks();
-        await this.accountStateManager.saveAccountState(payeeAccountHash, accountState);
+        await this.accountStateManager.saveAccountState(escrow.payeeAccount, accountState);
     }
 }

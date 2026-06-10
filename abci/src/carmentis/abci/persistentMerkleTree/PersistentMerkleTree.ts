@@ -142,7 +142,7 @@ export class PersistentMerkleTree {
      * Generates a Merkle proof for a given leaf index.
      * @param index - The 0-based index of the leaf to prove.
      * @param size - The current size of the tree (number of leaves).
-     * @returns {Proof} - The proof object containing the tree size, proven leaf, root hash and witnesses.
+     * @returns {MerkleProof} - The proof object containing the tree size, proven leaf, root hash and witnesses.
      */
     async getProof(index: number, size: number): Promise<MerkleProof> {
         const treeHeight = PersistentMerkleTree.sizeToHeight(size);
@@ -159,6 +159,7 @@ export class PersistentMerkleTree {
             proof.witnesses.push(witness);
             col >>>= 1;
         }
+        console.log("MerkleProof", proof);
         return proof;
     }
 
