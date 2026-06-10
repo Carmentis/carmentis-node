@@ -1,6 +1,6 @@
 import { LevelDb } from './LevelDb';
 import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
-import { Utils } from '@cmts-dev/carmentis-sdk-core';
+import { VirtualBlockchain, Utils } from '@cmts-dev/carmentis-sdk-core';
 import { getLogger } from '@logtape/logtape';
 import { AbstractLevelDb } from './AbstractLevelDb';
 import { LevelDbTable } from './LevelDbTable';
@@ -169,5 +169,13 @@ export class CachedLevelDb extends AbstractLevelDb {
             throw new Error(`attempt to access cached data on table ${tableId}, which doesn't exist`);
         }
         return { cachedInsertions, cachedDeletions };
+    }
+
+    async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
+        const vbType = virtualBlockchain.getType();
+        const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
+        if (indexTableId != -1) {
+            await this.putRaw(indexTableId, virtualBlockchain.getId(), new Uint8Array(0));
+        }
     }
 }

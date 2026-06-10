@@ -168,10 +168,9 @@ export class AccountManager {
         );
     }
 
-    async updateExpiredEscrows(payeeAccountHash: Uint8Array, payerAccountHash: Uint8Array, timestamp: number, blockHeight: number) {
-        await this.accountEscrowHandler.updateExpiredEscrows(
-            payeeAccountHash,
-            payerAccountHash,
+    async updateExpiredEscrow(escrowIdentifier: Uint8Array, timestamp: number, blockHeight: number) {
+        await this.accountEscrowHandler.updateExpiredEscrow(
+            escrowIdentifier,
             timestamp,
             blockHeight
         );

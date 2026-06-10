@@ -313,7 +313,7 @@ export class GlobalState extends AbstractProvider {
             this.logger.debug(
                 `Add virtual blockchain ${Utils.binaryToHexa(virtualBlockchain.getId())} to index`,
             );
-            await this.db.indexVirtualBlockchain(virtualBlockchain);
+            await this.cachedDb.indexVirtualBlockchain(virtualBlockchain);
         } else {
             // in this case, the virtual blockchain is (and should be) already indexed so no need to index it again
         }
