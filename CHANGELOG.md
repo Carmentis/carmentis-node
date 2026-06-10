@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/Carmentis/carmentis-node/compare/v1.6.0...v1.6.1) (2026-06-10)
+
+
+### Bug Fixes
+
+* added StateProof to handle MB and account proofs ([49e43fa](https://github.com/Carmentis/carmentis-node/commit/49e43fa3773597a1e1d63ef27de110026f461d90))
+
 # [1.6.0](https://github.com/Carmentis/carmentis-node/compare/v1.5.2...v1.6.0) (2026-06-09)
 
 
