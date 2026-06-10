@@ -44,14 +44,19 @@ import {
     ValidatorNodeByAddressAbciResponse,
     VirtualBlockchainStateAbciResponse,
     VirtualBlockchainUpdateAbciResponse,
+    GetMicroblockProofAbciRequest,
+    MicroblockProofAbciResponse,
+    GetAccountProofAbciRequest,
+    AccountProofAbciResponse,
 } from '@cmts-dev/carmentis-sdk-core';
-import {LevelDb} from './database/LevelDb';
-import {AccountManager} from './accounts/AccountManager';
-import {GenesisSnapshotStorageService} from './GenesisSnapshotStorageService';
-import {GlobalState} from './state/GlobalState';
-import {Logger, getLogger} from '@logtape/logtape';
-import {PersistentMerkleTree} from './persistentMerkleTree/PersistentMerkleTree';
-import {NodeCrypto} from "./crypto/NodeCrypto";
+import { LevelDb } from './database/LevelDb';
+import { AccountManager } from './accounts/AccountManager';
+import { GenesisSnapshotStorageService } from './GenesisSnapshotStorageService';
+import { GlobalState } from './state/GlobalState';
+import { Logger, getLogger } from '@logtape/logtape';
+import { PersistentMerkleTree } from './persistentMerkleTree/PersistentMerkleTree';
+import { NodeCrypto } from "./crypto/NodeCrypto";
+import { StateProof } from './stateProof/StateProof';
 
 const MAX_RAW_BLOCK_PART_SIZE = 2 * 1024 * 1024;
 
@@ -113,6 +118,10 @@ export class ABCIQueryHandler {
                 return this.getChainInformation(request);
             case AbciRequestType.GET_SERIALIZED_MICROBLOCK_BY_HEIGHT:
                 return this.getSerializedMicroblockByHeight(request);
+            case AbciRequestType.GET_MICROBLOCK_PROOF:
+                return this.getMicroblockProof(request);
+            case AbciRequestType.GET_ACCOUNT_PROOF:
+                return this.getAccountProof(request);
             default:
                 throw new Error(`Unsupported request`);
         }
@@ -329,6 +338,26 @@ export class ABCIQueryHandler {
             responseType: AbciResponseType.SERIALIAZED_MICROBLOCK_BY_HEIGHT,
             serializedContent,
         }
+    }
+
+    async getMicroblockProof(request: GetMicroblockProofAbciRequest): Promise<MicroblockProofAbciResponse> {
+        const db = this.provider.getDatabase();
+        const stateProof = new StateProof(db);
+        const proof = await stateProof.createMicroblockProof(request.hash);
+        return {
+            responseType: AbciResponseType.MICROBLOCK_PROOF,
+            proof,
+        };
+    }
+
+    async getAccountProof(request: GetAccountProofAbciRequest): Promise<AccountProofAbciResponse> {
+        const db = this.provider.getDatabase();
+        const stateProof = new StateProof(db);
+        const proof = await stateProof.createAccountProof(request.accountId);
+        return {
+            responseType: AbciResponseType.ACCOUNT_PROOF,
+            proof,
+        };
     }
 
     async awaitMicroblockAnchoring(request: AwaitMicroblockAnchoringAbciRequest): Promise<MicroblockAnchoringAbciResponse> {
