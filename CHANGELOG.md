@@ -1,3 +1,25 @@
+## [1.6.6](https://github.com/Carmentis/carmentis-node/compare/v1.6.5...v1.6.6) (2026-06-11)
+
+
+### Bug Fixes
+
+* missing building step before proceeding to release ([887e1b0](https://github.com/Carmentis/carmentis-node/commit/887e1b0ce14b548d6ca6e666fc7099ce81577eb3))
+* missing directory specification when running the install ([442f94f](https://github.com/Carmentis/carmentis-node/commit/442f94f17e977238114684760f75207eaeb32c51))
+
+## [1.6.5](https://github.com/Carmentis/carmentis-node/compare/v1.6.4...v1.6.5) (2026-06-11)
+
+
+### Bug Fixes
+
+* bump to version 1.2.21 of @cmts-dev/carmentis-sdk-core ([08a949d](https://github.com/Carmentis/carmentis-node/commit/08a949d7f56e20a90f8b28bbbf5f1cdff66c0d64))
+
+## [1.6.4](https://github.com/Carmentis/carmentis-node/compare/v1.6.3...v1.6.4) (2026-06-11)
+
+
+### Bug Fixes
+
+* removed VB index tables, updated the way to store the protocol VB id ([3db16d7](https://github.com/Carmentis/carmentis-node/commit/3db16d78c4b4a303e6aa054bac054e87aca98dab))
+
 ## [1.6.3](https://github.com/Carmentis/carmentis-node/compare/v1.6.2...v1.6.3) (2026-06-10)
 
 

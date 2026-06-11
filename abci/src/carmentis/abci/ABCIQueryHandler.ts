@@ -29,7 +29,6 @@ import {
     GetMicroblockInformationByHeightAbciRequest,
     GetSerializedMicroblockByHeightAbciRequest,
     GetRawBlockContentAbciRequest,
-    GetObjectListAbciRequest,
     GetValidatorNodeByAddressAbciRequest,
     GetVirtualBlockchainStateAbciRequest,
     GetVirtualBlockchainUpdateAbciRequest,
@@ -39,7 +38,6 @@ import {
     MicroblockInformationAbciResponse,
     SerializedMicroblockByHeightAbciResponse,
     RawBlockContentAbciResponse,
-    ObjectListAbciResponse,
     Utils,
     ValidatorNodeByAddressAbciResponse,
     VirtualBlockchainStateAbciResponse,
@@ -86,8 +84,6 @@ export class ABCIQueryHandler {
                 return this.getAccountByPublicKeyHash(request);
             case AbciRequestType.GET_VALIDATOR_NODE_BY_ADDRESS:
                 return this.getValidatorNodeByAddress(request);
-            case AbciRequestType.GET_OBJECT_LIST:
-                return this.getObjectList(request);
             case AbciRequestType.GET_GENESIS_SNAPSHOT:
                 return this.getGenesisSnapshot(request);
             case AbciRequestType.GET_ACCOUNT_HISTORY:
@@ -441,23 +437,6 @@ export class ABCIQueryHandler {
             responseType: AbciResponseType.VALIDATOR_NODE_BY_ADDRESS,
             validatorNodeHash
         }
-    }
-
-    async getObjectList(request: GetObjectListAbciRequest): Promise<ObjectListAbciResponse> {
-        const requestedObjectType = request.type;
-        this.logger.debug(`Request a list of objects of type ${requestedObjectType}`);
-        const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(requestedObjectType);
-        if (indexTableId == -1) {
-            throw new Error(`Invalid object type ${requestedObjectType}`);
-        }
-
-        const list = await this.db.getKeys(indexTableId, 100);
-        this.logger.debug(`Returning ${list.length} elements`);
-        return {
-            responseType: AbciResponseType.OBJECT_LIST,
-            list: list
-        }
-        //return this.messageSerializer.serialize(SCHEMAS.MSG_OBJECT_LIST, { list });
     }
 
     async getMicroblockBodys(request: GetMicroblockBodysAbciRequest): Promise<MicroblockBodysAbciResponse> {

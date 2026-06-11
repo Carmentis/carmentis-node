@@ -229,11 +229,14 @@ export class GlobalStateUpdater {
         if (virtualBlockchain.getHeight() == 1) {
             this.newObjectCounts[virtualBlockchain.getType()] += 1;
         }
+        const vbId = virtualBlockchain.getId();
+        const vbType = virtualBlockchain.getType();
+        const height = virtualBlockchain.getHeight();
         this.processedAndAcceptedMicroblocks.push({
             hash: microblock.getHashAsBytes(), //vb.currentMicroblock.hash,
-            vbId: virtualBlockchain.getId(),
-            vbType: virtualBlockchain.getType(),
-            height: virtualBlockchain.getHeight(),
+            vbId,
+            vbType,
+            height,
             size: transaction.length,
             sectionCount: numberOfSectionsInMicroblock,
         });
@@ -247,6 +250,11 @@ export class GlobalStateUpdater {
             microblock,
             transaction,
         );
+
+        // if this the genesis microblock of the Protocol VB, save its ID in CHAIN_INFORMATION
+        if (vbType === CHAIN.VB_PROTOCOL && height === 1) {
+            await globalState.storeProtocolVirtualBlockchainIdentifier(vbId);
+        }
     }
 
     /**
@@ -498,7 +506,6 @@ export class GlobalStateUpdater {
         chainInfoObject.height = blockHeight;
         chainInfoObject.lastBlockTimestamp = blockTimestamp;
         chainInfoObject.microblockCount += this.processedAndAcceptedMicroblocks.length;
-        // TODO: update the chain information object with the protocol vbid
         chainInfoObject.objectCounts = chainInfoObject.objectCounts.map(
             (count, ndx) => count + this.newObjectCounts[ndx],
         );

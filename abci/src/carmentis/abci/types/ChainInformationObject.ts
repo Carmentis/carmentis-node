@@ -3,4 +3,5 @@ export interface ChainInformationObject {
     objectCounts: number[]
     height: number;
     lastBlockTimestamp: number;
+    protocolVirtualBlockchainId: Uint8Array;
 }

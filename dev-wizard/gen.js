@@ -138,7 +138,7 @@ for(let n = 1; n <= N_NODES; n++) {
     `endlocal\n` +
     `title Node ${n} - ABCI\n` +
     `SET NODE_CONFIG=${rootPath}\\abci\\config${n}.toml\n` +
-    `npm run start:debug\n`;
+    `npm run start:prod\n`;
 
   const cometConfigPath = path.join(cometConfigRootPath, `node${n}`, "config");
 
