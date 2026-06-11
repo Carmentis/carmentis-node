@@ -9,7 +9,7 @@ genesisRunoffs*
 logs*
 buf*
 .cometbft
-abci
+./abci
 
 
 # config

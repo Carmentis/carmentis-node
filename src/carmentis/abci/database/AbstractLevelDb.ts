@@ -1,0 +1,330 @@
+import { DbInterface, LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
+import {
+    BlockContent,
+    BlockInformation,
+    BlockModifiedAccounts,
+    ChainInformation,
+    DataFile,
+    Escrows,
+    ValidatorNodeByAddress,
+    MicroblockStorage,
+} from '../types/valibot/db/db';
+import {
+    AccountState,
+    BlockchainUtils,
+    CHAIN,
+    Microblock,
+    MicroblockInformation,
+    Utils,
+    AccountHistoryEntry,
+} from '@cmts-dev/carmentis-sdk-core';
+import { NodeEncoder } from '../NodeEncoder';
+import { LevelDb } from './LevelDb';
+import { ChainInformationObject } from '../types/ChainInformationObject';
+import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
+import { getLogger, Logger } from '@logtape/logtape';
+
+export abstract class AbstractLevelDb implements DbInterface {
+    abstract getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined>;
+    abstract putRaw(tableId: number, key: Uint8Array, data: Uint8Array): Promise<boolean>;
+    abstract getKeys(tableId: number): Promise<Uint8Array[]>;
+    abstract query(
+        tableId: number,
+        query?: LevelQueryIteratorOptions,
+    ): Promise<LevelQueryResponseType>;
+    abstract getFullTable(tableId: number): Promise<Uint8Array[][]>;
+    abstract del(tableId: number, key: Uint8Array): Promise<boolean>;
+
+    constructor(protected logger: Logger) {
+    }
+
+    public static getTableName(tableId: number) {
+        const entry = Object.entries(LevelDbTable).find(([ name, id ]) => id == tableId);
+        return entry ? entry[0] : '(UNKNOWN TABLE)';
+    }
+
+    async getProtocolVirtualBlockchainIdentifier() {
+        const chainInfo = await this.getChainInformation();
+        const protocolVirtualBlockchainId = chainInfo.protocolVirtualBlockchainId;
+        const nullHash = Utils.getNullHash();
+
+        if (Utils.binaryIsEqual(protocolVirtualBlockchainId, nullHash)) {
+            this.logger.error(
+                `No protocol virtual blockchain identifier is currently defined in CHAIN_INFORMATION`,
+            );
+            throw new Error(
+                `No protocol virtual blockchain identifier is currently defined in CHAIN_INFORMATION`,
+            );
+        }
+        return protocolVirtualBlockchainId;
+    }
+
+    async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array): Promise<Uint8Array | undefined> {
+        return this.getRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, vbIdentifier);
+    }
+
+    async setSerializedVirtualBlockchainState(identifier: Uint8Array, serializedState: Uint8Array): Promise<boolean> {
+        this.logger.debug(`Setting vb state for {identifier}: {dataLength}`, () => ({
+            identifier: Utils.binaryToHexa(identifier),
+            dataLength: serializedState.length,
+        }));
+        return await this.putRaw(LevelDbTable.VIRTUAL_BLOCKCHAIN_STATE, identifier, serializedState);
+    }
+
+    async getChainInformation(): Promise<ChainInformation> {
+        this.logger.debug('Getting chain information');
+        const serializedChainInfo = await this.getRaw(
+            LevelDbTable.CHAIN_INFORMATION,
+            ChainInformationIndex.CHAIN_INFORMATION_KEY,
+        );
+        if (serializedChainInfo) {
+            return NodeEncoder.decodeChainInformation(serializedChainInfo);
+        } else {
+            const defaultChainInfo: ChainInformation = {
+                height: 0,
+                lastBlockTimestamp: 0,
+                objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0),
+                microblockCount: 0,
+                protocolVirtualBlockchainId: Utils.getNullHash(),
+            };
+            return defaultChainInfo;
+        }
+    }
+
+    async getAccountIdByPublicKeyHash(
+        publicKeyBytesHash: Uint8Array,
+    ): Promise<Uint8Array | undefined> {
+        const serialzedAccountId = this.getRaw(
+            LevelDbTable.ACCOUNT_BY_PUBLIC_KEY,
+            publicKeyBytesHash,
+        );
+        if (serialzedAccountId === undefined) return undefined;
+        return serialzedAccountId;
+    }
+
+    putAccountState(id: Uint8Array, accountState: AccountState): Promise<boolean> {
+        return this.putRaw(
+            LevelDbTable.ACCOUNT_STATE,
+            id,
+            BlockchainUtils.encodeAccountState(accountState),
+        );
+    }
+
+    putAccountHistoryEntry(historyHash: Uint8Array, entry: AccountHistoryEntry): Promise<boolean> {
+        return this.putRaw(
+            LevelDbTable.ACCOUNT_HISTORY,
+            historyHash,
+            NodeEncoder.encodeAccountHistoryEntry(entry),
+        );
+    }
+
+    async setMicroblockInformation(microblock: Microblock, info: MicroblockInformation): Promise<boolean> {
+        this.logger.debug(
+            `Setting microblock information for microblock ${microblock.getHash().encode()}`,
+        );
+        const hash = microblock.getHashAsBytes();
+        const serializedInfo = BlockchainUtils.encodeMicroblockInformation(info);
+        return await this.putRaw(LevelDbTable.MICROBLOCK_VB_INFORMATION, hash, serializedInfo);
+    }
+
+    async getMicroblockInformation(
+        microblockHash: Uint8Array,
+    ): Promise<MicroblockInformation | undefined> {
+        this.logger.debug(
+            `Getting information for microblock ${Utils.binaryToHexa(microblockHash)}`,
+        );
+        const serializedMicroblockInformation = await this.getRaw(
+            LevelDbTable.MICROBLOCK_VB_INFORMATION,
+            microblockHash,
+        );
+        if (serializedMicroblockInformation === undefined) {
+            return undefined;
+        }
+        return BlockchainUtils.decodeMicroblockInformation(serializedMicroblockInformation);
+    }
+
+    async getEscrow(escrowIdentifier: Uint8Array): Promise<Escrows | undefined> {
+        const serializedEscrows = await this.getRaw(LevelDbTable.ESCROWS, escrowIdentifier);
+        return serializedEscrows === undefined
+            ? undefined
+            : NodeEncoder.decodeEscrows(serializedEscrows);
+    }
+
+    async putBlockInformation(blockHeight: number, info: BlockInformation) {
+        return await this.putRaw(
+            LevelDbTable.BLOCK_INFORMATION,
+            LevelDb.convertHeightToTableKey(blockHeight),
+            NodeEncoder.encodeBlockInformation(info),
+        );
+    }
+
+    async putBlockContent(height: number, blockContent: BlockContent) {
+        return await this.putRaw(
+            LevelDbTable.BLOCK_CONTENT,
+            LevelDb.convertHeightToTableKey(height),
+            NodeEncoder.encodeBlockContent(blockContent),
+        );
+    }
+
+    async putBlockModifiedAccounts(height: number, modifiedAccounts: BlockModifiedAccounts) {
+        return await this.putRaw(
+            LevelDbTable.BLOCK_MODIFIED_ACCOUNTS,
+            LevelDb.convertHeightToTableKey(height),
+            NodeEncoder.encodeBlockModifiedAccounts(modifiedAccounts),
+        );
+    }
+
+    async getBlockModifiedAccounts(height: number): Promise<BlockModifiedAccounts | undefined> {
+        const serializedBlockModifiedAccounts = await this.getRaw(
+            LevelDbTable.BLOCK_MODIFIED_ACCOUNTS,
+            LevelDb.convertHeightToTableKey(height),
+        );
+        if (serializedBlockModifiedAccounts === undefined) return undefined;
+        return NodeEncoder.decodeBlockModifiedAccounts(serializedBlockModifiedAccounts);
+    }
+
+    async getDataFileFromDataFileKey(
+        dbFileKey: Uint8Array<ArrayBuffer>,
+    ): Promise<DataFile | undefined> {
+        const serializedDataFile = await this.getRaw(LevelDbTable.DATA_FILE, dbFileKey);
+        if (serializedDataFile === undefined) return undefined;
+        return NodeEncoder.decodeDataFile(serializedDataFile);
+    }
+
+    async putDataFile(dataFileKey: Uint8Array, dataFileObject: DataFile) {
+        return await this.putRaw(
+            LevelDbTable.DATA_FILE,
+            dataFileKey,
+            NodeEncoder.encodeDataFile(dataFileObject),
+        );
+    }
+
+    async putMicroblockStorage(
+        microblockHeaderHash: Uint8Array,
+        microblockStorage: MicroblockStorage,
+    ) {
+        return await this.putRaw(
+            LevelDbTable.MICROBLOCK_STORAGE,
+            microblockHeaderHash,
+            NodeEncoder.encodeMicroblockStorage(microblockStorage),
+        );
+    }
+
+    async getMicroblockStorage(
+        microblockHeaderHash: Uint8Array,
+    ): Promise<MicroblockStorage | undefined> {
+        const serializedMicroblockStorage = await this.getRaw(
+            LevelDbTable.MICROBLOCK_STORAGE,
+            microblockHeaderHash,
+        );
+        if (serializedMicroblockStorage === undefined) return undefined;
+        return NodeEncoder.decodeMicroblockStorage(serializedMicroblockStorage);
+    }
+
+    async putChainInformation(chainInfoObject: ChainInformationObject) {
+        this.logger.debug(
+            `Setting chain information at height ${chainInfoObject.height}: ${chainInfoObject.microblockCount} microblocks, ${chainInfoObject.objectCounts} object created`,
+        );
+        const serializedChainInfo = NodeEncoder.encodeChainInformation(chainInfoObject);
+        return await this.putRaw(
+            LevelDbTable.CHAIN_INFORMATION,
+            ChainInformationIndex.CHAIN_INFORMATION_KEY,
+            serializedChainInfo,
+        );
+    }
+
+    async putAccountWithVestingLocks(accountHash: Uint8Array): Promise<boolean> {
+        return await this.putRaw(
+            LevelDbTable.ACCOUNTS_WITH_VESTING_LOCKS,
+            accountHash,
+            NodeEncoder.encodeAccountsWithVestingLocks({}),
+        );
+    }
+
+    async putAccountWithStakingLocks(accountHash: Uint8Array): Promise<boolean> {
+        return await this.putRaw(
+            LevelDbTable.ACCOUNTS_WITH_STAKING_LOCKS,
+            accountHash,
+            NodeEncoder.encodeAccountsWithStakingLocks({}),
+        );
+    }
+
+    async putEscrow(escrowIdentifier: Uint8Array, escrowData: Escrows): Promise<boolean> {
+        return await this.putRaw(
+            LevelDbTable.ESCROWS,
+            escrowIdentifier,
+            NodeEncoder.encodeEscrows(escrowData),
+        );
+    }
+
+    async getValidatorNodeByAddress(
+        nodeAddress: Uint8Array,
+    ): Promise<ValidatorNodeByAddress | undefined> {
+        const response = await this.getRaw(LevelDbTable.VALIDATOR_NODE_BY_ADDRESS, nodeAddress);
+        if (response === undefined) return undefined;
+        return NodeEncoder.decodeValidatorNodeByAddress(response);
+    }
+
+    async putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array, votingPower: number): Promise<boolean> {
+        if (validatorNodeHash.length != 32) {
+            throw new Error(`invalid size of validatorNodeHash: ${validatorNodeHash.length} bytes (expecting 32)`);
+        }
+        return await this.putRaw(
+            LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
+            nodeAddress,
+            NodeEncoder.encodeValidatorNodeByAddress({
+                validatorNodeHash,
+                votingPower,
+            }),
+        );
+    }
+
+    async getBlockInformation(height: number): Promise<BlockInformation | undefined> {
+        const serializedBlockInformation = await this.getRaw(
+            LevelDbTable.BLOCK_INFORMATION,
+            LevelDb.convertHeightToTableKey(height),
+        );
+        if (serializedBlockInformation === undefined) return undefined;
+        return NodeEncoder.decodeBlockInformation(serializedBlockInformation);
+    }
+
+    async getBlockContent(height: number): Promise<BlockContent | undefined> {
+        const serializedBlockContent = await this.getRaw(
+            LevelDbTable.BLOCK_CONTENT,
+            LevelDb.convertHeightToTableKey(height),
+        );
+        if (serializedBlockContent === undefined) return undefined;
+        return NodeEncoder.decodeBlockContent(serializedBlockContent);
+    }
+
+    async getAccountStateByAccountId(accountId: Uint8Array): Promise<AccountState | undefined> {
+        const serializedAccountState = await this.getRaw(LevelDbTable.ACCOUNT_STATE, accountId);
+        if (serializedAccountState === undefined) return undefined;
+        return BlockchainUtils.decodeAccountState(serializedAccountState);
+    }
+
+    async getAccountHistoryEntryByHistoryHash(historyHash: Uint8Array) {
+        const serializedAccountHistoryEntry = await this.getRaw(
+            LevelDbTable.ACCOUNT_HISTORY,
+            historyHash,
+        );
+        if (serializedAccountHistoryEntry === undefined) return undefined;
+        return NodeEncoder.decodeAccountHistoryEntry(serializedAccountHistoryEntry);
+        //return result as AccountHistoryEntry;
+    }
+
+    async getMerkleNode(key: Uint8Array): Promise<Uint8Array | undefined> {
+        return await this.getRaw(
+            LevelDbTable.MERKLE_NODE,
+            key,
+        );
+    }
+
+    async putMerkleNode(key: Uint8Array, nodeHash: Uint8Array): Promise<boolean> {
+        return await this.putRaw(
+            LevelDbTable.MERKLE_NODE,
+            key,
+            nodeHash,
+        );
+    }
+}

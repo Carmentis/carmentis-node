@@ -1,0 +1,257 @@
+import { Level } from 'level';
+import { CHAIN, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk-core';
+import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
+import { getLogger } from '@logtape/logtape';
+import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
+import { ChainInformation } from '../types/valibot/db/db';
+import { NodeEncoder } from '../NodeEncoder';
+import { AbstractLevelDb } from './AbstractLevelDb';
+import { ChainInformationIndex, LevelDbTable } from './LevelDbTable';
+
+export class LevelDb extends AbstractLevelDb {
+    private db: Level<Uint8Array, Uint8Array>;
+    private path: string;
+    private sub: Map<
+        number,
+        AbstractSublevel<
+            Level<Uint8Array, Uint8Array>,
+            string | Uint8Array<ArrayBufferLike> | Buffer,
+            Uint8Array,
+            Uint8Array
+        >
+    > = new Map();
+    private static logger = getLogger(['node', 'db', LevelDb.name])
+    private static encoding  = {
+        keyEncoding: 'view',
+        valueEncoding: 'view',
+    };
+
+    constructor(path: string) {
+        super(LevelDb.logger)
+        this.path = path;
+        this.db = new Level(this.path, LevelDb.encoding);
+    }
+
+    /**
+     * This method is used when a height should be used as a table key.
+     * @param height
+     */
+    public static convertHeightToTableKey(height: number): Uint8Array {
+        return new Uint8Array(Utils.intToByteArray(height, 6));
+    }
+
+    initialize() {
+        this.logger.info(`Initializing LevelDB at ${this.path}`);
+        for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
+            this.sub.set(
+                tableId,
+                this.db.sublevel(Utils.numberToHexa(tableId, 2), LevelDb.encoding)
+            );
+        }
+    }
+
+    async open() {
+        await this.db.open();
+    }
+
+    async close() {
+        await this.db.close();
+    }
+
+    async clear() {
+        await this.db.clear();
+    }
+
+    getDbIterator() {
+        return this.db.iterator();
+    }
+
+    async getRaw(tableId: number, key: Uint8Array): Promise<Uint8Array | undefined> {
+        this.logger.debug(
+            `Accessing binary with key {key} on table {tableName}`, () => ({
+                key: Utils.binaryToHexa(key),
+                tableName: LevelDb.getTableName(tableId),
+            })
+        );
+        try {
+            const subTable = this.sub.get(tableId);
+            if (subTable) {
+                const b = await subTable.get(key);
+                if (b !== undefined) {
+                    this.logger.debug(`Returning ${b.length} bytes`);
+                    return new Uint8Array(
+                        b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
+                    );
+                }
+            } else {
+                this.logger.error(`table ${tableId} not found`);
+            }
+
+        } catch (e) {
+            this.logger.error('{e}', { e });
+        }
+        this.logger.warn(
+            `Raw entry ${Utils.binaryToHexa(key)} not found on table {tableName}: returning undefined`, () => ({
+                tableName: LevelDb.getTableName(tableId)
+            })
+        );
+        return undefined;
+    }
+
+    async putRaw(tableId: number, key: Uint8Array, data: Uint8Array) {
+        this.logger.debug(
+            `Storing raw data with key {key} on table {tableName} in buffer: length = {length} bytes, data extract = {data}`, () => ({
+                key: Utils.binaryToHexa(key),
+                tableName: LevelDb.getTableName(tableId),
+                length: data.length,
+                data: Utils.binaryToHexa(data.slice(0, 128)),
+            })
+        );
+
+        try {
+            const subTable = this.sub.get(tableId);
+            if (subTable) {
+                await subTable.put(key, data);
+                return true;
+            } else {
+                // TODO: handle this case
+                return false;
+            }
+        } catch (e) {
+            this.logger.error(`{e}`, { e });
+            return false;
+        }
+    }
+
+
+    async getKeys(tableId: number, limit?: number): Promise<Uint8Array[]> {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(
+                `Attempting to access an undefined table {tableName}: aborting`, () => ({
+                    tableName: LevelDb.getTableName(tableId)
+                })
+            )
+            return []
+        }
+
+        const keys: Uint8Array[] = [];
+        for await (const [key] of table.iterator({ limit })) {
+            keys.push(key);
+        }
+        return keys;
+    }
+
+    /**
+     * Executes a query on the specified table using provided iterator options.
+     *
+     * @param {number} tableId - The identifier of the table to execute the query on.
+     * @param {AbstractIteratorOptions<Uint8Array<ArrayBufferLike>, Uint8Array<ArrayBufferLike>>} query - The query options for the iterator.
+     * @return {Promise<Iterator | undefined>} A promise that resolves to the result of the query iterator on success, or undefined if an error occurs.
+     */
+    async query(
+        tableId: number,
+        query?: LevelQueryIteratorOptions,
+    ): Promise<LevelQueryResponseType> {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to query an undefined table ${tableId}: aborting`);
+            throw new Error("Attempted to query an undefined table");
+        }
+
+        if (query) {
+            return table.iterator(query);
+        } else {
+            return table.iterator();
+        }
+    }
+
+    async getFullTable(tableId: number): Promise<[Uint8Array,Uint8Array][]> {
+        const iterator = await this.query(tableId);
+        return await iterator.all();
+    }
+
+    async del(tableId: number, key: Uint8Array) {
+        const table = this.sub.get(tableId);
+        if (table === undefined) {
+            this.logger.debug(`Attempting to delete an entry an undefined table ${tableId}: aborting`);
+            return false;
+        }
+
+        try {
+            await table.del(key);
+            return true;
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
+    }
+
+    getBatch() {
+        const batchObject = this.db.batch();
+        const sub = this.sub;
+
+        const obj = {
+            del: function (tableId: number, list: any) {
+                const table = sub.get(tableId);
+                if (table === undefined) {
+                    throw new Error(`Attempted to access an undefined table (table id ${tableId})`);
+                }
+
+                const options = tableId == -1 ? {} : { sublevel: table };
+
+                for (const key of list) {
+                    batchObject.del(key, options);
+                }
+                return obj;
+            },
+            put: function (tableId: number, list: any) {
+                const table = sub.get(tableId);
+                if (table === undefined) {
+                    throw new Error('Attempted to access an undefined table');
+                }
+
+                const options = { sublevel: table };
+
+                for (const [key, value] of list) {
+                    batchObject.put(key, value, options);
+                }
+                return obj;
+            },
+            putAtRoot: function (list: any) {
+                const options = {};
+
+                for (const [key, value] of list) {
+                    batchObject.put(key, value, options);
+                }
+                return obj;
+            },
+            write: async function () {
+                try {
+                    await batchObject.write();
+                    return true;
+                } catch (e) {
+                    console.error(e);
+                    return e;
+                }
+            },
+        };
+
+        return obj;
+    }
+
+    async initializeTable() {
+        const chainInfo: ChainInformation = {
+            height: 0,
+            lastBlockTimestamp: 0,
+            microblockCount: 0,
+            objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0), // TODO: use version-based constants
+            protocolVirtualBlockchainId: Utils.getNullHash(),
+        };
+        await this.putRaw(
+            LevelDbTable.CHAIN_INFORMATION,
+            ChainInformationIndex.CHAIN_INFORMATION_KEY,
+            NodeEncoder.encodeChainInformation(chainInfo),
+        );
+    }
+}
