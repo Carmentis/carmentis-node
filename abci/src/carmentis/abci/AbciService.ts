@@ -744,9 +744,18 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const proposedTxs: Uint8Array[] = [];
 
 
+        // define the limits
         const protocolVariables = await workingState.getProtocolState();
         const maxBlockSize = protocolVariables.getMaximumBlockSizeInBytes();
-        const maxMicroblocksPerBlock = this.nodeConfig.getMaxMicroblocksPerBlock() ?? -1;
+        const protocolLevelMaxMicroblocksPerBlock = protocolVariables.getProtocolVariables().maxMicroblocksPerBlock;
+        const configLeveLMaxMicroblocksPerBlock = this.nodeConfig.getMaxMicroblocksPerBlock();
+        const maxMicroblocksPerBlock =
+            (
+                // should be a positive, safe, strictly positive integer
+                Number.isInteger(configLeveLMaxMicroblocksPerBlock) &&
+                Number.isSafeInteger(configLeveLMaxMicroblocksPerBlock) &&
+                0 < configLeveLMaxMicroblocksPerBlock
+            ) ? configLeveLMaxMicroblocksPerBlock : protocolLevelMaxMicroblocksPerBlock;
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 
         let currentBlockSizeInBytes = 0;
@@ -845,11 +854,30 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         );
 
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
+
+        // reject the proposal if proposed block exceeds the protocol-level limits...
+        const protocolVariables = await workingState.getProtocolState();
+
+        // ... in number of microblocks per block
+        const protocolLevelMaxMicroblocksPerBlock = protocolVariables.getProtocolVariables().maxMicroblocksPerBlock;
+        const mbsInBlock = request.txs.length;
+        if (protocolLevelMaxMicroblocksPerBlock < mbsInBlock) return ResponseProcessProposal.create({
+            status: ResponseProcessProposal_ProposalStatus.REJECT,
+        });
+
+        // ... in total bytes size (only the transactions, the resulting block may
+        // exceed the protocol-level limits in size when including the header)
+        const maxBlockSizeInBytes = protocolVariables.getMaximumBlockSizeInBytes();
+        const blockSizeInBytes = request.txs.reduce((acc, tx) => acc + tx.length, 0);
+        if (maxBlockSizeInBytes < blockSizeInBytes) return ResponseProcessProposal.create({
+            status: ResponseProcessProposal_ProposalStatus.REJECT,
+        });
+
+
+        // proceed to the global state update
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
         let status = ResponseProcessProposal_ProposalStatus.ACCEPT;
-
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
-
         for (const tx of request.txs) {
             try {
                 // we attempt to parse the received microblock and check its consistency
