@@ -44,29 +44,19 @@ export abstract class AbstractLevelDb implements DbInterface {
     }
 
     async getProtocolVirtualBlockchainIdentifier() {
-        const protocolTableId = LevelDb.getTableIdFromVirtualBlockchainType(CHAIN.VB_PROTOCOL);
-        const protocolVirtualBlockchainIdentifiers = await this.getKeys(protocolTableId);
-        const foundIdentifiersNumber = protocolVirtualBlockchainIdentifiers.length;
-        // we expect at least one identifier
-        if (foundIdentifiersNumber === 0) {
-            this.logger.error(
-                `No protocol virtual blockchain identifier found in table ${protocolTableId}`,
-            );
-            throw new Error(
-                `No protocol virtual blockchain identifier found in table ${protocolTableId}`,
-            );
-        }
+        const chainInfo = await this.getChainInformation();
+        const protocolVirtualBlockchainId = chainInfo.protocolVirtualBlockchainId;
+        const nullHash = Utils.getNullHash();
 
-        // we expect no more than one identifier
-        if (foundIdentifiersNumber > 1) {
+        if (Utils.binaryIsEqual(protocolVirtualBlockchainId, nullHash)) {
             this.logger.error(
-                `More than one protocol virtual blockchain identifier found in table ${protocolTableId}: ${protocolVirtualBlockchainIdentifiers}`,
+                `No protocol virtual blockchain identifier is currently defined in CHAIN_INFORMATION`,
             );
             throw new Error(
-                `More than one protocol virtual blockchain identifier found in table ${protocolTableId}: ${protocolVirtualBlockchainIdentifiers}`,
+                `No protocol virtual blockchain identifier is currently defined in CHAIN_INFORMATION`,
             );
         }
-        return protocolVirtualBlockchainIdentifiers[0];
+        return protocolVirtualBlockchainId;
     }
 
     async getSerializedVirtualBlockchainState(vbIdentifier: Uint8Array): Promise<Uint8Array | undefined> {
@@ -95,6 +85,7 @@ export abstract class AbstractLevelDb implements DbInterface {
                 lastBlockTimestamp: 0,
                 objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0),
                 microblockCount: 0,
+                protocolVirtualBlockchainId: Utils.getNullHash(),
             };
             return defaultChainInfo;
         }

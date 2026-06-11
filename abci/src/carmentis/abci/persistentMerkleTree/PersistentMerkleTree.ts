@@ -89,8 +89,8 @@ export class PersistentMerkleTree {
      * @returns {number} - The height of the tree.
      */
     private static sizeToHeight(size: number): number {
-        if (size < 1) {
-            throw new Error('size must be at least 1');
+        if (size < 1 || size > 2 ** 32) {
+            throw new Error(`size must be at least 1 and at most 2**32, got ${size}`);
         }
         // For size == 1, the height is 1.
         // For size > 1, the height is the 1-indexed position of the highest significant bit in size-1, plus one.

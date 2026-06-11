@@ -170,12 +170,4 @@ export class CachedLevelDb extends AbstractLevelDb {
         }
         return { cachedInsertions, cachedDeletions };
     }
-
-    async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
-        const vbType = virtualBlockchain.getType();
-        const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
-        if (indexTableId != -1) {
-            await this.putRaw(indexTableId, virtualBlockchain.getId(), new Uint8Array(0));
-        }
-    }
 }

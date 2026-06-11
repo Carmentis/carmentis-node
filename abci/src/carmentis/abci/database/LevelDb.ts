@@ -40,23 +40,6 @@ export class LevelDb extends AbstractLevelDb {
         return new Uint8Array(Utils.intToByteArray(height, 6));
     }
 
-    public static getTableIdFromVirtualBlockchainType(type: number) {
-        switch (type) {
-            case CHAIN.VB_ACCOUNT:
-                return LevelDbTable.ACCOUNTS_INDEX;
-            case CHAIN.VB_VALIDATOR_NODE:
-                return LevelDbTable.VALIDATOR_NODES_INDEX;
-            case CHAIN.VB_ORGANIZATION:
-                return LevelDbTable.ORGANIZATIONS_INDEX;
-            case CHAIN.VB_APPLICATION:
-                return LevelDbTable.APPLICATIONS_INDEX;
-            case CHAIN.VB_PROTOCOL:
-                return LevelDbTable.PROTOCOL_INDEX;
-            default:
-                return -1;
-        }
-    }
-
     initialize() {
         this.logger.info(`Initializing LevelDB at ${this.path}`);
         for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
@@ -263,24 +246,12 @@ export class LevelDb extends AbstractLevelDb {
             lastBlockTimestamp: 0,
             microblockCount: 0,
             objectCounts: Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0), // TODO: use version-based constants
+            protocolVirtualBlockchainId: Utils.getNullHash(),
         };
         await this.putRaw(
             LevelDbTable.CHAIN_INFORMATION,
             ChainInformationIndex.CHAIN_INFORMATION_KEY,
             NodeEncoder.encodeChainInformation(chainInfo),
         );
-    }
-
-    async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
-        const vbType = virtualBlockchain.getType();
-        const indexTableId = LevelDb.getTableIdFromVirtualBlockchainType(vbType);
-        if (indexTableId != -1) {
-            await this.putRaw(indexTableId, virtualBlockchain.getId(), new Uint8Array(0));
-        } else {
-            // no need to index this type of virtual blockchain
-            this.logger.debug(
-                `Ignore virtual blockchain from index: virtual blockchain type ${virtualBlockchain.getType()} is ignored`,
-            );
-        }
     }
 }

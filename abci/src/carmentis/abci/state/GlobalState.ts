@@ -18,7 +18,6 @@ import {
     Utils,
     VirtualBlockchain,
     VirtualBlockchainState,
-    VirtualBlockchainStatus,
 } from '@cmts-dev/carmentis-sdk-core';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
@@ -75,6 +74,16 @@ export class GlobalState extends AbstractProvider {
         }
 
         return vbState;
+    }
+
+    async storeProtocolVirtualBlockchainIdentifier(identifier: Uint8Array) {
+        const chainInformation = await this.cachedDb.getChainInformation();
+        const nullHash = Utils.getNullHash();
+        if (!Utils.binaryIsEqual(chainInformation.protocolVirtualBlockchainId, nullHash)) {
+            throw new Error(`attempt to update the protocol VB identifier after it has already been set`);
+        }
+        chainInformation.protocolVirtualBlockchainId = identifier;
+        await this.cachedDb.putChainInformation(chainInformation);
     }
 
     async getProtocolState(): Promise<ProtocolInternalState> {
@@ -188,8 +197,8 @@ export class GlobalState extends AbstractProvider {
     async getApplicationStateHashes(): Promise<ApplicationStateHashes> {
         //const perfMeasure = this.perf.start('computeApplicationHash');
 
-        const chainStatus = await this.db.getChainInformation();
-        const currentHeight = chainStatus.height;
+        const chainInformation = await this.db.getChainInformation();
+        const currentHeight = chainInformation.height;
         let lastRadixHash: Uint8Array;
         this.logger.debug(`computing application hash`);
         if (currentHeight > 0) {
@@ -306,17 +315,6 @@ export class GlobalState extends AbstractProvider {
             virtualBlockchainId: virtualBlockchain.getId(),
             virtualBlockchainType: virtualBlockchain.getType(),
         });
-    }
-
-    async indexVirtualBlockchain(virtualBlockchain: VirtualBlockchain) {
-        if (virtualBlockchain.getHeight() === 1) {
-            this.logger.debug(
-                `Add virtual blockchain ${Utils.binaryToHexa(virtualBlockchain.getId())} to index`,
-            );
-            await this.cachedDb.indexVirtualBlockchain(virtualBlockchain);
-        } else {
-            // in this case, the virtual blockchain is (and should be) already indexed so no need to index it again
-        }
     }
 
     async isProtocolVbDefined() {

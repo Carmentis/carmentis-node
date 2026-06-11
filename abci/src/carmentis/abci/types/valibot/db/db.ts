@@ -1,5 +1,6 @@
 import * as v from 'valibot';
 import { ApplicationStateHashesSchema } from "../ApplicationStateHashes";
+import { ProtocolVirtualBlockchainStateSchema, uint8 } from '@cmts-dev/carmentis-sdk-core';
 
 export function uint8array() {
     return v.instance(Uint8Array<ArrayBuffer | ArrayBufferLike>)
@@ -11,6 +12,7 @@ export const ChainInformationSchema = v.object({
     lastBlockTimestamp: v.number(),
     microblockCount: v.number(),
     objectCounts: v.array(v.number()),
+    protocolVirtualBlockchainId: uint8array(),
 });
 export type ChainInformation = v.InferOutput<typeof ChainInformationSchema>;
 

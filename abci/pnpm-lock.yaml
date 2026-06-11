@@ -12,8 +12,8 @@ importers:
         specifier: ^2.12.0
         version: 2.12.0
       '@cmts-dev/carmentis-sdk-core':
-        specifier: ^1.2.19
-        version: 1.2.19(typescript@5.9.3)
+        specifier: ^1.2.20
+        version: 1.2.20(typescript@5.9.3)
       '@grpc/grpc-js':
         specifier: ^1.14.3
         version: 1.14.4
@@ -230,8 +230,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@cmts-dev/carmentis-sdk-core@1.2.19':
-    resolution: {integrity: sha512-SipaosAIuTYlVUKJM6NZbLyyP9TM7rcbFxT0sx4d5Q/puVXlmNkRzeiV6mlXTK/L02NBMAN1QaiJwCryRI2kJg==}
+  '@cmts-dev/carmentis-sdk-core@1.2.20':
+    resolution: {integrity: sha512-RIftTUQuwW8PkA6i5dzZxwwuzSr3B07UCaJx79hI7Ak8dVDAUJnvtEPtdgD0yK+lrj8iFshNeKevGGhizBkLZQ==}
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -3037,7 +3037,7 @@ snapshots:
   '@cbor-extract/cbor-extract-win32-x64@2.2.2':
     optional: true
 
-  '@cmts-dev/carmentis-sdk-core@1.2.19(typescript@5.9.3)':
+  '@cmts-dev/carmentis-sdk-core@1.2.20(typescript@5.9.3)':
     dependencies:
       '@logtape/logtape': 1.3.10
       '@noble/ciphers': 1.3.0
