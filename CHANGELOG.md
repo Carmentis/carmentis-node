@@ -1,3 +1,10 @@
+## [1.6.4](https://github.com/Carmentis/carmentis-node/compare/v1.6.3...v1.6.4) (2026-06-11)
+
+
+### Bug Fixes
+
+* removed VB index tables, updated the way to store the protocol VB id ([3db16d7](https://github.com/Carmentis/carmentis-node/commit/3db16d78c4b4a303e6aa054bac054e87aca98dab))
+
 ## [1.6.3](https://github.com/Carmentis/carmentis-node/compare/v1.6.2...v1.6.3) (2026-06-10)
 
 
