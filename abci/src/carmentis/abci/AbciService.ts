@@ -861,17 +861,23 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // ... in number of microblocks per block
         const protocolLevelMaxMicroblocksPerBlock = protocolVariables.getProtocolVariables().maxMicroblocksPerBlock;
         const mbsInBlock = request.txs.length;
-        if (protocolLevelMaxMicroblocksPerBlock < mbsInBlock) return ResponseProcessProposal.create({
-            status: ResponseProcessProposal_ProposalStatus.REJECT,
-        });
+        if (protocolLevelMaxMicroblocksPerBlock < mbsInBlock) {
+            this.logger.error(`Microblocks per block exceeds protocol-level limits: ${mbsInBlock} > ${protocolLevelMaxMicroblocksPerBlock}`);
+            return ResponseProcessProposal.create({
+                status: ResponseProcessProposal_ProposalStatus.REJECT,
+            });
+        }
 
         // ... in total bytes size (only the transactions, the resulting block may
         // exceed the protocol-level limits in size when including the header)
         const maxBlockSizeInBytes = protocolVariables.getMaximumBlockSizeInBytes();
         const blockSizeInBytes = request.txs.reduce((acc, tx) => acc + tx.length, 0);
-        if (maxBlockSizeInBytes < blockSizeInBytes) return ResponseProcessProposal.create({
-            status: ResponseProcessProposal_ProposalStatus.REJECT,
-        });
+        if (maxBlockSizeInBytes < blockSizeInBytes) {
+            this.logger.error(`Block size exceeds protocol-level limits: ${blockSizeInBytes} bytes > ${maxBlockSizeInBytes} bytes`);
+            return ResponseProcessProposal.create({
+                status: ResponseProcessProposal_ProposalStatus.REJECT,
+            });
+        }
 
 
         // proceed to the global state update
