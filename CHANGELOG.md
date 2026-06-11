@@ -1,3 +1,10 @@
+## [1.6.5](https://github.com/Carmentis/carmentis-node/compare/v1.6.4...v1.6.5) (2026-06-11)
+
+
+### Bug Fixes
+
+* bump to version 1.2.21 of @cmts-dev/carmentis-sdk-core ([08a949d](https://github.com/Carmentis/carmentis-node/commit/08a949d7f56e20a90f8b28bbbf5f1cdff66c0d64))
+
 ## [1.6.4](https://github.com/Carmentis/carmentis-node/compare/v1.6.3...v1.6.4) (2026-06-11)
 
 
