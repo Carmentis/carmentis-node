@@ -1,3 +1,11 @@
+## [1.6.6](https://github.com/Carmentis/carmentis-node/compare/v1.6.5...v1.6.6) (2026-06-11)
+
+
+### Bug Fixes
+
+* missing building step before proceeding to release ([887e1b0](https://github.com/Carmentis/carmentis-node/commit/887e1b0ce14b548d6ca6e666fc7099ce81577eb3))
+* missing directory specification when running the install ([442f94f](https://github.com/Carmentis/carmentis-node/commit/442f94f17e977238114684760f75207eaeb32c51))
+
 ## [1.6.5](https://github.com/Carmentis/carmentis-node/compare/v1.6.4...v1.6.5) (2026-06-11)
 
 
