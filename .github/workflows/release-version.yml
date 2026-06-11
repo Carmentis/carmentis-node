@@ -14,6 +14,13 @@ permissions:
 jobs:
   check-build:
     runs-on: ubuntu-latest
+
+    # we have to run the job in the abci directory
+    defaults:
+      run:
+        working-directory: abci
+
+    # checkout, install pnpm, install dependencies, build
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
