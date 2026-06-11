@@ -1,3 +1,10 @@
+## [1.6.8](https://github.com/Carmentis/carmentis-node/compare/v1.6.7...v1.6.8) (2026-06-11)
+
+
+### Bug Fixes
+
+* add error logs for protocol-level limit violations on microblocks and block size ([32be9e9](https://github.com/Carmentis/carmentis-node/commit/32be9e9a7dd4022781cd95443c41bca260287df4))
+
 ## [1.6.7](https://github.com/Carmentis/carmentis-node/compare/v1.6.6...v1.6.7) (2026-06-11)
 
 
