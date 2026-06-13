@@ -1,0 +1,133 @@
+import { AccountStateManager } from './AccountStateManager';
+import { LevelDbTable } from '../database/LevelDbTable';
+import { Transfer } from './AccountManager';
+import {
+    BalanceAvailability,
+    ECO,
+    ChainReference,
+    Utils,
+    ChainReferenceType
+} from '@cmts-dev/carmentis-sdk-core';
+import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
+import { DbInterface } from '../database/DbInterface';
+import {getLogger} from "@logtape/logtape";
+
+export class AccountEscrowHandler {
+    private logger = getLogger(['node', 'accounts', 'escrow']);
+
+    private readonly db: DbInterface;
+    constructor(
+        private readonly accountStateManager: AccountStateManager,
+        private readonly accountTokenTransferHandler: AccountTokenTransferHandler,
+    ) {
+        this.db = accountStateManager.getDatabase();
+    }
+
+    /**
+     * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
+     */
+    async escrowSettlement(
+        account: Uint8Array,
+        escrowIdentifier: Uint8Array,
+        confirmed: boolean,
+        timestamp: number,
+        chainReference: ChainReference,
+    ) {
+        const escrow = await this.db.getEscrow(escrowIdentifier);
+
+        // make sure that this escrow exists
+        if (escrow === undefined) {
+            throw new Error(`rejected escrow settlement: unknown or out-of-date escrow identifier`);
+        }
+        // make sure that the caller is the agent
+        if (!Utils.binaryIsEqual(account, escrow.agentAccount)) {
+            throw new Error(`rejected escrow settlement: caller is not the agent`);
+        }
+
+        // retrieve the lock from the payee account, get the amount, then remove the lock
+        const accountInformation = await this.accountStateManager.loadAccountInformation(escrow.payeeAccount);
+        const payeeAccountState = accountInformation.state;
+        const balanceAvailability = new BalanceAvailability(
+            payeeAccountState.balance,
+            payeeAccountState.locks,
+        );
+        const amountAsAtomics = balanceAvailability.removeEscrowLock(escrowIdentifier);
+        payeeAccountState.locks = balanceAvailability.getLocks();
+        await this.accountStateManager.saveAccountState(escrow.payeeAccount, payeeAccountState);
+
+        // if the escrow is canceled, send the funds back to the payer
+        if (!confirmed) {
+            const tokenTransfer: Transfer = {
+                type: ECO.BK_SENT_ESCROW_REFUND,
+                payerAccount: escrow.payeeAccount,
+                payeeAccount: escrow.payerAccount,
+                amountAsAtomics,
+                feesAsAtomics: 0,
+            };
+
+            await this.accountTokenTransferHandler.tokenTransfer(
+                tokenTransfer,
+                chainReference,
+                timestamp,
+            );
+        }
+
+        // remove the escrow from the DB
+        await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
+    }
+
+    async updateExpiredEscrow(escrowIdentifier: Uint8Array, timestamp: number, blockHeight: number) {
+        const escrow = await this.db.getEscrow(escrowIdentifier);
+        if (escrow === undefined) {
+            throw new Error(`Escrow ${escrowIdentifier.toString()} not found`);
+        }
+
+        const accountInformation = await this.accountStateManager.loadAccountInformation(escrow.payeeAccount);
+        const accountState = accountInformation.state;
+        const balanceAvailability = new BalanceAvailability(
+            accountState.balance,
+            accountState.locks,
+        );
+        const escrowLocks = balanceAvailability.getEscrowLocks();
+        const lock = escrowLocks.find((lock) =>
+            Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier)
+        );
+        if (lock === undefined) {
+            throw new Error(`Lock of escrow ${escrowIdentifier.toString()} not found`);
+        }
+
+        const isEscrowLockExpired = timestamp > Utils.addDaysToTimestamp(
+            lock.parameters.startTimestamp,
+            lock.parameters.durationDays
+        );
+
+        if (isEscrowLockExpired) {
+            // the escrow has expired: the funds are sent back from payee to payer
+            this.logger.info(`Escrow has expired: funds are sent back to payer`);
+            const amountAsAtomics = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
+            const tokenTransfer: Transfer = {
+                type: ECO.BK_SENT_EXPIRED_ESCROW,
+                payerAccount: escrow.payeeAccount,
+                payeeAccount: escrow.payerAccount,
+                amountAsAtomics,
+                feesAsAtomics: 0,
+            };
+            const chainReference: ChainReference = {
+                type: ChainReferenceType.BLOCK,
+                height: blockHeight
+            };
+
+            await this.accountTokenTransferHandler.tokenTransfer(
+                tokenTransfer,
+                chainReference,
+                timestamp,
+            );
+
+            // remove the escrow from the DB
+            await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
+        }
+
+        accountState.locks = balanceAvailability.getLocks();
+        await this.accountStateManager.saveAccountState(escrow.payeeAccount, accountState);
+    }
+}

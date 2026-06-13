@@ -1,8 +1,0 @@
-version: v1
-deps:
-  - buf.build/gogo/protobuf
-  - buf.build/cometbft/cometbft
-  - buf.build/protocolbuffers/wellknowntypes
-build:
-  excludes:
-    - node_modules

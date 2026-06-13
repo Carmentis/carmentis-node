@@ -1,0 +1,121 @@
+import { AccountManager, Transfer } from '../abci/accounts/AccountManager';
+import { createTempLevel } from "../abci/database/TempLevel";
+import {
+    CMTSToken,
+    PublicSignatureKey,
+    Secp256k1PrivateSignatureKey,
+    Utils,
+    ChainReferenceType,
+    ECO,
+} from '@cmts-dev/carmentis-sdk-core';
+import { randomBytes } from 'node:crypto';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+
+let temp: Awaited<ReturnType<typeof createTempLevel>>;
+describe('AccountManager', () => {
+    beforeAll(async () => {
+        temp = await createTempLevel();
+    })
+
+    afterAll(async () => {
+        await temp.cleanup();
+    });
+
+    it("Should manipulate accounts correctly", async () => {
+        const db = temp.cachedDb;
+        const accountManager = new AccountManager(db);
+
+        // should create several zero-balance accounts based on public keys
+        const publicKeys: PublicSignatureKey[] = [];
+        const accountIds: Uint8Array[] = [];
+
+        // we now create the account for the issuer
+        const issuerAccountInitialAmount = CMTSToken.createCMTS(100000);
+        const issuerAccountPrivateKey = Secp256k1PrivateSignatureKey.gen();
+        const issuerAccountPublicKey = await issuerAccountPrivateKey.getPublicKey();
+        const issuerAccountId = randomBytes(32);
+        await accountManager.createIssuerAccount(
+            issuerAccountPublicKey,
+            issuerAccountId,
+            issuerAccountInitialAmount.getAmountAsAtomic()
+        );
+        const issuerAccountBalance = await accountManager.getAccountBalanceByAccountId(issuerAccountId);
+        expect(issuerAccountBalance.getAmountAsAtomic()).toEqual(issuerAccountInitialAmount.getAmountAsAtomic());
+
+        for (let index = 0; index < 100; index++) {
+            const sk =  Secp256k1PrivateSignatureKey.gen();
+            const pk = await sk.getPublicKey();
+            const pkBytes = await pk.getPublicKeyAsBytes();
+            publicKeys.push(pk);
+
+            // expect the public key to be available
+            expect(await accountManager.isPublicKeyAvailable(pkBytes))
+                .toBeTruthy();
+
+            // create the account
+            // TODO(explain): the account creation is done using only pk: the id of the account is the
+            // hash of the pk. Why not the the hash of the first account microblock?
+            //await accountManager.createAccountWithNoTokens(pk);
+            const randomAccountId = randomBytes(32);
+            await accountManager.saveAccountByPublicKey(randomAccountId, pkBytes);
+            const accountId = await accountManager.loadAccountByPublicKey(pk);
+            expect(randomAccountId).toEqual(accountId);
+            accountIds.push(accountId)
+
+            // each account should have a balance of 0
+            const balance = await accountManager.getAccountBalanceByAccountId(accountId)
+            expect(balance.getAmountAsAtomic()).toEqual(0);
+
+            // expect the public key to be not available anymore
+            expect(await accountManager.isPublicKeyAvailable(pkBytes))
+                .toBeFalsy();
+        }
+
+        // feeds accounts randomly
+        const balanceForAccounts = new Map<Uint8Array, CMTSToken>([
+            [issuerAccountId, issuerAccountBalance]
+        ]);
+        for (const accountId of accountIds) {
+            const randomBalance = CMTSToken.createCMTS(
+                Number.parseInt((Math.random() * 100).toString())
+            )
+            const transfer: Transfer = {
+                type: ECO.BK_SENT_PAYMENT,
+                payerAccount: issuerAccountId,
+                payeeAccount: accountId,
+                amountAsAtomics: randomBalance.getAmountAsAtomic(),
+                feesAsAtomics: 0,
+            };
+            await accountManager.tokenTransfer(
+                transfer,
+                {
+                    type: ChainReferenceType.SECTION,
+                    microblockHash: Utils.getNullHash(),
+                    sectionIndex: 0,
+                },
+                Math.floor(Date.now() / 1000),
+            );
+            balanceForAccounts.set(accountId, randomBalance);
+
+            // each account should have the specified balance
+            const balance = await accountManager.getAccountBalanceByAccountId(accountId)
+            expect(balance.getAmountAsAtomic()).toEqual(randomBalance.getAmountAsAtomic());
+        }
+
+        // we now perform the stake
+        for (const accountId of accountIds) {
+            const accountBalance = balanceForAccounts.get(accountId);
+            const percentToStack = Math.random();
+            const dumbType = 1;
+            const dumbId = Utils.getNullHash();
+            /*
+            await accountManager.stake(
+                accountId,
+                accountBalance.getAmountAsAtomic() * percentToStack,
+                dumbType,
+                dumbId,
+                );
+            */
+        }
+    })
+})

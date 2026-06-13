@@ -1,16 +1,87 @@
-./cometbft/*
-.output
-/cometbft/
-.cometbft*
+.claude
+local-devnet-governance
+prod
+output
+dist
+configs
+benchmark
+genesisRunoffs*
+logs*
+buf*
+.cometbft
+.cometbft-config
 .carmentis
 .vs
-node_modules
-**/node_modules
-**/local-*gov*
-output
-.idea
-abci/package-lock.json
+./abci
+
+# config
+*config.toml
+config*.toml
+!example-config.toml
+
+# windows debug scripts
 *.bat
+
+# compiled output
+/dist
+node_modules
+/build
+
+# runtime output
+abci/.output
+.abci
+
+# Logs
+logs
+*.log
 log*.txt
-out
-docker-compose.*.yml
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+isolate-*.log
+profiling*.txt
+
+# OS
+.DS_Store
+
+# Tests
+/coverage
+/.nyc_output
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# temp directory
+.temp
+.tmp
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

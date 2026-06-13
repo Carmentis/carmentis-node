@@ -1,3 +1,10 @@
+## [1.6.9](https://github.com/Carmentis/carmentis-node/compare/v1.6.8...v1.6.9) (2026-06-13)
+
+
+### Bug Fixes
+
+* up-to-date chain references ([ab32236](https://github.com/Carmentis/carmentis-node/commit/ab32236b1355fed9c6b9aefc03290678222d9309))
+
 ## [1.6.8](https://github.com/Carmentis/carmentis-node/compare/v1.6.7...v1.6.8) (2026-06-11)
 
 
