@@ -1,3 +1,10 @@
+## [1.6.10](https://github.com/Carmentis/carmentis-node/compare/v1.6.9...v1.6.10) (2026-06-13)
+
+
+### Bug Fixes
+
+* updated release-docker.yml ([0106c94](https://github.com/Carmentis/carmentis-node/commit/0106c94bdc3843b63e9f1a914e9eb2cb5f7f4bc8))
+
 ## [1.6.9](https://github.com/Carmentis/carmentis-node/compare/v1.6.8...v1.6.9) (2026-06-13)
 
 
