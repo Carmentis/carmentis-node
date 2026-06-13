@@ -7,6 +7,7 @@ import {
     EscrowParameters,
     Utils,
     VestingParameters,
+    ChainReference,
 } from '@cmts-dev/carmentis-sdk-core';
 import { getLogger } from '@logtape/logtape';
 import { AccountHistoryHandler } from './AccountHistoryHandler';
@@ -39,7 +40,7 @@ export class AccountTokenTransferHandler {
      */
     async tokenTransfer(
         transfer: Transfer,
-        chainReference: unknown,
+        chainReference: ChainReference,
         timestamp: number,
         publicReference = "",
         privateReference = "",
@@ -172,7 +173,7 @@ export class AccountTokenTransferHandler {
         accountHash: Uint8Array,
         linkedAccountHash: Uint8Array | null,
         amount: number,
-        chainReference: unknown,
+        chainReference: ChainReference,
         timestamp: number,
         vestingParameters: VestingParameters | null = null,
         escrowParameters: EscrowParameters | null = null,

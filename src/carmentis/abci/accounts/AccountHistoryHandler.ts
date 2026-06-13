@@ -1,14 +1,12 @@
 import { NodeEncoder } from '../NodeEncoder';
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import { LevelDbTable } from '../database/LevelDbTable';
-import { NODE_SCHEMAS } from '../constants/constants';
 import {
     AccountHistory,
     AccountHistoryEntry,
     AccountState,
-    ECO,
-    SchemaSerializer,
     Utils,
+    ChainReference,
 } from '@cmts-dev/carmentis-sdk-core';
 import { AccountStateManager } from './AccountStateManager';
 import { getLogger } from '@logtape/logtape';
@@ -90,16 +88,11 @@ export class AccountHistoryHandler {
         accountHash: Uint8Array,
         linkedAccountHash: Uint8Array | null,
         amount: number,
-        chainReference: unknown,
+        chainReference: ChainReference,
         timestamp: number,
         publicReference: string,
         privateReference: string,
     ): Promise<Uint8Array> {
-        const serializer = new SchemaSerializer(
-            NODE_SCHEMAS.ACCOUNT_REF_SCHEMAS[ECO.BK_REFERENCES[type]],
-        );
-        const chainReferenceBinary = serializer.serialize(chainReference);
-
         const entry = {
             height: state.height,
             previousHistoryHash: state.lastHistoryHash,
@@ -109,7 +102,7 @@ export class AccountHistoryHandler {
             timestamp: timestamp,
             linkedAccount: linkedAccountHash || Utils.getNullHash(),
             amount: amount,
-            chainReference: chainReferenceBinary,
+            chainReference,
         };
 
         const record = NodeEncoder.encodeAccountHistoryEntry(entry);

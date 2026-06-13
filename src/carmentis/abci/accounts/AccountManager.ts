@@ -17,6 +17,8 @@ import {
     Sha256CryptographicHash,
     Utils,
     VestingParameters,
+    ChainReference,
+    ChainReferenceType,
 } from '@cmts-dev/carmentis-sdk-core';
 import { getLogger, Logger } from '@logtape/logtape';
 import { Performance } from '../Performance';
@@ -97,30 +99,6 @@ export class AccountManager {
     }
 
     /**
-     * @deprecated
-     */
-    async transferToken(
-        fromAccountId: Uint8Array,
-        toAccountId: Uint8Array,
-        amountInAtomics: number,
-        feesAsAtomics: number,
-    ) {
-        const tokenTransfer: Transfer = {
-            type: ECO.BK_SALE,
-            payerAccount: fromAccountId,
-            payeeAccount: toAccountId,
-            amountAsAtomics: amountInAtomics,
-            feesAsAtomics,
-        };
-        const chainReference = {
-            mbHash: Utils.getNullHash(),
-            sectionIndex: 1,
-        };
-        const timestamp = Date.now();
-        await this.tokenTransfer(tokenTransfer, chainReference, timestamp);
-    }
-
-    /**
      * Processes a token transfer between accounts.
      * Validates account types, balances, and transfer permissions before executing.
      *
@@ -135,7 +113,7 @@ export class AccountManager {
      */
     async tokenTransfer(
         transfer: Transfer,
-        chainReference: unknown,
+        chainReference: ChainReference,
         timestamp: number,
         publicReference = "",
         privateReference = "",
@@ -157,7 +135,7 @@ export class AccountManager {
         escrowIdentifier: Uint8Array,
         confirmed: boolean,
         timestamp: number,
-        chainReference: unknown,
+        chainReference: ChainReference,
     ) {
         await this.accountEscrowHandler.escrowSettlement(
             account,
@@ -304,7 +282,7 @@ export class AccountManager {
         accountHash: Uint8Array,
         linkedAccountHash: Uint8Array | null,
         amount: number,
-        chainReference: unknown,
+        chainReference: ChainReference,
         timestamp: number,
         publicReference = "",
         privateReference = "",
@@ -424,7 +402,10 @@ export class AccountManager {
             accountHash,
             null,
             amount,
-            { mbHash: Utils.getNullHash(), sectionIndex: 0 },
+            {
+                type: ChainReferenceType.BLOCK,
+                height: 1,
+            },
             timestamp,
         );
 

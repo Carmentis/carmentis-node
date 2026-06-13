@@ -9,17 +9,22 @@ genesisRunoffs*
 logs*
 buf*
 .cometbft
+.cometbft-config
+.carmentis
+.vs
 ./abci
-
 
 # config
 *config.toml
 config*.toml
 !example-config.toml
 
+# windows debug scripts
+*.bat
+
 # compiled output
 /dist
-/node_modules/*
+node_modules
 /build
 
 # runtime output
@@ -29,6 +34,7 @@ abci/.output
 # Logs
 logs
 *.log
+log*.txt
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*

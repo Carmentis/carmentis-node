@@ -1,10 +1,12 @@
-import { AccountManager } from '../abci/accounts/AccountManager';
+import { AccountManager, Transfer } from '../abci/accounts/AccountManager';
 import { createTempLevel } from "../abci/database/TempLevel";
 import {
     CMTSToken,
     PublicSignatureKey,
     Secp256k1PrivateSignatureKey,
     Utils,
+    ChainReferenceType,
+    ECO,
 } from '@cmts-dev/carmentis-sdk-core';
 import { randomBytes } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -77,7 +79,22 @@ describe('AccountManager', () => {
             const randomBalance = CMTSToken.createCMTS(
                 Number.parseInt((Math.random() * 100).toString())
             )
-            await accountManager.transferToken(issuerAccountId, accountId, randomBalance.getAmountAsAtomic(), 0)
+            const transfer: Transfer = {
+                type: ECO.BK_SENT_PAYMENT,
+                payerAccount: issuerAccountId,
+                payeeAccount: accountId,
+                amountAsAtomics: randomBalance.getAmountAsAtomic(),
+                feesAsAtomics: 0,
+            };
+            await accountManager.tokenTransfer(
+                transfer,
+                {
+                    type: ChainReferenceType.SECTION,
+                    microblockHash: Utils.getNullHash(),
+                    sectionIndex: 0,
+                },
+                Math.floor(Date.now() / 1000),
+            );
             balanceForAccounts.set(accountId, randomBalance);
 
             // each account should have the specified balance

@@ -4,8 +4,9 @@ import { Transfer } from './AccountManager';
 import {
     BalanceAvailability,
     ECO,
-    LockType,
-    Utils
+    ChainReference,
+    Utils,
+    ChainReferenceType
 } from '@cmts-dev/carmentis-sdk-core';
 import { AccountTokenTransferHandler } from './AccountTokenTransferHandler';
 import { DbInterface } from '../database/DbInterface';
@@ -30,7 +31,7 @@ export class AccountEscrowHandler {
         escrowIdentifier: Uint8Array,
         confirmed: boolean,
         timestamp: number,
-        chainReference: unknown,
+        chainReference: ChainReference,
     ) {
         const escrow = await this.db.getEscrow(escrowIdentifier);
 
@@ -111,7 +112,8 @@ export class AccountEscrowHandler {
                 amountAsAtomics,
                 feesAsAtomics: 0,
             };
-            const chainReference = {
+            const chainReference: ChainReference = {
+                type: ChainReferenceType.BLOCK,
                 height: blockHeight
             };
 

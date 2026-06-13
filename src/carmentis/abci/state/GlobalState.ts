@@ -82,6 +82,7 @@ export class GlobalState extends AbstractProvider {
         if (!Utils.binaryIsEqual(chainInformation.protocolVirtualBlockchainId, nullHash)) {
             throw new Error(`attempt to update the protocol VB identifier after it has already been set`);
         }
+        this.logger.info(`Saving protocolo VB id in CHAIN_INFORMATION: ${Utils.binaryToHexa(identifier)}`);
         chainInformation.protocolVirtualBlockchainId = identifier;
         await this.cachedDb.putChainInformation(chainInformation);
     }
@@ -103,7 +104,7 @@ export class GlobalState extends AbstractProvider {
 
        } catch (e) {
            if (e instanceof Error) {
-               this.logger.warn("Unabled to return the protocol variables: " + e.message + `(${e.stack})`)
+               this.logger.warn("Unabled to return the protocol variables: " + e.message)
                this.logger.warn("Returning default protocol variables")
            }
            return ProtocolInternalState.createInitialState();

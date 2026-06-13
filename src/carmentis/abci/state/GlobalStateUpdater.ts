@@ -21,6 +21,8 @@ import {
     VirtualBlockchain,
     BalanceAvailability,
     VirtualBlockchainType,
+    ChainReference,
+    ChainReferenceType,
 } from '@cmts-dev/carmentis-sdk-core';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
@@ -286,8 +288,9 @@ export class GlobalStateUpdater {
                 amountAsAtomics: amount,
                 feesAsAtomics: 0,
             };
-            const chainReference = {
-                mbHash: microblock.getHash().toBytes(),
+            const chainReference: ChainReference = {
+                type: ChainReferenceType.SECTION,
+                microblockHash: microblock.getHash().toBytes(),
                 sectionIndex,
             };
 
@@ -426,7 +429,8 @@ export class GlobalStateUpdater {
                 feesAsAtomics: 0,
             },
             {
-                mbHash: microblock.getHash().toBytes(),
+                type: ChainReferenceType.MICROBLOCK,
+                microblockHash: microblock.getHash().toBytes(),
             },
             sentAt,
         );
@@ -751,6 +755,7 @@ export class GlobalStateUpdater {
                     feesAsAtomics: 0,
                 },
                 {
+                    type: ChainReferenceType.BLOCK,
                     height: blockHeight - 1,
                 },
                 timeInRequest,
@@ -794,7 +799,8 @@ export class GlobalStateUpdater {
                         feesAsAtomics,
                     },
                     {
-                        mbHash: microblock.getHash().toBytes(),
+                        type: ChainReferenceType.SECTION,
+                        microblockHash: microblock.getHash().toBytes(),
                         sectionIndex,
                     },
                     microblock.getTimestamp(),
@@ -820,7 +826,8 @@ export class GlobalStateUpdater {
                         feesAsAtomics,
                     },
                     {
-                        mbHash: microblock.getHash().toBytes(),
+                        type: ChainReferenceType.SECTION,
+                        microblockHash: microblock.getHash().toBytes(),
                         sectionIndex,
                     },
                     microblock.getTimestamp(),
@@ -885,7 +892,8 @@ export class GlobalStateUpdater {
                         }
                     },
                     {
-                        mbHash: microblock.getHash().toBytes(),
+                        type: ChainReferenceType.SECTION,
+                        microblockHash: microblock.getHash().toBytes(),
                         sectionIndex,
                     },
                     microblock.getTimestamp(),
@@ -897,8 +905,9 @@ export class GlobalStateUpdater {
             // check token escrow settlements
             if (sectionType === SectionType.ACCOUNT_ESCROW_SETTLEMENT) {
                 const { escrowIdentifier, confirmed } = section;
-                const chainReference = {
-                    mbHash: microblock.getHash().toBytes(),
+                const chainReference: ChainReference = {
+                    type: ChainReferenceType.SECTION,
+                    microblockHash: microblock.getHash().toBytes(),
                     sectionIndex
                 };
                 await accountManager.escrowSettlement(
@@ -935,7 +944,8 @@ export class GlobalStateUpdater {
                         }
                     },
                     {
-                        mbHash: microblock.getHash().toBytes(),
+                        type: ChainReferenceType.SECTION,
+                        microblockHash: microblock.getHash().toBytes(),
                         sectionIndex,
                     },
                     microblock.getTimestamp(),
