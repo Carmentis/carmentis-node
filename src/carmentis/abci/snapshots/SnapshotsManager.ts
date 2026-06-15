@@ -16,6 +16,8 @@ import * as v from 'valibot';
 import { NodeEncoder } from '../NodeEncoder';
 import { LevelDbTable } from '../database/LevelDbTable';
 
+type DbIterator = ReturnType<LevelDb['getDbIterator']>
+
 const FORMAT = 1;
 const DB_BATCH_SIZE = 1000;
 const SNAPSHOT_PREFIX = 'snapshot-';
@@ -26,15 +28,17 @@ const DB_DUMP_IN_PROGRESS_FILENAME = 'db-dump-in-progress.bin';
 const IMPORTED_CHUNKS_FILENAME = 'imported-chunks.bin';
 
 export class SnapshotsManager {
-    db: LevelDb;
-    path: string;
-    chunkSize: number;
-    private logger = getLogger(['node', 'snapshots', SnapshotsManager.name])
+    private readonly db: LevelDb;
+    private readonly path: string;
+    private readonly chunkSize: number;
+    private readonly logger = getLogger(['node', 'snapshots', SnapshotsManager.name]);
+    private snapshotInProgress: boolean;
 
     constructor(db: LevelDb, path: string, chunkSize: number) {
         this.db = db;
         this.path = path;
         this.chunkSize = chunkSize;
+        this.snapshotInProgress = false;
     }
 
     /**
@@ -266,38 +270,48 @@ export class SnapshotsManager {
      *   -> meta information about the snapshot, used to answer ListSnapshots
      */
     async create() {
-        await this.createPath();
+        try {
+            if (this.snapshotInProgress) {
+                throw new Error(`Previous snapshot is still in progress: cancelling the creation of a new one`);
+            }
+            this.snapshotInProgress = true;
+            const dbIterator = this.db.getDbIterator();
 
-        const { height, files, earliestFileDate, dbFilePath } = await this.createDbFile();
-        const { chunks, chunksFilePath } = await this.createChunksFile(height, files);
-        const dbFileSha256 = await this.getFileSha256(dbFilePath);
-        const chunksFileSha256 = await this.getFileSha256(chunksFilePath);
-        const hash = NodeCrypto.Hashes.sha256(Utils.binaryFrom(dbFileSha256, chunksFileSha256));
+            await this.createPath();
 
-        const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + JSON_SUFFIX);
+            const { height, files, earliestFileDate, dbFilePath } = await this.createDbFile(dbIterator);
+            const { chunks, chunksFilePath } = await this.createChunksFile(height, files);
+            const dbFileSha256 = await this.getFileSha256(dbFilePath);
+            const chunksFileSha256 = await this.getFileSha256(chunksFilePath);
+            const hash = NodeCrypto.Hashes.sha256(Utils.binaryFrom(dbFileSha256, chunksFileSha256));
 
-        const snapshotObject: StoredSnapshot = {
-            height,
-            format: FORMAT,
-            chunks,
-            hash,
-            metadata: {
-                earliestFileDate,
-                dbFile: path.basename(dbFilePath),
-                dbFileSha256: Utils.binaryToHexa(dbFileSha256),
-                chunksFile: path.basename(chunksFilePath),
-                chunksFileSha256: Utils.binaryToHexa(chunksFileSha256),
-                jsonFile: path.basename(jsonFilePath),
-            },
-        };
+            const jsonFilePath = path.join(this.path, this.getFilePrefix(height) + JSON_SUFFIX);
 
-        fs.writeFileSync(jsonFilePath, JSON.stringify(snapshotObject, null, 2));
+            const snapshotObject: StoredSnapshot = {
+                height,
+                format: FORMAT,
+                chunks,
+                hash,
+                metadata: {
+                    earliestFileDate,
+                    dbFile: path.basename(dbFilePath),
+                    dbFileSha256: Utils.binaryToHexa(dbFileSha256),
+                    chunksFile: path.basename(chunksFilePath),
+                    chunksFileSha256: Utils.binaryToHexa(chunksFileSha256),
+                    jsonFile: path.basename(jsonFilePath),
+                },
+            };
+
+            fs.writeFileSync(jsonFilePath, JSON.stringify(snapshotObject, null, 2));
+        } finally {
+            this.snapshotInProgress = false;
+        }
     }
 
     /**
      * Creates the database dump file.
      */
-    private async createDbFile() {
+    private async createDbFile(dbIterator: DbIterator) {
         this.logger.info("Creating DB file")
         const chainInfoTableId = Utils.numberToHexa(LevelDbTable.CHAIN_INFORMATION, 2);
         const chainInfoTableChar0 = chainInfoTableId.charCodeAt(0);
@@ -311,13 +325,12 @@ export class SnapshotsManager {
         this.logger.debug(`Writing in temporary file ${temporaryPath}`);
         const handle = await open(temporaryPath, 'w');
 
-        const iterator = this.db.getDbIterator();
         const files: [number, number][] = [];
         let earliestFileIdentifier = 0xff000000;
         let height: number | undefined = undefined;
         let size = 0;
 
-        for await (const [key, value] of iterator) {
+        for await (const [key, value] of dbIterator) {
             await handle.write(new Uint8Array(Utils.intToByteArray(key.length, 2)));
             await handle.write(key);
             await handle.write(new Uint8Array(Utils.intToByteArray(value.length, 2)));

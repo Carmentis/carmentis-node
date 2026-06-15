@@ -1054,12 +1054,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const snapshotBlockPeriod = this.nodeConfig.getSnapshotBlockPeriod();
         const chainInfoObject = await db.getChainInformation();
         const isTimeToGenerateSnapshot = chainInfoObject.height % snapshotBlockPeriod == 0;
+
         if (isNotImportingSnapshot && isTimeToGenerateSnapshot) {
             this.logger.info(`Creating snapshot at height ${chainInfoObject.height}`);
             const maxSnapshots = this.nodeConfig.getMaxSnapshots();
             await snapshot.clear(maxSnapshots - 1);
-            await snapshot.create();
-            this.logger.info(`Done creating snapshot`);
+
+            snapshot.create()
+            .catch ((error) => {
+                this.logger.error(`Snapshot creation at height ${chainInfoObject.height} failed with the following error:`);
+                this.logger.error(String(error));
+            })
+            .then (() =>
+                this.logger.info(`Done creating snapshot at height ${chainInfoObject.height}`)
+            );
 
             // We preserve a certain amount of blocks that are not put in a snapshot.
             const blockHistoryBeforeSnapshot = this.nodeConfig.getBlockHistoryBeforeSnapshot();
