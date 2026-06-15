@@ -17,6 +17,7 @@ export const LevelDbTable: Record<string, number> = {
     ESCROWS: 0x0f,
     VALIDATOR_NODE_BY_ADDRESS: 0x10,
     MERKLE_NODE: 0x11,
+    GENESIS_SEED: 0x12,
 }
 
 const encoder = new TextEncoder();

@@ -65,7 +65,7 @@ import {
     Utils
 } from '@cmts-dev/carmentis-sdk-core';
 import { LevelDb } from './database/LevelDb';
-import { SnapshotsManager } from './SnapshotsManager';
+import { SnapshotsManager } from './snapshots/SnapshotsManager';
 import { ABCIQueryHandler } from './ABCIQueryHandler';
 import { AbciHandlerInterface } from './AbciHandlerInterface';
 import { NodeConfigService } from '../config/services/NodeConfigService';
@@ -1054,12 +1054,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const snapshotBlockPeriod = this.nodeConfig.getSnapshotBlockPeriod();
         const chainInfoObject = await db.getChainInformation();
         const isTimeToGenerateSnapshot = chainInfoObject.height % snapshotBlockPeriod == 0;
+
         if (isNotImportingSnapshot && isTimeToGenerateSnapshot) {
             this.logger.info(`Creating snapshot at height ${chainInfoObject.height}`);
             const maxSnapshots = this.nodeConfig.getMaxSnapshots();
             await snapshot.clear(maxSnapshots - 1);
-            await snapshot.create();
-            this.logger.info(`Done creating snapshot`);
+
+            snapshot.create()
+            .catch ((error) => {
+                this.logger.error(`Snapshot creation at height ${chainInfoObject.height} failed with the following error:`);
+                this.logger.error(String(error));
+            })
+            .then (() =>
+                this.logger.info(`Done creating snapshot at height ${chainInfoObject.height}`)
+            );
 
             // We preserve a certain amount of blocks that are not put in a snapshot.
             const blockHistoryBeforeSnapshot = this.nodeConfig.getBlockHistoryBeforeSnapshot();
@@ -1185,6 +1193,22 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     /**
+     * Checks that the genesis seed is unique for a genesis microblock.
+     */
+    private async checkGenesisSeedUniquenessOrFail(
+        workingState: GlobalState,
+        checkedMicroblock: Microblock,
+    ) {
+        if (checkedMicroblock.getHeight() === 1) {
+            const seed = checkedMicroblock.getPreviousHash().toBytes().slice(8);
+            const seedExists = await workingState.genesisSeedExists(seed);
+            if (seedExists) {
+                throw new Error(`The genesis seed declared in the microblock already exists`)
+            }
+        }
+    }
+
+    /**
      * Checks a microblock and invokes the section callbacks of the node.
      */
     private async checkMicroblockLocalStateConsistency(
@@ -1195,6 +1219,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.debug(`Checking microblock local state consistency`);
         const microblockCheckTimer = this.perf.start('checking microblock');
         try {
+            await this.checkGenesisSeedUniquenessOrFail(workingState, checkedMicroblock);
+
             const checker = new MicroblockConsistencyChecker(workingState, checkedMicroblock);
 
             // loading and checking virtual blockchain consistency when adding the microblock

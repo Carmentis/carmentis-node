@@ -1,6 +1,6 @@
 import { open } from 'node:fs/promises';
 import path from 'path';
-import { getLogger, Logger } from '@logtape/logtape';
+import { getLogger } from '@logtape/logtape';
 
 export class SnapshotDataCopyManager {
     private logger = getLogger(["node", "snapshot", SnapshotDataCopyManager.name])

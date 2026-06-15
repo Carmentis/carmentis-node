@@ -1,4 +1,4 @@
-import {SnapshotsManager} from "../SnapshotsManager";
+import {SnapshotsManager} from "../snapshots/SnapshotsManager";
 import {Storage} from "./Storage";
 import {rm} from "node:fs/promises";
 import {getLogger} from "@logtape/logtape";

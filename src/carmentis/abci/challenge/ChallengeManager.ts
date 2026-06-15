@@ -4,8 +4,8 @@ import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeFile } from './ChallengeFile';
 import { Storage } from '../storage/Storage';
 import { getLogger } from '@logtape/logtape';
-import {LevelDbTable} from "../database/LevelDbTable";
-import {NodeEncoder} from "../NodeEncoder";
+import { LevelDbTable } from "../database/LevelDbTable";
+import { NodeEncoder } from "../NodeEncoder";
 
 const CHALLENGE_FILES_PER_CHALLENGE = 8;
 const CHALLENGE_PARTS_PER_FILE = 256;
@@ -54,17 +54,16 @@ export class ChallengeManager {
 
         for (let fileNdx = 0; fileNdx < CHALLENGE_FILES_PER_CHALLENGE; fileNdx++) {
             const fileRank = getRandom48() % filesCount;
-            const [fileIdentifier, fileSize] = fileEntries[fileRank];
+            const [ fileIdentifier, committedSize ] = fileEntries[fileRank];
             const filePath = this.storage.getFilePath(fileIdentifier);
-            const challengeFile = new ChallengeFile(filePath);
+            const challengeFile = new ChallengeFile(filePath, committedSize);
             await challengeFile.open();
-            challengeFile.checkSizeOrFail(fileSize);
 
             let bufferOffset = 0;
 
             for (let partNdx = 0; partNdx < CHALLENGE_PARTS_PER_FILE; partNdx++) {
                 const sizeToRead = CHALLENGE_BYTES_PER_PART;
-                const fileOffset = getRandom48() % fileSize;
+                const fileOffset = getRandom48() % committedSize;
 
                 // NB: this makes the log very verbose
                 // this.logger.debug(`processChallenge: read ${sizeToRead} from ${fileOffset}`);

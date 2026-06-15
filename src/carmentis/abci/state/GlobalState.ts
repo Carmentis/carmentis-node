@@ -111,6 +111,11 @@ export class GlobalState extends AbstractProvider {
        }
     }
 
+    async genesisSeedExists(seed: Uint8Array): Promise<boolean> {
+        const dbSeed = await this.cachedDb.getRaw(LevelDbTable.GENESIS_SEED, seed);
+        return dbSeed !== undefined;
+    }
+
     async getVirtualBlockchainState(
         virtualBlockchainId: Uint8Array,
     ): Promise<VirtualBlockchainState | null> {
@@ -250,8 +255,8 @@ export class GlobalState extends AbstractProvider {
     }
 
     async commit() {
-        await this.cachedDb.commit();
         await this.cachedStorage.flush();
+        await this.cachedDb.commit();
     }
 
     getAccountManager() {
@@ -302,6 +307,7 @@ export class GlobalState extends AbstractProvider {
 
     /**
      * Stores the given microblock along with its associated transaction in the buffered storage.
+     * If this is a genesis microblock, saves the seed.
      *
      * @param {number} expirationDay - The day when the microblock should expire and be removed from storage.
      *
@@ -316,6 +322,10 @@ export class GlobalState extends AbstractProvider {
             virtualBlockchainId: virtualBlockchain.getId(),
             virtualBlockchainType: virtualBlockchain.getType(),
         });
+        if (microblock.getHeight() === 1) {
+            const seed = microblock.getPreviousHash().toBytes().slice(8);
+            await this.cachedDb.putRaw(LevelDbTable.GENESIS_SEED, seed, new Uint8Array(0));
+        }
     }
 
     async isProtocolVbDefined() {

@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises';
-import {getLogger} from '@logtape/logtape';
+import { getLogger } from '@logtape/logtape';
 import { Utils } from '@cmts-dev/carmentis-sdk-core';
 
 const CHUNK_HEIGHT_LENGTH = 6;

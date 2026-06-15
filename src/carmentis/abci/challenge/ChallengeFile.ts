@@ -9,31 +9,30 @@ export class ChallengeFile {
     private logger = getLogger(['node', 'challenge', ChallengeFile.name])
     private filePath: string;
     private handle?: FileHandle;
-    private size: number;
+    private committedSize: number;
 
-    constructor(filePath: string) {
+    constructor(filePath: string, committedSize: number) {
         this.filePath = filePath;
-        this.size = 0;
+        this.committedSize = committedSize;
     }
 
     async open() {
+        let size: number;
         try {
             this.handle = await open(this.filePath, 'r');
             const stats = await this.handle.stat();
-            this.size = stats.size;
-            this.logger.debug(`File ${this.filePath} opened successfully, size=${this.size}`);
+            size = stats.size;
+            this.logger.debug(`File ${this.filePath} opened successfully, size=${size}`);
         }
         catch(err) {
             this.logger.warn(`Failed to open file ${this.filePath}`);
             this.handle = undefined;
-            this.size = 0;
+            size = 0;
         }
-    }
-
-    checkSizeOrFail(expectedSize: number) {
-        if (this.size !== expectedSize) {
+        if (size < this.committedSize) {
+            await this.close();
             throw new Error(
-                `PANIC - Invalid size for '${this.filePath}': file size is ${this.size}, expected ${expectedSize}`
+                `PANIC - File '${this.filePath}' is too small: file size is ${size}, committed size is ${this.committedSize}`
             );
         }
     }
@@ -57,7 +56,7 @@ export class ChallengeFile {
         let bufferOffset = initialBufferOffset;
 
         while (remainingBytes) {
-            const sizeToRead = Math.min(this.size - fileOffset, remainingBytes);
+            const sizeToRead = Math.min(this.committedSize - fileOffset, remainingBytes);
             const rd = await this.handle.read(buffer, bufferOffset, sizeToRead, fileOffset);
 
             // NB: this makes the log very verbose
@@ -71,7 +70,7 @@ export class ChallengeFile {
 
             bufferOffset += sizeToRead;
 
-            // if there are more bytes to read, it means we've reached the end of the file and must restart at 0
+            // if there are more bytes to read, it means we've reached the committed size of the file and must restart at 0
             fileOffset = 0;
             remainingBytes -= sizeToRead;
         }
