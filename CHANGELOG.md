@@ -1,3 +1,10 @@
+## [1.6.12](https://github.com/Carmentis/carmentis-node/compare/v1.6.11...v1.6.12) (2026-06-15)
+
+
+### Bug Fixes
+
+* snapshots no longer block execution ([04d792c](https://github.com/Carmentis/carmentis-node/commit/04d792c33b2935685c31714a9892ecffa929cd54))
+
 ## [1.6.11](https://github.com/Carmentis/carmentis-node/compare/v1.6.10...v1.6.11) (2026-06-15)
 
 
