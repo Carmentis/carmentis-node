@@ -132,7 +132,7 @@ export class ABCIQueryHandler {
     }
 
     async getChainInformation(request: GetChainInformationAbciRequest): Promise<ChainInformationAbciResponse> {
-        this.logger.info(`Request for chain information`);
+        this.logger.debug(`Request for chain information`);
         const chainInfo = await this.db.getChainInformation();
         return {
             responseType: AbciResponseType.CHAIN_INFORMATION,
@@ -142,7 +142,7 @@ export class ABCIQueryHandler {
 
     async getBlockInformation(request: GetBlockInformationAbciRequest): Promise<BlockInformationAbciResponse> {
         const requestedBlockHeight = request.height;
-        this.logger.info(`Request to get information for block ${requestedBlockHeight} `);
+        this.logger.debug(`Request to get information for block ${requestedBlockHeight} `);
         const blockInformation = await this.db.getBlockInformation(requestedBlockHeight);
         if (blockInformation === undefined) throw new Error(`No information found for block ${requestedBlockHeight}`);
         return {
@@ -153,7 +153,7 @@ export class ABCIQueryHandler {
 
     async getBlockContent(request: GetBlockContentAbciRequest): Promise<BlockContentAbciResponse> {
         const requestedBlockHeight = request.height;
-        this.logger.info(`Request to get content for block ${requestedBlockHeight}`);
+        this.logger.debug(`Request to get content for block ${requestedBlockHeight}`);
         const blockContent = await this.db.getBlockContent(requestedBlockHeight);
         if (blockContent === undefined) throw new Error(`No block found at height ${requestedBlockHeight}`);
         return {
@@ -164,7 +164,7 @@ export class ABCIQueryHandler {
 
     async getBlockModifiedAccounts(request: GetBlockModifiedAccountsAbciRequest): Promise<BlockModifiedAccountsAbciResponse> {
         const requestedBlockHeight = request.height;
-        this.logger.info(`Request to get modified accounts for block ${requestedBlockHeight}`);
+        this.logger.debug(`Request to get modified accounts for block ${requestedBlockHeight}`);
         const blockModifiedAccounts = await this.db.getBlockModifiedAccounts(requestedBlockHeight);
         if (blockModifiedAccounts === undefined) throw new Error(`No data found at height ${requestedBlockHeight}`);
         return {
@@ -175,7 +175,7 @@ export class ABCIQueryHandler {
 
     async getAccountUpdates(request: GetAccountUpdatesAbciRequest): Promise<AccountUpdatesAbciResponse> {
         const requestedAccounts = request.list;
-        this.logger.info(`Request to get account updates for ${requestedAccounts.length} account(s)`);
+        this.logger.debug(`Request to get account updates for ${requestedAccounts.length} account(s)`);
         const list: AccountUpdate[] = [];
         for (const requestedAccount of requestedAccounts) {
             const accountHash = requestedAccount.accountHash;
@@ -204,7 +204,7 @@ export class ABCIQueryHandler {
     async getRawBlockContent(request: GetRawBlockContentAbciRequest): Promise<RawBlockContentAbciResponse> {
         const requestedBlockHeight = request.height;
         const partIndex = request.partIndex;
-        this.logger.info(`Request to get raw content for block at height ${requestedBlockHeight} / partIndex = ${partIndex}`);
+        this.logger.debug(`Request to get raw content for block at height ${requestedBlockHeight} / partIndex = ${partIndex}`);
         const blockContent = await this.db.getBlockContent(requestedBlockHeight);
         if (blockContent === undefined) {
             throw new Error(`Unable to retrieve block content at height ${requestedBlockHeight}`);
@@ -245,7 +245,7 @@ export class ABCIQueryHandler {
 
     async getVirtualBlockchainState(request: GetVirtualBlockchainStateAbciRequest): Promise<VirtualBlockchainStateAbciResponse> {
         const virtualBlockchainId: Uint8Array = request.virtualBlockchainId;
-        this.logger.info(`Request state for virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`)
+        this.logger.debug(`Request state for virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`)
         const cachedDb = this.provider.getDatabase();
         const stateData = await cachedDb.getSerializedVirtualBlockchainState(virtualBlockchainId);
         if (!stateData) {
@@ -253,7 +253,7 @@ export class ABCIQueryHandler {
             this.logger.warn(errMsg);
             throw new Error(errMsg);
         }
-        this.logger.info(
+        this.logger.debug(
             `Virtual blockchain state request for id ${Utils.binaryToHexa(virtualBlockchainId)}: done`,
         );
         return {
@@ -264,7 +264,7 @@ export class ABCIQueryHandler {
 
     async getVirtualBlockchainUpdate(request: GetVirtualBlockchainUpdateAbciRequest): Promise<VirtualBlockchainUpdateAbciResponse> {
         const virtualBlockchainId: Uint8Array = request.virtualBlockchainId;
-        this.logger.info(
+        this.logger.debug(
             `Request update for virtual blockchain ${Utils.binaryToHexa(virtualBlockchainId)}`,
         );
         const vbState = await this.provider.getVirtualBlockchainStatus(
@@ -286,7 +286,7 @@ export class ABCIQueryHandler {
         const stateHash = NodeCrypto.Hashes.sha256AsBinary(serializedVirtualBlockchainState);
         const changed = !Utils.binaryIsEqual(request.knownStateHash, stateHash);
 
-        this.logger.info(
+        this.logger.debug(
             `Virtual blockchain update request for id ${Utils.binaryToHexa(virtualBlockchainId)}: ${changed ? 'changed' : 'unchanged'}`,
         );
         return {
@@ -362,16 +362,13 @@ export class ABCIQueryHandler {
 
         return new Promise(async (resolve, reject) => {
             const test = async () => {
-                console.log("AWAIT ANCHORING - remaingingAttempts", remaingingAttempts);
                 const microblockInfo = await db.getMicroblockInformation(request.hash);
-                console.log("AWAIT ANCHORING - got microblockInfo", microblockInfo);
 
                 if (microblockInfo) {
                     const response: MicroblockAnchoringAbciResponse = {
                         responseType: AbciResponseType.MICROBLOCK_ANCHORING,
                         ...microblockInfo
                     }
-                    console.log("AWAIT ANCHORING - response is ready", response);
                     resolve(response);
                 } else {
                     if (--remaingingAttempts > 0) {

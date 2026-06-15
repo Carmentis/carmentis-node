@@ -83,6 +83,7 @@ import { EarlyMicroblockRejectionService } from './services/EarlyMicroblockRejec
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private initialized: boolean;
+    private abciQueryLogger = getLogger(['node', 'abci', 'query']);
     private logger = getLogger(['node', AbciService.name]);
     private perf: Performance;
 
@@ -221,7 +222,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         try {
             // decoding the request
             const abciRequest = AbciQueryEncoder.decodeAbciRequest(serializedQuery);
-            this.logger.info(`Receiving request of type ${abciRequest.requestType}`);
+            this.abciQueryLogger.debug(`Receiving request of type ${abciRequest.requestType}`);
 
             // handle the request, encode and sends back the response
             const response = await this.abciQueryHandler.handleAbciRequest(abciRequest);
