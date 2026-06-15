@@ -83,8 +83,13 @@ import { EarlyMicroblockRejectionService } from './services/EarlyMicroblockRejec
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private initialized: boolean;
+
+    // define custom loggers depending of the case
+    private snapshotLogger = getLogger(['node', 'abci', 'snapshot']);
     private abciQueryLogger = getLogger(['node', 'abci', 'query']);
     private logger = getLogger(['node', AbciService.name]);
+
+
     private perf: Performance;
 
     // The ABCI query handler is used to handle queries sent to the application via the abci_query method.
@@ -244,12 +249,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async Info(request: RequestInfo) {
-        this.logger.info(`info`);
+        this.logger.info(`Request from cometbft to obtain info about the chain`);
         this.isCatchingUp = false;
         const chainInformation = await this.getLevelDb().getChainInformation();
         const last_block_height = chainInformation?.height || 0;
         if (last_block_height === 0) {
-            this.logger.info(`(Info) Aborting info request because the chain is empty.`);
+            this.logger.info(`Aborting info request because the chain is empty.`);
             return ResponseInfo.create({
                 version: '1',
                 data: 'Carmentis ABCI application',
@@ -261,8 +266,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const { appHash } = await this.getGlobalState().getApplicationStateHashes();
 
             const hex = EncoderFactory.bytesToHexEncoder();
-            this.logger.info(`(Info) last_block_height: ${last_block_height}`);
-            this.logger.info(`(Info) last_block_app_hash: ${hex.encode(appHash)}`);
+            this.logger.info(`Current info: last_block_height=${last_block_height}, last_block_app_hash=${hex.encode(appHash)}`);
 
             return ResponseInfo.create({
                 version: '1',
@@ -275,7 +279,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async InitChain(request: RequestInitChain) {
-        this.logger.info(`[ InitChain ] --------------------------------------------------------`);
+        this.logger.info(`InitChain`);
 
         // we start by cleaning database, snapshots and storage
         await this.clearDatabase();
@@ -523,20 +527,25 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         referenceTimestamp = Utils.getTimestampInSeconds(),
     ): Promise<ResponseCheckTx> {
         const perfMeasure = this.perf.start('CheckTx');
+        this.logger.info(`CheckTx: tx_bytes=${request.tx.length}, request_type=${request.type}`);
+        /*
         this.logger.info(`[ CheckTx ]  --------------------------------------------------------`);
         this.logger.debug(
             `Size of transaction: ${request.tx.length} bytes / request type: ${request.type} (${typeof request.type})`,
         );
 
+         */
+
         // we first attempt to parse the microblock
         try {
             const serializedMicroblock = request.tx;
             const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+            const hexMicroblockHash = parsedMicroblock.getHash().encode();
 
             // perform early rejection of the microblock
             const shouldBeEarlyRejected = this.earlyMicroblockRejectionService.shouldBeRejected(parsedMicroblock);
             if (shouldBeEarlyRejected) {
-                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} rejected early`);
+                this.logger.info(`Microblock ${hexMicroblockHash} rejected early`);
                 return {
                     code: CheckTxResponseCode.KO,
                     log: '',
@@ -569,7 +578,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const minAcceptedGasPrice = this.nodeConfig.getMinMicroblockGasPriceInAtomics();
             if (gasPrice.getAmountAsAtomic() < minAcceptedGasPrice) {
                 this.logger.info(
-                    `Microblock ${parsedMicroblock.getHash().encode()} rejected: gas price is below the accepted minimum (${minAcceptedGasPrice})`,
+                    `Microblock ${hexMicroblockHash} rejected: gas price is below the accepted minimum (${minAcceptedGasPrice})`,
                 );
                 return {
                     code: CheckTxResponseCode.KO,
@@ -583,7 +592,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 };
             }
 
-            this.logger.info(`Checking microblock ${parsedMicroblock.getHash().encode()}`);
+            this.logger.info(`Checking microblock ${hexMicroblockHash}`);
 
             // we create working state to check the transaction
             const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
@@ -600,10 +609,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     const sectionLabel = SectionLabel.getSectionLabelFromSection(section);
                     const sectionLengthInBytes = serializedSection.length;
                     const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
-                    this.logger.info(message);
+                    this.logger.debug(message);
                 }
 
-                this.logger.info(`Microblock ${parsedMicroblock.getHash().encode()} accepted`);
+                this.logger.info(`Microblock ${hexMicroblockHash} accepted`);
                 return {
                     code: CheckTxResponseCode.OK,
                     log: '',
@@ -616,7 +625,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                 };
             } else {
                 this.logger.info(
-                    `Microblock ${parsedMicroblock.getHash().encode()} rejected: not checked: ${checkResult.error}`,
+                    `Microblock ${hexMicroblockHash} rejected: not checked: ${checkResult.error}`,
                 );
                 return {
                     code: CheckTxResponseCode.KO,
@@ -631,7 +640,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         } catch (e) {
             if (e instanceof Error) {
-                this.logger.info(
+                this.logger.warn(
                     `Microblock rejected due to an unexpected error: ${e.message} at ${e.stack}`,
                 );
             } else {
@@ -690,13 +699,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      */
     async PrepareProposal(request: RequestPrepareProposal) {
         const cometParameters = this.extractCometParameters(request);
+        const height = cometParameters.blockHeight;
+        const nbTxs = request.txs.length;
+        const ts = cometParameters.blockTimestamp;
 
+        this.logger.info(`PrepareProposal: height=${height}, nb_txs=${nbTxs}, ts=${ts}`)
+        /*
         this.logger.info(
             `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
             `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
         );
+         */
+
 
         // Step 1: transaction decoding (and early rejection)
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
@@ -846,13 +862,21 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     async ProcessProposal(request: RequestProcessProposal) {
         const perfMeasure = this.perf.start('ProcessProposal');
         const cometParameters = this.extractCometParameters(request);
+        const height = cometParameters.blockHeight;
+        const nbTxs = request.txs.length;
+        const ts = cometParameters.blockTimestamp;
 
+        this.logger.info(`ProcessProposal: height=${height}, nb_txs=${nbTxs}, ts=${ts}`)
+
+        /*
         this.logger.info(
             `[ ProcessProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
             `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
         );
+
+         */
 
         const workingState = new GlobalState(this.getLevelDb(), this.getStorage());
 
@@ -936,13 +960,21 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     async FinalizeBlock(request: RequestFinalizeBlock) {
         const perfMeasure = this.perf.start('FinalizeBlock');
         const cometParameters = this.extractCometParameters(request);
+        const height = cometParameters.blockHeight;
+        const nbTxs = request.txs.length;
+        const ts = cometParameters.blockTimestamp;
 
+
+        this.logger.info(`FinalizeBlock: height=${height}, nb_txs=${nbTxs}, ts=${ts}`)
+        /*
         this.logger.info(
             `[ FinalizeBlock - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
         );
         this.logger.info(
             `Handling ${request.txs.length} transactions at ts ${cometParameters.blockTimestamp}`,
         );
+
+         */
 
         const workingState = this.getGlobalState();
         workingState.clearCaches();
@@ -1026,7 +1058,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async Commit(request: RequestCommit) {
-        this.logger.info(`[ Commit ] --------------------------------------------------------`);
+        this.logger.info(`Commit`);
+
+
         const state = this.getGlobalState();
         const db = this.getLevelDb();
         const snapshot = this.getSnapshot();
@@ -1037,7 +1071,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         }
 
         await state.commit();
-        this.logger.info(`Commit done`);
+        this.logger.debug(`Commit done`);
 
         // if this is the first block of the day, delete expired data files
         const newDayTimestamp = state.getNewDayTimestamp();
@@ -1083,11 +1117,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async ListSnapshots(request: RequestListSnapshots) {
-        this.logger.info(`EVENT: listSnapshots`);
+        this.snapshotLogger.info(`EVENT: listSnapshots`);
 
         const list = await this.getSnapshot().getList();
 
-        this.logger.info(`snapshot.getList(): ${list.length}`);
+        this.snapshotLogger.debug(`snapshot.getList(): ${list.length}`);
         list.forEach((object) =>
             console.log({
                 height: object.height,
@@ -1116,7 +1150,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async LoadSnapshotChunk(request: RequestLoadSnapshotChunk) {
-        this.logger.info(
+        this.snapshotLogger.info(
             `EVENT: loadSnapshotChunk height=${request.height} (typeof height: ${typeof request.height})`,
         );
 
@@ -1129,7 +1163,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async OfferSnapshot(request: RequestOfferSnapshot) {
-        this.logger.info(`EVENT: offerSnapshot`);
+        this.snapshotLogger.info(`EVENT: offerSnapshot`);
 
         this.importedSnapshot = request.snapshot;
 
@@ -1140,11 +1174,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async ApplySnapshotChunk(request: RequestApplySnapshotChunk) {
-        this.logger.info(`EVENT: applySnapshotChunk index=${request.index}`);
+        this.snapshotLogger.info(`EVENT: applySnapshotChunk index=${request.index}`);
 
         // reject if the provided snapshot is not defined
         if (this.importedSnapshot === undefined) {
-            this.logger.error(`Cannot apply snapshot chunk: imported snapshot undefined`);
+            this.snapshotLogger.error(`Cannot apply snapshot chunk: imported snapshot undefined`);
             return ResponseApplySnapshotChunk.create({
                 result: ResponseApplySnapshotChunk_Result.ABORT,
                 //result: ResponseApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT,
