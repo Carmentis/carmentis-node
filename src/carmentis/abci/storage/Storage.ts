@@ -1,7 +1,7 @@
 import fs, { mkdirSync } from 'node:fs';
 import { access, readdir, mkdir, open, rm } from 'node:fs/promises';
 import path from 'path';
-import { SnapshotDataCopyManager } from '../SnapshotDataCopyManager';
+import { SnapshotDataCopyManager } from '../snapshots/SnapshotDataCopyManager';
 import { DbInterface } from '../database/DbInterface';
 import {Microblock, Utils} from '@cmts-dev/carmentis-sdk-core';
 import { FileIdentifier } from '../types/FileIdentifier';
@@ -187,27 +187,59 @@ export class Storage implements IStorage {
             await mkdir(directoryPath, { recursive: true });
         }
 
+        this.logger.debug(`Opening file ${filePath} for writing`)
+        let handle;
+        let isNewFile = false;
+
         try {
-            this.logger.debug(`Opening file ${filePath} for writing`)
-            const handle = await open(filePath, 'a+');
+            handle = await open(filePath, 'r+');
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+                handle = await open(filePath, 'w+');
+                isNewFile = true;
+            } else {
+                throw err;
+            }
+        }
+
+        try {
             const stats = await handle.stat();
             const fileSize = stats.size;
 
-            if (fileSize != expectedFileSizeBeforeWriting) {
+            if (fileSize < expectedFileSizeBeforeWriting) {
                 throw new Error(
-                    `PANIC - '${filePath}' has an invalid size (expected ${expectedFileSizeBeforeWriting}, got ${fileSize})`,
+                    `PANIC - '${filePath}' is smaller than expected (size in DB is ${expectedFileSizeBeforeWriting}, actual size is ${fileSize})`,
                 );
             }
 
+            let position = fileSize;
+
             for (const tx of transactions) {
                 this.logger.debug(`Writing ${tx.length} bytes to ${filePath}`);
-                await handle.write(tx);
+                await handle.write(tx, 0, tx.length, position);
+                position += tx.length;
             }
             await handle.sync();
-            await handle.close();
             this.logger.debug(`Writing on ${filePath} done`)
         } catch (error) {
-            this.logger.error("{e}", {e: error})
+            this.logger.error("{e}", {e: error});
+            throw new Error(`PANIC - Inconsistent node state`);
+        }
+        finally {
+            await handle.close();
+        }
+
+        if (isNewFile) {
+            // fsync of parent directory, to persist the new file entry
+            const parentDir = path.dirname(filePath);
+            const dirHandle = await open(parentDir, 'r');
+            try {
+                await dirHandle.sync();
+            } catch (error) {
+                this.logger.debug(`failed to fsync directory '${parentDir}' (this is expected on Windows)`);
+            } finally {
+                await dirHandle.close();
+            }
         }
     }
 

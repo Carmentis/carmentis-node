@@ -113,12 +113,18 @@ export class GlobalStateUpdater {
         // if this is the first block of the day, apply daily updates
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
-            globalState.setNewDayTimestamp(currentBlockDayTs);
-            await this.updateVestingLocks(globalState, cometParameters);
-            await this.updateEscrowLocks(globalState, cometParameters);
-            await this.applyNodeStakingUnlocks(globalState, cometParameters);
-            await this.applyNodeSlashing(globalState, cometParameters);
-            await this.purgeDataFileTable(globalState, cometParameters);
+            try {
+                globalState.setNewDayTimestamp(currentBlockDayTs);
+                await this.updateVestingLocks(globalState, cometParameters);
+                await this.updateEscrowLocks(globalState, cometParameters);
+                await this.applyNodeStakingUnlocks(globalState, cometParameters);
+                await this.applyNodeSlashing(globalState, cometParameters);
+                await this.purgeDataFileTable(globalState, cometParameters);
+            }
+            catch (error) {
+                this.logger.error(`daily updates failed with the following error:`);
+                this.logger.error(String(error));
+            }
         }
     }
 

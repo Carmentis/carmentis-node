@@ -102,9 +102,12 @@ export class AccountEscrowHandler {
         );
 
         if (isEscrowLockExpired) {
-            // the escrow has expired: the funds are sent back from payee to payer
+            // the escrow has expired: we remove the lock and send the funds back from payee to payer
             this.logger.info(`Escrow has expired: funds are sent back to payer`);
             const amountAsAtomics = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
+            accountState.locks = balanceAvailability.getLocks();
+            await this.accountStateManager.saveAccountState(escrow.payeeAccount, accountState);
+
             const tokenTransfer: Transfer = {
                 type: ECO.BK_SENT_EXPIRED_ESCROW,
                 payerAccount: escrow.payeeAccount,
@@ -126,8 +129,5 @@ export class AccountEscrowHandler {
             // remove the escrow from the DB
             await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
         }
-
-        accountState.locks = balanceAvailability.getLocks();
-        await this.accountStateManager.saveAccountState(escrow.payeeAccount, accountState);
     }
 }

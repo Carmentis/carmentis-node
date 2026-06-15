@@ -2,19 +2,19 @@ import fs from 'node:fs';
 import path from 'path';
 import crypto from 'node:crypto';
 import stream from 'node:stream/promises';
-import {NodeCrypto} from './crypto/NodeCrypto';
-import {access, mkdir, open, readdir, rename, rm} from 'node:fs/promises';
-import {LevelDb} from './database/LevelDb';
-import {Storage} from './storage/Storage';
-import {SnapshotDataCopyManager} from './SnapshotDataCopyManager';
-import {SnapshotChunksFile} from './SnapshotChunksFile';
+import { NodeCrypto } from '../crypto/NodeCrypto';
+import { access, mkdir, open, readdir, rename, rm } from 'node:fs/promises';
+import { LevelDb } from '../database/LevelDb';
+import { Storage } from '../storage/Storage';
+import { SnapshotDataCopyManager } from '../snapshots/SnapshotDataCopyManager';
+import { SnapshotChunksFile } from '../snapshots/SnapshotChunksFile';
 
-import {Utils} from '@cmts-dev/carmentis-sdk-core';
-import {getLogger} from '@logtape/logtape';
-import {StoredSnapshot, StoredSnapshotSchema} from './types/valibot/snapshots/StoredSnapshot';
+import { Utils } from '@cmts-dev/carmentis-sdk-core';
+import { getLogger } from '@logtape/logtape';
+import {StoredSnapshot, StoredSnapshotSchema} from '../types/valibot/snapshots/StoredSnapshot';
 import * as v from 'valibot';
-import {NodeEncoder} from './NodeEncoder';
-import {LevelDbTable} from './database/LevelDbTable';
+import { NodeEncoder } from '../NodeEncoder';
+import { LevelDbTable } from '../database/LevelDbTable';
 
 const FORMAT = 1;
 const DB_BATCH_SIZE = 1000;
@@ -438,10 +438,10 @@ export class SnapshotsManager {
         let currentChunk: Uint8Array[] = [];
         let currentChunkSize = 0;
 
-        for (const [fileIdentifier, fileSize] of files) {
-            this.logger.debug(`Adding to chunks file: fileIdentifier = ${Utils.numberToHexa(fileIdentifier, 8)}, fileSize = ${fileSize}`);
+        for (const [ fileIdentifier, committedSize ] of files) {
+            this.logger.debug(`Adding to chunks file: fileIdentifier = ${Utils.numberToHexa(fileIdentifier, 8)}, committedSize = ${committedSize}`);
 
-            let remainingSize = fileSize;
+            let remainingSize = committedSize;
             let offset = 0;
 
             while (currentChunkSize + remainingSize > this.chunkSize) {
