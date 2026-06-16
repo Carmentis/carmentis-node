@@ -1,3 +1,5 @@
+import { bigint } from 'valibot';
+
 export class FeesDispatcher {
     constructor(private feesToDispatch: number, private validatorPowers: number[], private blockHeight: number) {
     }
@@ -6,6 +8,16 @@ export class FeesDispatcher {
         const feesInAtomics = this.feesToDispatch;
         const nValidators = this.validatorPowers.length;
         const totalValidationPowers = this.validatorPowers.reduce((acc, power) => acc + power, 0);
+
+        // case where there are no validators
+        if (nValidators === 0) {
+            return [];
+        }
+
+        // case where there is one validator with no voting power
+        if (nValidators === 1 && this.validatorPowers[0] === 0) {
+            return [0]
+        }
 
         const result: number[] = [];
         let distributedFees = 0;
