@@ -60,6 +60,8 @@ describe("fees dispatch", () => {
 
     it('Should handle zero-power validators with remainder', () => {
         testFeesDispatch(100, [0, 0, 10], [0, 0, 100], 1);
+        testFeesDispatch(100, [0, 10, 10], [0, 50, 50], 1);
+        testFeesDispatch(100, [0, 10, 10], [0, 50, 50], 2);
     });
 
 
