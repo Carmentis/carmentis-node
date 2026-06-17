@@ -38,8 +38,9 @@ describe("fees dispatch", () => {
     });
 
     it('Should dispatch all fees to a single validator', () => {
+        testFeesDispatch(10, [0], [0])
         for (let index = 0; index < 300; ++index) {
-            const randomVoting = Math.floor(Math.random() * 1000);
+            const randomVoting = Math.max(1, Math.floor(Math.random() * 1000));
             const randomFees = Math.floor(Math.random() * 10000);
             testFeesDispatch(randomFees, [randomVoting], [randomFees]);
         }
@@ -59,6 +60,8 @@ describe("fees dispatch", () => {
 
     it('Should handle zero-power validators with remainder', () => {
         testFeesDispatch(100, [0, 0, 10], [0, 0, 100], 1);
+        testFeesDispatch(100, [0, 10, 10], [0, 50, 50], 1);
+        testFeesDispatch(100, [0, 10, 10], [0, 50, 50], 2);
     });
 
 

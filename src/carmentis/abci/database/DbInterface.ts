@@ -14,7 +14,7 @@ import {
     ChainInformation,
     DataFile,
     Escrows,
-    ValidatorNodeByAddress,
+    ValidatorSet,
     MicroblockStorage,
 } from '../types/valibot/db/db';
 import {LevelDbTable} from "./LevelDbTable";
@@ -42,9 +42,9 @@ export interface DbInterface {
     getFullTable(tableId: number): Promise<Uint8Array[][]>;
     del(tableId: number, key: Uint8Array): Promise<boolean>;
 
-    // validator node
-    getValidatorNodeByAddress(nodeAddress: Uint8Array): Promise<ValidatorNodeByAddress | undefined>;
-    putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array, votingPower: number): Promise<boolean>;
+    // validator set
+    getValidatorSet(nodeId: Uint8Array): Promise<ValidatorSet | undefined>;
+    putValidatorSet(nodeid: Uint8Array, validatorSet: ValidatorSet): Promise<boolean>;
 
     // data file
     getDataFileFromDataFileKey(dbFileKey: Uint8Array): Promise<DataFile | undefined>;

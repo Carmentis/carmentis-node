@@ -1,5 +1,5 @@
 import { Level } from 'level';
-import { CHAIN, Utils, VirtualBlockchain } from '@cmts-dev/carmentis-sdk-core';
+import { CHAIN, Utils } from '@cmts-dev/carmentis-sdk-core';
 import { LevelQueryIteratorOptions, LevelQueryResponseType } from './DbInterface';
 import { getLogger } from '@logtape/logtape';
 import { AbstractSublevel } from 'abstract-level/types/abstract-sublevel';
@@ -122,7 +122,6 @@ export class LevelDb extends AbstractLevelDb {
             return false;
         }
     }
-
 
     async getKeys(tableId: number, limit?: number): Promise<Uint8Array[]> {
         const table = this.sub.get(tableId);

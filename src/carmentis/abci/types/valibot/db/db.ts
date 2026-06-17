@@ -1,6 +1,5 @@
 import * as v from 'valibot';
 import { ApplicationStateHashesSchema } from "../ApplicationStateHashes";
-import { ProtocolVirtualBlockchainStateSchema, uint8 } from '@cmts-dev/carmentis-sdk-core';
 
 export function uint8array() {
     return v.instance(Uint8Array<ArrayBuffer | ArrayBufferLike>)
@@ -103,12 +102,15 @@ export const EscrowsSchema = v.object({
 });
 export type Escrows = v.InferOutput<typeof EscrowsSchema>;
 
-// (0x10) VALIDATOR_NODE_BY_ADDRESS - ValidatorNodeByAddress
-export const ValidatorNodeByAddressSchema = v.object({
+// (0x10) VALIDATOR_SET - ValidatorSet
+// key: address
+export const ValidatorSetSchema = v.object({
     validatorNodeHash: uint8array(),
+    publicKeyType: v.string(),
+    publicKeyBytes: uint8array(),
     votingPower: v.number(),
 });
-export type ValidatorNodeByAddress = v.InferOutput<typeof ValidatorNodeByAddressSchema>;
+export type ValidatorSet = v.InferOutput<typeof ValidatorSetSchema>;
 
 // (0x11) MERKLE_NODE - MerkleNode
 export const MerkleNodeSchema = v.object({
@@ -116,23 +118,8 @@ export const MerkleNodeSchema = v.object({
 });
 export type MerkleNode = v.InferOutput<typeof MerkleNodeSchema>;
 
-// Account history references
-
-// AccountBlockReference
-export const AccountBlockReferenceSchema = v.object({
-    height: v.number(),
+// (0x13) VALIDATOR_NODE_INDEX - ValidatorNodeIndex
+export const ValidatorNodeIndexSchema = v.object({
+    // no payload - just used as an index of virtual blockchains
 });
-export type AccountBlockReference = v.InferOutput<typeof AccountBlockReferenceSchema>;
-
-// AccountMbReference
-export const AccountMbReferenceSchema = v.object({
-    mbHash: uint8array(),
-});
-export type AccountMbReference = v.InferOutput<typeof AccountMbReferenceSchema>;
-
-// AccountSectionReference
-export const AccountSectionReferenceSchema = v.object({
-    mbHash: uint8array(),
-    sectionIndex: v.number(),
-});
-export type AccountSectionReference = v.InferOutput<typeof AccountSectionReferenceSchema>;
+export type ValidatorNodeIndex = v.InferOutput<typeof ValidatorNodeIndexSchema>;

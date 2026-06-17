@@ -15,9 +15,10 @@ export const LevelDbTable: Record<string, number> = {
     ACCOUNTS_WITH_VESTING_LOCKS: 0x0d,
     ACCOUNTS_WITH_STAKING_LOCKS: 0x0e,
     ESCROWS: 0x0f,
-    VALIDATOR_NODE_BY_ADDRESS: 0x10,
+    VALIDATOR_SET: 0x10,
     MERKLE_NODE: 0x11,
     GENESIS_SEED: 0x12,
+    VALIDATOR_INDEX: 0x13,
 }
 
 const encoder = new TextEncoder();

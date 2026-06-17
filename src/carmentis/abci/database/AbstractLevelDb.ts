@@ -6,7 +6,7 @@ import {
     ChainInformation,
     DataFile,
     Escrows,
-    ValidatorNodeByAddress,
+    ValidatorSet,
     MicroblockStorage,
 } from '../types/valibot/db/db';
 import {
@@ -257,25 +257,25 @@ export abstract class AbstractLevelDb implements DbInterface {
         );
     }
 
-    async getValidatorNodeByAddress(
-        nodeAddress: Uint8Array,
-    ): Promise<ValidatorNodeByAddress | undefined> {
-        const response = await this.getRaw(LevelDbTable.VALIDATOR_NODE_BY_ADDRESS, nodeAddress);
+    async getValidatorSet(
+        nodeId: Uint8Array,
+    ): Promise<ValidatorSet | undefined> {
+        const response = await this.getRaw(LevelDbTable.VALIDATOR_SET, nodeId);
         if (response === undefined) return undefined;
-        return NodeEncoder.decodeValidatorNodeByAddress(response);
+        return NodeEncoder.decodeValidatorSet(response);
     }
 
-    async putValidatorNodeByAddress(nodeAddress: Uint8Array, validatorNodeHash: Uint8Array, votingPower: number): Promise<boolean> {
-        if (validatorNodeHash.length != 32) {
-            throw new Error(`invalid size of validatorNodeHash: ${validatorNodeHash.length} bytes (expecting 32)`);
+    async putValidatorSet(address: Uint8Array, validatorSet: ValidatorSet): Promise<boolean> {
+        if (address.length != 20) {
+            throw new Error(`invalid size of Comet address: ${address.length} bytes (expecting 20)`);
+        }
+        if (validatorSet.validatorNodeHash.length != 32) {
+            throw new Error(`invalid size of validator node hash: ${validatorSet.validatorNodeHash.length} bytes (expecting 32)`);
         }
         return await this.putRaw(
-            LevelDbTable.VALIDATOR_NODE_BY_ADDRESS,
-            nodeAddress,
-            NodeEncoder.encodeValidatorNodeByAddress({
-                validatorNodeHash,
-                votingPower,
-            }),
+            LevelDbTable.VALIDATOR_SET,
+            address,
+            NodeEncoder.encodeValidatorSet(validatorSet),
         );
     }
 

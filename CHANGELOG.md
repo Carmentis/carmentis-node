@@ -1,3 +1,17 @@
+## [1.6.14](https://github.com/Carmentis/carmentis-node/compare/v1.6.13...v1.6.14) (2026-06-17)
+
+
+### Bug Fixes
+
+* simplified & more robust processing of validator set updates ([43aad33](https://github.com/Carmentis/carmentis-node/commit/43aad335cd306a6870d7e2cd06904d5130dc6b2e))
+
+## [1.6.13](https://github.com/Carmentis/carmentis-node/compare/v1.6.12...v1.6.13) (2026-06-17)
+
+
+### Bug Fixes
+
+* handle edge cases for zero and single validator scenarios in FeesDispatcher ([b5081a3](https://github.com/Carmentis/carmentis-node/commit/b5081a33735f149104ddf57a36739005b8ca0c67))
+
 ## [1.6.12](https://github.com/Carmentis/carmentis-node/compare/v1.6.11...v1.6.12) (2026-06-15)
 
 
