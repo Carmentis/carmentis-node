@@ -1,3 +1,10 @@
+## [1.6.14](https://github.com/Carmentis/carmentis-node/compare/v1.6.13...v1.6.14) (2026-06-17)
+
+
+### Bug Fixes
+
+* simplified & more robust processing of validator set updates ([43aad33](https://github.com/Carmentis/carmentis-node/commit/43aad335cd306a6870d7e2cd06904d5130dc6b2e))
+
 ## [1.6.13](https://github.com/Carmentis/carmentis-node/compare/v1.6.12...v1.6.13) (2026-06-17)
 
 
