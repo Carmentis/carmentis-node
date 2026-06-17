@@ -685,8 +685,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const height = cometParameters.blockHeight;
         const nbTxs = request.txs.length;
         const ts = cometParameters.blockTimestamp;
+        const maxTxBytes = request.max_tx_bytes;
 
-        this.logger.info(`PrepareProposal: height=${height}, nb_txs=${nbTxs}, ts=${ts}`)
+        this.logger.info(`PrepareProposal: height=${height}, nb_txs=${nbTxs}, ts=${ts}, request.max_tx_bytes=${maxTxBytes}`)
         /*
         this.logger.info(
             `[ PrepareProposal - Height: ${cometParameters.blockHeight} ]  --------------------------------------------------------`,
