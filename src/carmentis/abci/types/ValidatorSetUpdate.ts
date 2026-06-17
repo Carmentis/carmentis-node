@@ -18,8 +18,3 @@ export interface CometValidatorSetUpdate {
      */
     pub_key_bytes: Uint8Array;
 };
-
-export interface ValidatorSetUpdate {
-    validatorNodeId: Uint8Array;
-    cometValidatorSetUpdate: CometValidatorSetUpdate;
-}

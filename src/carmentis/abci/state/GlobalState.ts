@@ -87,6 +87,10 @@ export class GlobalState extends AbstractProvider {
         await this.cachedDb.putChainInformation(chainInformation);
     }
 
+    async storeNodeVirtualBlockchainIndex(identifier: Uint8Array) {
+        await this.cachedDb.putRaw(LevelDbTable.VALIDATOR_INDEX, identifier, new Uint8Array(0));
+    }
+
     async getProtocolState(): Promise<ProtocolInternalState> {
        try {
            const protocolVirtualBlockchainIdentifier =

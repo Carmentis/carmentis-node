@@ -23,6 +23,7 @@ import {
     VirtualBlockchainType,
     ChainReference,
     ChainReferenceType,
+    EncoderFactory,
 } from '@cmts-dev/carmentis-sdk-core';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
@@ -33,12 +34,13 @@ import { GlobalStateUpdateCometParameters } from '../types/GlobalStateUpdateCome
 import { ProcessedMicroblock } from '../types/ProcessBlockResult';
 import { ApplicationStateHashes } from '../types/valibot/ApplicationStateHashes';
 import { LevelDb } from '../database/LevelDb';
-import { CometValidatorSetUpdate, ValidatorSetUpdate } from '../types/ValidatorSetUpdate';
 import { LevelDbTable } from '../database/LevelDbTable';
+import { ValidatorSet } from '../types/valibot/db/db';
+import { CometValidatorSetUpdate } from '../types/ValidatorSetUpdate';
 import { FeesDispatcher } from '../accounts/FeesDispatcher';
 import { CometBFTUtils } from '../CometBFTUtils';
 
-const KEY_TYPE_MAPPING: Record<string, string> = {
+const ABCI_TO_COMET_KEY_TYPE_MAPPING: Record<string, string> = {
     'tendermint/PubKeyEd25519': 'ed25519',
 };
 
@@ -48,7 +50,7 @@ export class GlobalStateUpdater {
     }
 
     // map of validator set updates
-    private validatorSetUpdates: Map<string, ValidatorSetUpdate> = new Map();
+    private validatorSetUpdates: CometValidatorSetUpdate[] = [];
 
     // we use these values for statistics purpose
     private newObjectCounts = Array(CHAIN.N_VIRTUAL_BLOCKCHAINS).fill(0);
@@ -89,7 +91,7 @@ export class GlobalStateUpdater {
             this.logger.error(`MISBEHAVIOR OF TYPE ${misbehavior.type} DETECTED FOR NODE '${Utils.binaryToHexa(validatorNodeAddress)}'`);
 
             // retrieve node identifier
-            const dataObject = await database.getValidatorNodeByAddress(validatorNodeAddress);
+            const dataObject = await database.getValidatorSet(validatorNodeAddress);
             if (dataObject === undefined) throw new Error(`Validator node with address ${Utils.binaryToHexa(validatorNodeAddress)} not found`);
             const validatorNodeHash = dataObject.validatorNodeHash;
             this.logger.debug(`Node ID is ${Utils.binaryToHexa(validatorNodeHash)}`);
@@ -110,6 +112,9 @@ export class GlobalStateUpdater {
             }
         }
 
+        // build the validator set update
+        await this.buildValidatorSetUpdate(globalState);
+
         // if this is the first block of the day, apply daily updates
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
@@ -126,6 +131,86 @@ export class GlobalStateUpdater {
                 this.logger.error(String(error));
             }
         }
+    }
+
+    /**
+     * Builds the validator set update by comparing what is currently declared on the Comet side
+     * with the voting powers computed from the virtual blockchains.
+     */
+    private async buildValidatorSetUpdate(globalState: GlobalState) {
+        const database = globalState.getCachedDatabase();
+
+        // Get the list of voting powers currently declared on the Comet side.
+        const cometList: ValidatorSet[] = [];
+        const validatorSetKeys = await database.getKeys(LevelDbTable.VALIDATOR_SET);
+        for (const key of validatorSetKeys) {
+            const record = await database.getValidatorSet(key);
+            if (record === undefined) {
+                throw new Error(`failed to load record from VALIDATOR_SET`);
+            }
+            cometList.push(record);
+        }
+
+        // Get the list of validator nodes, from the ABCI perspective.
+        // The key comes from the last VN_COMETBFT_PUBLIC_KEY_DECLARATION section.
+        // The voting power is computed according to:
+        // - the staking lock for the node (floored amount in CMTS)
+        // - the last VN_APPROVAL section
+        const abciList: ValidatorSet[] = [];
+        const validatorNodeKeys = await database.getKeys(LevelDbTable.VALIDATOR_INDEX);
+        for (const key of validatorNodeKeys) {
+            const nodeVb = await globalState.loadValidatorNodeVirtualBlockchain(Hash.from(key));
+            const stakingAmount = await this.getValidatorNodeStakingAmount(globalState, nodeVb);
+            const internalState = nodeVb.getInternalState();
+            const approved = internalState.getLastKnownApprovalStatus();
+            const votingPower = approved ? Math.floor(CMTSToken.createAtomic(stakingAmount).getAmountAsCMTS()) : 0;
+            const pubKeyDeclaration = await nodeVb.getCometbftPublicKeyDeclaration();
+            const b64 = EncoderFactory.bytesToBase64Encoder();
+            const publicKeyBytes = b64.decode(pubKeyDeclaration.cometbftPublicKey);
+            abciList.push({
+                validatorNodeHash: key,
+                publicKeyType: pubKeyDeclaration.cometbftPublicKeyType,
+                publicKeyBytes,
+                votingPower,
+            });
+        }
+
+        // Sanity check: there should never be a Comet record that does not exist in the ABCI records.
+        for (const cometRecord of cometList) {
+            const abciRecord = abciList.find((abciRecord) => this.validatorSetsHaveSameKey(cometRecord, abciRecord));
+            if (abciRecord === undefined) {
+                throw new Error(`PANIC - A node declared in the Comet validator set is not referenced on the ABCI side`);
+            }
+        }
+
+        // Search for records in the ABCI list that do not have the same voting power or do not exist in the Comet list.
+        // For each of them, update the VALIDATOR_SET table and push an entry into this.validatorSetUpdates which will
+        // eventually be passed to Comet in finalizeBlock.
+        for (const abciRecord of abciList) {
+            const cometRecord = cometList.find((cometRecord) => this.validatorSetsHaveSameKey(cometRecord, abciRecord));
+            const abciVotingPower = abciRecord.votingPower;
+            const cometVotingPower = cometRecord?.votingPower ?? 0;
+            if (cometVotingPower !== abciVotingPower) {
+                this.logger.info(
+                    `Validator set update: public key = ${Utils.binaryToHexa(abciRecord.publicKeyBytes)}, voting power = ${abciVotingPower}, previous value = ${cometVotingPower}`
+                );
+                const cometAddress = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(abciRecord.publicKeyBytes);
+                await database.putValidatorSet(cometAddress, abciRecord);
+                const validatorSetUpdateEntry: CometValidatorSetUpdate = {
+                    power: abciVotingPower,
+                    pub_key_type: ABCI_TO_COMET_KEY_TYPE_MAPPING[abciRecord.publicKeyType],
+                    pub_key_bytes: abciRecord.publicKeyBytes,
+                };
+                this.validatorSetUpdates.push(validatorSetUpdateEntry);
+            }
+        }
+    }
+
+    private validatorSetsHaveSameKey(cometRecord: ValidatorSet, abciRecord: ValidatorSet): boolean {
+        return (
+            cometRecord.publicKeyType === abciRecord.publicKeyType &&
+            Utils.binaryIsEqual(cometRecord.publicKeyBytes, abciRecord.publicKeyBytes)
+        );
     }
 
     /**
@@ -259,9 +344,15 @@ export class GlobalStateUpdater {
             transaction,
         );
 
-        // if this the genesis microblock of the Protocol VB, save its ID in CHAIN_INFORMATION
-        if (vbType === CHAIN.VB_PROTOCOL && height === 1) {
-            await globalState.storeProtocolVirtualBlockchainIdentifier(vbId);
+        if (height === 1) {
+            // if this is the genesis microblock of the Protocol VB, save its ID in CHAIN_INFORMATION
+            if (vbType === CHAIN.VB_PROTOCOL) {
+                await globalState.storeProtocolVirtualBlockchainIdentifier(vbId);
+            }
+            // if this is the genesis microblock of a validator node, save its ID in VALIDATOR_INDEX
+            if (vbType === CHAIN.VB_VALIDATOR_NODE) {
+                await globalState.storeNodeVirtualBlockchainIndex(vbId);
+            }
         }
     }
 
@@ -443,17 +534,20 @@ export class GlobalStateUpdater {
 
         // update the statistics
         const numberOfSectionsInMicroblock: number = microblock.getNumberOfSections();
+        const height = virtualBlockchain.getHeight();
+        const vbType = virtualBlockchain.getType();
+        const vbId = virtualBlockchain.getId();
         this.blockSectionCount += numberOfSectionsInMicroblock;
         this.blockSizeInBytes += transaction.length;
         this.totalFees += feesToPay.getAmountAsAtomic();
-        if (virtualBlockchain.getHeight() == 1) {
-            this.newObjectCounts[virtualBlockchain.getType()] += 1;
+        if (height === 1) {
+            this.newObjectCounts[vbType] += 1;
         }
         this.processedAndAcceptedMicroblocks.push({
-            hash: microblock.getHashAsBytes(), //vb.currentMicroblock.hash,
-            vbId: virtualBlockchain.getId(),
-            vbType: virtualBlockchain.getType(),
-            height: virtualBlockchain.getHeight(),
+            hash: microblock.getHashAsBytes(),
+            vbId,
+            vbType,
+            height,
             size: transaction.length,
             sectionCount: numberOfSectionsInMicroblock,
         });
@@ -467,6 +561,13 @@ export class GlobalStateUpdater {
             microblock,
             transaction,
         );
+
+        if (height === 1) {
+            // if this is the genesis microblock of a validator node, save its ID in VALIDATOR_INDEX
+            if (vbType === CHAIN.VB_VALIDATOR_NODE) {
+                await globalState.storeNodeVirtualBlockchainIndex(vbId);
+            }
+        }
     }
 
     async finalizeBlockApproval(globalState: GlobalState, request: RequestFinalizeBlock) {
@@ -489,29 +590,6 @@ export class GlobalStateUpdater {
         );
 
         const database = globalState.getCachedDatabase();
-
-        for (const [key, entry] of this.validatorSetUpdates) {
-            const update = entry.cometValidatorSetUpdate;
-            const cometAddress = Utils.binaryFromHexa(key);
-            const existingEntry = await database.getValidatorNodeByAddress(cometAddress);
-            const existingPower = existingEntry === undefined ? 0 : existingEntry.votingPower;
-
-            this.logger.info(
-                `validatorSet update: pub_key=[${update.pub_key_type}]${Base64.encodeBinary(update.pub_key_bytes)}, power=${update.power}`,
-            );
-
-            // If there is no actual change, remove this update from the set.
-            // This is especially important if both the existing voting power and the new voting power are set to 0 because
-            // Comet is likely to erroneously consider that 'applying the validator changes would result in empty set'.
-            // (see updateWithChangeSet() in types/validator_set.go)
-            if (existingPower == update.power) {
-                this.logger.info(`no actual voting power change -> removed from validatorSet update`);
-                this.validatorSetUpdates.delete(key);
-            }
-
-            await database.putValidatorNodeByAddress(cometAddress, entry.validatorNodeId, update.power);
-        }
-
         const chainInfoObject = await database.getChainInformation();
         chainInfoObject.height = blockHeight;
         chainInfoObject.lastBlockTimestamp = blockTimestamp;
@@ -603,7 +681,7 @@ export class GlobalStateUpdater {
     }
 
     getCometValidatorSetUpdates(): CometValidatorSetUpdate[] {
-        return [...this.validatorSetUpdates.values()].map((obj) => obj.cometValidatorSetUpdate);
+        return this.validatorSetUpdates;
     }
 
     private async storeBlockInformationInBuffer(
@@ -689,7 +767,7 @@ export class GlobalStateUpdater {
                 }
 
                 const address = Utils.bufferToUint8Array(vote.validator.address);
-                const nodeByAddress = await stateDb.getValidatorNodeByAddress(address);
+                const nodeByAddress = await stateDb.getValidatorSet(address);
 
                 if(nodeByAddress === undefined) {
                     this.logger.error(`Unknown validator address ${Utils.binaryToHexa(address)}`);
@@ -1003,92 +1081,11 @@ export class GlobalStateUpdater {
 
         this.logger.debug(`declaration of node public key ${cometPublicKey} -> address ${Utils.binaryToHexa(cometAddress)}`);
 
-        const existingNode = await database.getValidatorNodeByAddress(cometAddress);
+        const existingNode = await database.getValidatorSet(cometAddress);
 
-        if (existingNode === undefined) {
-            // we search for the last known voting power from the internal VB state
-            const localState = vb.getInternalState();
-            const approvalStatus = localState.getLastKnownApprovalStatus();
-
-            await this.processValidatorSetUpdate(
-                globalState,
-                vb,
-                approvalStatus,
-                cometPublicKeyType,
-                cometPublicKeyBytes,
-            );
+        if (existingNode !== undefined) {
+            throw new Error(`Attempt do declare a node public key that is already in use: ${cometPublicKey}, address = ${Utils.binaryToHexa(cometAddress)}`);
         }
-        else {
-            this.logger.warn(`this address is already in use: aborting`);
-        }
-    }
-
-    private async processValidatorSetUpdate(
-        globalState: GlobalState,
-        validatorNode: ValidatorNodeVb,
-        approvalStatus: boolean,
-        publicKeyType: string,
-        publicKeyBytes: Uint8Array,
-    ) {
-        const validatorNodeId = validatorNode.getId();
-        this.logger.debug(`Processing validator set update for node ${Utils.binaryToHexa(validatorNodeId)}`);
-
-        let votingPower: number;
-
-        if (approvalStatus) {
-            const stakingAmount = await this.getValidatorNodeStakingAmount(globalState, validatorNode);
-            if (stakingAmount == 0) {
-                this.logger.warn(`No staking for validator node ${Utils.binaryToHexa(validatorNodeId)}`);
-            }
-            else {
-                this.logger.debug(`Staking of ${stakingAmount} for validator node ${Utils.binaryToHexa(validatorNodeId)}`);
-            }
-            votingPower = stakingAmount;
-        }
-        else {
-            votingPower = 0;
-        }
-
-        if(votingPower == 0) {
-            this.logger.warn(`Validator node ${Utils.binaryToHexa(validatorNodeId)} has no voting power`);
-        }
-
-        this.addValidatorSetUpdate(
-            validatorNodeId,
-            votingPower,
-            publicKeyType,
-            publicKeyBytes,
-        );
-    }
-
-    private addValidatorSetUpdate(
-        validatorNodeId: Uint8Array,
-        votingPower: number,
-        pubKeyType: string,
-        pubKeyBytes: Uint8Array,
-    ) {
-        // ensure the public key type is correct
-        const translatedPubKeyType = KEY_TYPE_MAPPING[pubKeyType];
-        if (!translatedPubKeyType) {
-            this.logger.error(`Aborting validator set update: Invalid key type '${pubKeyType}' for validator set update`);
-            return false;
-        }
-
-        const validatorSetUpdateEntry: ValidatorSetUpdate = {
-            validatorNodeId,
-            cometValidatorSetUpdate: {
-                power: votingPower,
-                pub_key_type: translatedPubKeyType,
-                pub_key_bytes: pubKeyBytes,
-            }
-        };
-
-        const cometAddress = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(pubKeyBytes);
-        const key = Utils.binaryToHexa(cometAddress);
-
-        this.logger.info(`Validator set update: Public key ${Utils.binaryToHexa(pubKeyBytes)} -> voting power at ${votingPower}`)
-        this.validatorSetUpdates.set(key, validatorSetUpdateEntry);
-        return true;
     }
 
     private async validatorNodeApprovalCallback(
@@ -1096,18 +1093,8 @@ export class GlobalStateUpdater {
         vb: ValidatorNodeVb,
         section: ValidatorNodeVotingPowerUpdateSection,
     ) {
-        const publicKeyDeclaration = await vb.getCometbftPublicKeyDeclaration();
-        const cometPublicKeyType = publicKeyDeclaration.cometbftPublicKeyType;
-        const cometPublicKeyBytes = Base64.decodeBinary(publicKeyDeclaration.cometbftPublicKey);
-        const approvalStatus = vb.getInternalState().getLastKnownApprovalStatus();
-
-        await this.processValidatorSetUpdate(
-            globalState,
-            vb,
-            approvalStatus,
-            cometPublicKeyType,
-            cometPublicKeyBytes,
-        );
+        // we use to update the validator set here
+        // there's currently no more processing
     }
 
     private async validatorNodeSlashingCancellationCallback(

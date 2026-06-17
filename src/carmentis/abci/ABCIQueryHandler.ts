@@ -427,7 +427,7 @@ export class ABCIQueryHandler {
     }
 
     async getValidatorNodeByAddress(request: GetValidatorNodeByAddressAbciRequest): Promise<ValidatorNodeByAddressAbciResponse> {
-        const dataObject = await this.db.getValidatorNodeByAddress(request.address);
+        const dataObject = await this.db.getValidatorSet(request.address);
         if (dataObject === undefined) throw new Error(`Validator node with address ${Utils.binaryToHexa(request.address)} not found`);
         const validatorNodeHash = dataObject.validatorNodeHash;
         return {
@@ -442,7 +442,7 @@ export class ABCIQueryHandler {
             `The maximum number of microblock bodies to return is 100. Requested ${request.hashes.length}`
         )
 
-        // TODO: check what happen if no body found
+        // TODO: check what happens if no body found
         const microblockHashes = request.hashes;
         const microblockBodies = await this.provider.getListOfMicroblockBody(microblockHashes);
         const response: MicroblockBodysAbciResponse['list'] = [];

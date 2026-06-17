@@ -19,14 +19,8 @@ import {
     AccountsWithStakingLocksSchema,
     Escrows,
     EscrowsSchema,
-    ValidatorNodeByAddress,
-    ValidatorNodeByAddressSchema,
-    AccountBlockReference,
-    AccountBlockReferenceSchema,
-    AccountMbReference,
-    AccountMbReferenceSchema,
-    AccountSectionReference,
-    AccountSectionReferenceSchema,
+    ValidatorSet,
+    ValidatorSetSchema,
     BlockInformation,
     BlockInformationSchema,
     BlockContent,
@@ -184,48 +178,15 @@ export class NodeEncoder {
         return v.parse(EscrowsSchema, decoded);
     }
 
-    // ValidatorNodeByAddress
-    static encodeValidatorNodeByAddress(validatorNodeByAddress: ValidatorNodeByAddress): Uint8Array {
-        const validated = v.parse(ValidatorNodeByAddressSchema, validatorNodeByAddress);
+    // ValidatorSet
+    static encodeValidatorSet(validatorSet: ValidatorSet): Uint8Array {
+        const validated = v.parse(ValidatorSetSchema, validatorSet);
         return this.encodeObject(validated);
     }
 
-    static decodeValidatorNodeByAddress(encodedValidatorNodeByAddress: Uint8Array): ValidatorNodeByAddress {
-        const decoded = this.decodeBinary(encodedValidatorNodeByAddress);
-        return v.parse(ValidatorNodeByAddressSchema, decoded);
-    }
-
-    // AccountBlockReference
-    static encodeAccountBlockReference(accountBlockReference: AccountBlockReference): Uint8Array {
-        const validated = v.parse(AccountBlockReferenceSchema, accountBlockReference);
-        return this.encodeObject(validated);
-    }
-
-    static decodeAccountBlockReference(encodedAccountBlockReference: Uint8Array): AccountBlockReference {
-        const decoded = this.decodeBinary(encodedAccountBlockReference);
-        return v.parse(AccountBlockReferenceSchema, decoded);
-    }
-
-    // AccountMbReference
-    static encodeAccountMbReference(accountMbReference: AccountMbReference): Uint8Array {
-        const validated = v.parse(AccountMbReferenceSchema, accountMbReference);
-        return this.encodeObject(validated);
-    }
-
-    static decodeAccountMbReference(encodedAccountMbReference: Uint8Array): AccountMbReference {
-        const decoded = this.decodeBinary(encodedAccountMbReference);
-        return v.parse(AccountMbReferenceSchema, decoded);
-    }
-
-    // AccountSectionReference
-    static encodeAccountSectionReference(accountSectionReference: AccountSectionReference): Uint8Array {
-        const validated = v.parse(AccountSectionReferenceSchema, accountSectionReference);
-        return this.encodeObject(validated);
-    }
-
-    static decodeAccountSectionReference(encodedAccountSectionReference: Uint8Array): AccountSectionReference {
-        const decoded = this.decodeBinary(encodedAccountSectionReference);
-        return v.parse(AccountSectionReferenceSchema, decoded);
+    static decodeValidatorSet(encodedValidatorSet: Uint8Array): ValidatorSet {
+        const decoded = this.decodeBinary(encodedValidatorSet);
+        return v.parse(ValidatorSetSchema, decoded);
     }
 
     // BlockInformation

@@ -499,24 +499,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async storeInitialValidatorSet(request: RequestInitChain) {
-        const db = this.getLevelDb();
-        for (const validator of request.validators) {
-            const address = CometBFTUtils.extractNodeAddressFromValidatorUpdate(validator);
-            /*
-            const address = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(
-                Utils.bufferToUint8Array(validator.pub_key_bytes),
-            );
-
-             */
-            const record = await db.getValidatorNodeByAddress(address);
-
-            if (!record) {
-                this.logger.info(
-                    `Adding unknown validator address: ${Utils.binaryToHexa(address)}`,
-                );
-                await db.putValidatorNodeByAddress(address, Utils.getNullHash(), 0);
-            }
-        }
+        // there's no specific processing here anymore
     }
 
     /**
@@ -932,10 +915,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                         tx,
                     );
                 } else {
-                    // TODO: reject case
+                    status = ResponseProcessProposal_ProposalStatus.REJECT;
                     this.logger.error(
                         `Microblock  ${parsedMicroblock.getHash().encode()} rejected: ${localStateConsistentWithMicroblock.error}`,
                     );
+                    break;
                 }
             } catch (e) {
                 status = ResponseProcessProposal_ProposalStatus.REJECT;
@@ -1059,7 +1043,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
     async Commit(request: RequestCommit) {
         this.logger.info(`Commit`);
-
 
         const state = this.getGlobalState();
         const db = this.getLevelDb();
@@ -1238,7 +1221,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             const seed = checkedMicroblock.getPreviousHash().toBytes().slice(8);
             const seedExists = await workingState.genesisSeedExists(seed);
             if (seedExists) {
-                throw new Error(`The genesis seed declared in the microblock already exists`)
+                throw new Error(`The genesis seed declared in the microblock has already been used`);
             }
         }
     }
