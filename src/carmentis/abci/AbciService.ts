@@ -217,7 +217,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private async forwardAbciQueryToHandler(serializedQuery: Uint8Array) {
         // we reject the query if the handler is not initialized yet.
         if (this.abciQueryHandler === undefined) {
-            this.logger.error(`ABCI query handler is not initialized yet.`);
+            this.abciQueryLogger.error(`ABCI query handler is not initialized yet.`);
             return AbciQueryEncoder.encodeAbciResponse({
                 responseType: AbciResponseType.ERROR,
                 error: 'ABCI query handler is not initialized yet.',
@@ -234,11 +234,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             return AbciQueryEncoder.encodeAbciResponse(response);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-            this.logger.error(
+            this.abciQueryLogger.debug(
                 `ABCI query execution failed due to the following error: ${errorMsg}`,
             );
             if (error instanceof Error) {
-                this.logger.debug(error.stack ?? 'No stack provided');
+                this.abciQueryLogger.debug(error.stack ?? 'No stack provided');
             }
             const errorResponse: AbciResponse = {
                 responseType: AbciResponseType.ERROR,
@@ -825,7 +825,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             }
         }
 
-        this.logger.info(
+        this.logger.debug(
             `Included ${proposedTxs.length} transaction(s) out of ${txs.length}`,
         );
 

@@ -1,11 +1,6 @@
 name: Release and Publish Docker Image
 
 on:
-  pull_request:
-    branches:
-      - mainnet
-      - testnet
-      - devnet
   push:
     branches:
       - mainnet
