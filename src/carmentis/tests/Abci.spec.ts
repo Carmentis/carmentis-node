@@ -1,7 +1,6 @@
 // This file contains the tests which emulates the CometBFT server.
 import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
-import { RestABCIQueryModule } from '../rest-abci-query/RestABCIQueryModule';
 import { HttpModule } from '@nestjs/axios';
 import { AbciModule } from '../abci/AbciModule';
 import { NodeConfigService } from '../config/services/NodeConfigService';
@@ -137,7 +136,6 @@ describe('Abci', () => {
                 ConfigModule.forRoot({
                     isGlobal: true,
                 }),
-                RestABCIQueryModule,
                 HttpModule,
                 AbciModule,
             ],
