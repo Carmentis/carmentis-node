@@ -1,3 +1,10 @@
+## [1.6.15](https://github.com/Carmentis/carmentis-node/compare/v1.6.14...v1.6.15) (2026-06-18)
+
+
+### Bug Fixes
+
+* fixed node restart bug (invalid appHash returned by Info) ([ca2c0a0](https://github.com/Carmentis/carmentis-node/commit/ca2c0a0bbba3ab255802e550b39cbd0336f8c9eb))
+
 ## [1.6.14](https://github.com/Carmentis/carmentis-node/compare/v1.6.13...v1.6.14) (2026-06-17)
 
 
