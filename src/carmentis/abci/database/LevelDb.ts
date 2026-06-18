@@ -30,6 +30,10 @@ export class LevelDb extends AbstractLevelDb {
         super(LevelDb.logger)
         this.path = path;
         this.db = new Level(this.path, LevelDb.encoding);
+
+        if (!this.db.supports.implicitSnapshots) {
+            throw new Error(`This LevelDB implementation does not support implicit snapshots`);
+        }
     }
 
     /**
@@ -90,7 +94,7 @@ export class LevelDb extends AbstractLevelDb {
         } catch (e) {
             this.logger.error('{e}', { e });
         }
-        this.logger.warn(
+        this.logger.debug(
             `Raw entry ${Utils.binaryToHexa(key)} not found on table {tableName}: returning undefined`, () => ({
                 tableName: LevelDb.getTableName(tableId)
             })
