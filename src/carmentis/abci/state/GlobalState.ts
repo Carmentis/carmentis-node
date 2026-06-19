@@ -232,11 +232,13 @@ export class GlobalState extends AbstractProvider {
 
         //perfMeasure.end();
 
-        this.logger.debug(`VB radix hash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
-        this.logger.debug(`Token radix hash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
-        this.logger.debug(`Radix hash ......... : ${Utils.binaryToHexa(radixHash)}`);
-        this.logger.debug(`Storage hash ....... : ${Utils.binaryToHexa(storageHash)}`);
-        this.logger.debug(`Application hash ... : ${Utils.binaryToHexa(appHash)}`);
+        this.logger.debug(`currentHeight .... : ${currentHeight}`);
+        this.logger.debug(`lastRadixHash .... : ${Utils.binaryToHexa(lastRadixHash)}`);
+        this.logger.debug(`vbRadixHash ...... : ${Utils.binaryToHexa(vbRadixHash)}`);
+        this.logger.debug(`tokenRadixHash ... : ${Utils.binaryToHexa(tokenRadixHash)}`);
+        this.logger.debug(`radixHash ........ : ${Utils.binaryToHexa(radixHash)}`);
+        this.logger.debug(`storageHash ...... : ${Utils.binaryToHexa(storageHash)}`);
+        this.logger.debug(`appHash .......... : ${Utils.binaryToHexa(appHash)}`);
 
         return {
             vbRadixHash,

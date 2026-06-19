@@ -24,6 +24,7 @@ import {
     ChainReference,
     ChainReferenceType,
     EncoderFactory,
+    SectionLabel,
 } from '@cmts-dev/carmentis-sdk-core';
 import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { getLogger } from '@logtape/logtape';
@@ -600,6 +601,19 @@ export class GlobalStateUpdater {
         await database.putChainInformation(chainInfoObject);
 
         const applicationStateHashes = await globalState.getApplicationStateHashes();
+
+        const hashesSummary = [
+            { label: 'VBR', hash: applicationStateHashes.vbRadixHash },
+            { label: 'TKR', hash: applicationStateHashes.tokenRadixHash },
+            { label: 'RDX', hash: applicationStateHashes.radixHash },
+            { label: 'STO', hash: applicationStateHashes.storageHash },
+            { label: 'APP', hash: applicationStateHashes.appHash },
+        ]
+        .map((obj) =>
+            `${obj.label}:${Utils.binaryToHexa(obj.hash.slice(0, 2))}⋯${Utils.binaryToHexa(obj.hash.slice(-2))}`
+        ).join('/');
+
+        this.logger.info(`State hashes: ${hashesSummary}`);
 
         await this.storeBlockInformationInBuffer(
             globalState,

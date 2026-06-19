@@ -34,6 +34,7 @@ import {
     Snapshot,
     RequestVerifyVoteExtension,
     ResponseVerifyVoteExtension,
+    ResponseVerifyVoteExtension_VerifyStatus,
     ResponseProcessProposal_ProposalStatus,
     ResponseApplySnapshotChunk_Result,
     ResponseOfferSnapshot_Result,
@@ -80,6 +81,8 @@ import { ConsensusParams } from '../../proto/tendermint/types/params';
 import { CometBFTUtils } from './CometBFTUtils';
 import { EarlyMicroblockRejectionService } from './services/EarlyMicroblockRejectionService';
 
+const APP_VERSION = 1;
+
 @Injectable()
 export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private initialized: boolean;
@@ -88,7 +91,6 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     private snapshotLogger = getLogger(['node', 'abci', 'snapshot']);
     private abciQueryLogger = getLogger(['node', 'abci', 'query']);
     private logger = getLogger(['node', AbciService.name]);
-
 
     private perf: Performance;
 
@@ -251,28 +253,31 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     async Info(request: RequestInfo) {
         this.logger.info(`Request from cometbft to obtain info about the chain`);
         this.isCatchingUp = false;
-        const chainInformation = await this.getLevelDb().getChainInformation();
+        const db = this.getLevelDb();
+        const chainInformation = await db.getChainInformation();
         const last_block_height = chainInformation?.height || 0;
         if (last_block_height === 0) {
             this.logger.info(`Aborting info request because the chain is empty.`);
             return ResponseInfo.create({
                 version: '1',
                 data: 'Carmentis ABCI application',
-                //app_version: APP_VERSION,
-                //last_block_height,
-                last_block_height: last_block_height,
+                app_version: APP_VERSION,
+                last_block_height,
             });
         } else {
-            const { appHash } = await this.getGlobalState().getApplicationStateHashes();
-
+            const lastBlock = await db.getBlockInformation(last_block_height);
+            if (lastBlock === undefined) {
+                throw new Error(`Unable to retrieve information about last block at height ${last_block_height}`);
+            }
+            const appHash = lastBlock.applicationStateHashes.appHash;
             const hex = EncoderFactory.bytesToHexEncoder();
             this.logger.info(`Current info: last_block_height=${last_block_height}, last_block_app_hash=${hex.encode(appHash)}`);
 
             return ResponseInfo.create({
                 version: '1',
                 data: 'Carmentis ABCI application',
-                //app_version: APP_VERSION,
-                last_block_height: last_block_height,
+                app_version: APP_VERSION,
+                last_block_height,
                 last_block_app_hash: appHash,
             });
         }
@@ -939,7 +944,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     VerifyVoteExtension(request: RequestVerifyVoteExtension) {
-        return Promise.resolve(ResponseVerifyVoteExtension.create({}));
+        return Promise.resolve(ResponseVerifyVoteExtension.create({
+            status: ResponseVerifyVoteExtension_VerifyStatus.ACCEPT
+        }));
     }
 
     async FinalizeBlock(request: RequestFinalizeBlock) {
@@ -1043,9 +1050,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     async Commit(request: RequestCommit) {
-        this.logger.info(`Commit`);
-
         const state = this.getGlobalState();
+        const commitHeight = (await state.getCachedDatabase().getChainInformation()).height;
+        this.logger.info(`Commit height=${commitHeight}`);
+
         const db = this.getLevelDb();
         const snapshot = this.getSnapshot();
 
@@ -1107,12 +1115,12 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         this.snapshotLogger.debug(`snapshot.getList(): ${list.length}`);
         list.forEach((object) =>
-            console.log({
+            this.snapshotLogger.debug(JSON.stringify({
                 height: object.height,
                 format: object.format,
                 chunks: object.chunks,
                 hash: Utils.binaryFromHexa(object.hash),
-            }),
+            })),
         );
 
         const snapshots: Snapshot[] = list.map((object) => {

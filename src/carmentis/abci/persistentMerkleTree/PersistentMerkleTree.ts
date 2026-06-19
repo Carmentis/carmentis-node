@@ -159,7 +159,6 @@ export class PersistentMerkleTree {
             proof.witnesses.push(witness);
             col >>>= 1;
         }
-        console.log("MerkleProof", proof);
         return proof;
     }
 
