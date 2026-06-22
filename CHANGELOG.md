@@ -1,3 +1,10 @@
+## [1.6.17](https://github.com/Carmentis/carmentis-node/compare/v1.6.16...v1.6.17) (2026-06-22)
+
+
+### Bug Fixes
+
+* addition of loggers to make logging modular ([c276d5d](https://github.com/Carmentis/carmentis-node/commit/c276d5d5960bbcbfacd2d8d13939cbbb025e7b8e))
+
 ## [1.6.16](https://github.com/Carmentis/carmentis-node/compare/v1.6.15...v1.6.16) (2026-06-19)
 
 
