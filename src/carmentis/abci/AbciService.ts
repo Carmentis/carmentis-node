@@ -765,13 +765,14 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const maxBlockSize = protocolVariables.getMaximumBlockSizeInBytes();
         const protocolLevelMaxMicroblocksPerBlock = protocolVariables.getProtocolVariables().maxMicroblocksPerBlock;
         const configLeveLMaxMicroblocksPerBlock = this.nodeConfig.getMaxMicroblocksPerBlock();
-        const maxMicroblocksPerBlock =
+        let maxMicroblocksPerBlock =
             (
                 // should be a positive, safe, strictly positive integer
                 Number.isInteger(configLeveLMaxMicroblocksPerBlock) &&
                 Number.isSafeInteger(configLeveLMaxMicroblocksPerBlock) &&
                 0 < configLeveLMaxMicroblocksPerBlock
             ) ? configLeveLMaxMicroblocksPerBlock : protocolLevelMaxMicroblocksPerBlock;
+        maxMicroblocksPerBlock = Math.min(maxMicroblocksPerBlock, protocolLevelMaxMicroblocksPerBlock);
         const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
 
         let currentBlockSizeInBytes = 0;
@@ -1063,7 +1064,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             app_hash: appHash,
             events: [],
             validator_updates: validatorUpdate,
-            consensus_param_updates: undefined,
+            consensus_param_updates: {
+                version: {
+                    app: APP_VERSION
+                }
+            },
         });
     }
 

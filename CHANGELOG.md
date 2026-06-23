@@ -1,3 +1,11 @@
+## [1.6.19](https://github.com/Carmentis/carmentis-node/compare/v1.6.18...v1.6.19) (2026-06-23)
+
+
+### Bug Fixes
+
+* adapt the max microblocks per block calculation now taking the min of protocol and config levels. ([40861a3](https://github.com/Carmentis/carmentis-node/commit/40861a3f6a4d8fc66cddefc4b8fc08d19e5e6c70))
+* addition of consensus params update with app version set to the globally defined APP_VERSION constant ([e7628c3](https://github.com/Carmentis/carmentis-node/commit/e7628c3b8092589c459a1e56ded5ac48385c37e0))
+
 ## [1.6.18](https://github.com/Carmentis/carmentis-node/compare/v1.6.17...v1.6.18) (2026-06-22)
 
 
