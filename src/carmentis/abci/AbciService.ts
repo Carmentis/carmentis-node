@@ -1064,7 +1064,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             app_hash: appHash,
             events: [],
             validator_updates: validatorUpdate,
-            consensus_param_updates: undefined,
+            consensus_param_updates: {
+                version: {
+                    app: APP_VERSION
+                }
+            },
         });
     }
 
