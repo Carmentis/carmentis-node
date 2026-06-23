@@ -13,6 +13,7 @@ buf*
 .carmentis
 .vs
 ./abci
+profiling
 
 # config
 *config.toml
