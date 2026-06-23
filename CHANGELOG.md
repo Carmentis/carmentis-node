@@ -1,3 +1,10 @@
+## [1.6.20](https://github.com/Carmentis/carmentis-node/compare/v1.6.19...v1.6.20) (2026-06-23)
+
+
+### Bug Fixes
+
+* snapshotInProgress changed from boolean to number ([4703d69](https://github.com/Carmentis/carmentis-node/commit/4703d69ca6e04fa681ab5031ada27793723d3c3a))
+
 ## [1.6.19](https://github.com/Carmentis/carmentis-node/compare/v1.6.18...v1.6.19) (2026-06-23)
 
 

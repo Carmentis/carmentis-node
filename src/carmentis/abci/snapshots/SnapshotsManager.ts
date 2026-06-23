@@ -32,13 +32,13 @@ export class SnapshotsManager {
     private readonly path: string;
     private readonly chunkSize: number;
     private readonly logger = getLogger(['node', 'snapshots', SnapshotsManager.name]);
-    private snapshotInProgress: boolean;
+    private snapshotInProgress: number;
 
     constructor(db: LevelDb, path: string, chunkSize: number) {
         this.db = db;
         this.path = path;
         this.chunkSize = chunkSize;
-        this.snapshotInProgress = false;
+        this.snapshotInProgress = 0;
     }
 
     /**
@@ -271,10 +271,11 @@ export class SnapshotsManager {
      */
     async create() {
         try {
-            if (this.snapshotInProgress) {
+            this.snapshotInProgress++;
+
+            if (this.snapshotInProgress > 1) {
                 throw new Error(`Previous snapshot is still in progress: cancelling the creation of a new one`);
             }
-            this.snapshotInProgress = true;
             const dbIterator = this.db.getDbIterator();
 
             await this.createPath();
@@ -304,7 +305,7 @@ export class SnapshotsManager {
 
             fs.writeFileSync(jsonFilePath, JSON.stringify(snapshotObject, null, 2));
         } finally {
-            this.snapshotInProgress = false;
+            this.snapshotInProgress--;
         }
     }
 
