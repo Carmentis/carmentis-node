@@ -1,3 +1,10 @@
+## [1.6.21](https://github.com/Carmentis/carmentis-node/compare/v1.6.20...v1.6.21) (2026-06-24)
+
+
+### Bug Fixes
+
+* upgrade @inquirer/prompts and related dependencies, add private key prompts and validation to GenesisRunoffTransactionsBuilder ([7882915](https://github.com/Carmentis/carmentis-node/commit/788291566678fd817354001a55a866678c7bae6a))
+
 ## [1.6.20](https://github.com/Carmentis/carmentis-node/compare/v1.6.19...v1.6.20) (2026-06-23)
 
 

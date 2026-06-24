@@ -45,6 +45,7 @@ export class GenesisInitialTransactionsBuilder {
         const genesisNodeRpcEndpoint = this.nodeConfig.getCometbftExposedRpcEndpoint();
         const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
 
+        // Never store it globally (field) as sensitive data may be used during genesis runoff
         const runoffTransactionsBuilder = new GenesisRunoffTransactionsBuilder(
             this.genesisRunoffs,
             await encoder.encodePrivateKey(issuerPrivateKey),
@@ -53,6 +54,8 @@ export class GenesisInitialTransactionsBuilder {
             genesisNodeRpcEndpoint,
         );
         const runoffsTransactions = await runoffTransactionsBuilder.createRunoffTransactions();
+        // clear the builder
+        runoffTransactionsBuilder.clear();
 
         await this.publishGenesisTransactions(runoffsTransactions, 1);
 

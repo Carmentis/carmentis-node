@@ -28,6 +28,7 @@
         "@grpc/proto-loader": "^0.8.0",
         "@grpc/reflection": "^1.0.4",
         "@iarna/toml": "^2.2.5",
+        "@inquirer/prompts": "^8.5.2",
         "@logtape/file": "^2.0.5",
         "@logtape/logtape": "^2.0.5",
         "@logtape/otel": "^2.0.5",
