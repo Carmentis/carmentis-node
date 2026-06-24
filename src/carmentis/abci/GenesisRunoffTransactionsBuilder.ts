@@ -20,6 +20,7 @@ import {
     GenesisRunoffTransferActionType,
 } from './types/GenesisRunoffType';
 import { getLogger } from '@logtape/logtape';
+import { password, confirm } from '@inquirer/prompts';
 
 export class GenesisRunoffTransactionsBuilder {
     private logger = getLogger(["node", "genesis", GenesisRunoffTransactionsBuilder.name])
@@ -32,6 +33,7 @@ export class GenesisRunoffTransactionsBuilder {
     private readonly builtTransactions : Uint8Array[] = [];
     private stringByAlias: Map<string, string>;
     private tokenIssuanceIsProcessed = false;
+    private additionalPrivateKeys: Map<string, string> = new Map();
 
     constructor(
         private readonly genesisRunoffs: GenesisRunoff,
@@ -67,6 +69,10 @@ export class GenesisRunoffTransactionsBuilder {
             }
         }
         return this.builtTransactions;
+    }
+
+    clear() {
+        this.additionalPrivateKeys.clear();
     }
 
     /**
@@ -432,15 +438,52 @@ export class GenesisRunoffTransactionsBuilder {
         return organizationId;
     }
 
-    getPrivateKeyForAccountById(sourceAccountId: string) {
+    async getPrivateKeyForAccountById(sourceAccountId: string) {
         const account = this.genesisRunoffs.getAccountByIdOrFail(sourceAccountId);
-        if (!account.privateKey) throw new Error(
-            `Account ${sourceAccountId} does not have a private key defined in the genesis runoff`
-        )
-        const aliasedString = this.stringByAlias.get(account.privateKey);
-        const privateKey = aliasedString || account.privateKey;
         const encoder = CryptoEncoderFactory.defaultStringSignatureEncoder();
-        return encoder.decodePrivateKey(privateKey);
+
+
+        // if we already have asked the private key
+        const alreadyAskedPrivateKey = this.additionalPrivateKeys.get(account.id)
+        if (alreadyAskedPrivateKey) {
+            return encoder.decodePrivateKey(alreadyAskedPrivateKey);
+        }
+
+        if (!account.privateKey) {
+            let confirmed = false;
+            do {
+                try {
+                    const askedPrivateKey = await password({
+                        message: `Enter the private key for account ${account.id}:`,
+                        mask: false,
+                    })
+                    const decodedPrivateKey = await encoder.decodePrivateKey(askedPrivateKey);
+                    const publicKey = await decodedPrivateKey.getPublicKey();
+                    const encodedPublicKey = await encoder.encodePublicKey(publicKey);
+                    this.logger.info(``)
+                    confirmed = await confirm({
+                        message: `Here is the associated public key: ${encodedPublicKey}, is it correct?`,
+                        default: true,
+                    });
+
+                    if (confirmed) {
+                        this.additionalPrivateKeys.set(account.id, askedPrivateKey)
+                        return decodedPrivateKey
+                    }
+                } catch (e) {
+                    this.logger.error(`Error decoding private key: ${e}`);
+                }
+            } while (!confirmed);
+
+            throw new Error(
+                `Account ${sourceAccountId} does not have a private key defined in the genesis runoff`,
+            );
+        } else {
+            const aliasedString = this.stringByAlias.get(account.privateKey);
+            const privateKey = aliasedString || account.privateKey;
+            return encoder.decodePrivateKey(privateKey);
+        }
+
     }
 
     async getPublicKeyForAccountById(destinationAccountId: string) {
