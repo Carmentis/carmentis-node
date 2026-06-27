@@ -177,22 +177,29 @@ export class ABCIQueryHandler {
         const requestedAccounts = request.list;
         this.logger.debug(`Request to get account updates for ${requestedAccounts.length} account(s)`);
         const list: AccountUpdate[] = [];
+        let maxHistoryEntries = 1000;
+
         for (const requestedAccount of requestedAccounts) {
             const accountHash = requestedAccount.accountHash;
             const currentState = await this.db.getAccountStateByAccountId(accountHash);
             if (currentState === undefined) {
                 this.logger.warn(`account ${Utils.binaryToHexa(accountHash)} is undefined`);
             } else {
-                const historyUpdate =
-                    await this.accountManager.getHistoryRange(
-                        currentState.lastHistoryHash,
-                        requestedAccount.lastKnownHistoryHash,
-                    );
+                const firstHistoryHash = requestedAccount?.firstHistoryHash ?? currentState.lastHistoryHash;
+                const historyUpdate = await this.accountManager.getHistoryRange(
+                    firstHistoryHash,
+                    requestedAccount.lastKnownHistoryHash,
+                    maxHistoryEntries,
+                );
                 list.push({
                     accountHash,
                     currentState,
                     historyUpdate,
                 });
+                maxHistoryEntries -= historyUpdate.length;
+                if (maxHistoryEntries === 0) {
+                    break;
+                }
             }
         }
         return {

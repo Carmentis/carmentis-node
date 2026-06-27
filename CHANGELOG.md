@@ -1,3 +1,10 @@
+## [1.6.22](https://github.com/Carmentis/carmentis-node/compare/v1.6.21...v1.6.22) (2026-06-27)
+
+
+### Bug Fixes
+
+* added a limit and the support of firstHistoryHash in getAccountUpdates() ([65519e0](https://github.com/Carmentis/carmentis-node/commit/65519e0d535f5e5aa1489208d0862d0c39fc7574))
+
 ## [1.6.21](https://github.com/Carmentis/carmentis-node/compare/v1.6.20...v1.6.21) (2026-06-24)
 
 
