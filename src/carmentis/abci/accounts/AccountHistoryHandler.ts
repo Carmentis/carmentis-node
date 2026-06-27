@@ -49,6 +49,8 @@ export class AccountHistoryHandler {
     /**
      * Loads the transaction history for an account between two history hashes.
      * This is typically used by the indexer to fetch missing history lines.
+     * The number of returned entries is limited by maxHistoryEntries.
+     * The client is responsible for doing more queries if required.
      *
      * @param fromHistoryHash - The hash of the current history entry
      * @param toHistoryHash - The hash of the last known history entry
@@ -57,11 +59,12 @@ export class AccountHistoryHandler {
     async getHistoryRange(
         fromHistoryHash: Uint8Array,
         toHistoryHash: Uint8Array,
+        maxHistoryEntries: number,
     ): Promise<AccountHistory> {
         let historyHash = fromHistoryHash;
         const list: AccountHistory = [];
 
-        while (!Utils.binaryIsEqual(historyHash, toHistoryHash)) {
+        while (list.length < maxHistoryEntries && !Utils.binaryIsEqual(historyHash, toHistoryHash)) {
             // if there are no more history entries, break the loop
             if (Utils.binaryIsEqual(historyHash, Utils.getNullHash())) break;
 
