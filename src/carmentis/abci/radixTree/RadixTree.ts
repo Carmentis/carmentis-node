@@ -97,44 +97,6 @@ export class RadixTree {
         await this.setToStorage(RADIX_CST.ROOT_ANCHORING_HASH, rootHash);
     }
 
-    /**
-     * Debugging method.
-     */
-    async getEntries() {
-        /*
-        function hexa(a: any) {
-            return a.map((v: any) => v.toString(16).toUpperCase().padStart(2, 0)).join('');
-        }
-
-        const iterator = await this.db.query(this.tableId);
-        const list = [];
-
-        for  (const e of iterator) {
-            const msk = (e[1][0] << 8) | e[1][1];
-
-            list.push(
-                hexa([...e[0]]) +
-                    ': ' +
-                    (e[0].some((v: any) => v)
-                        ? // @ts-expect-error TS(2550): Property 'padStart' does not exist on type 'string... Remove this comment to see the full error message
-                          msk.toString(2).padStart(16, 0) +
-                          ' ' +
-                          (msk
-                              ? hexa([...e[1]].slice(2))
-                                    .match(RegExp(`.{${RADIX_CST.HASH_SIZE * 2}}`, 'g'))
-                                    .join(' ')
-                              : hexa([...e[1]].slice(2)).replace(
-                                    RegExp(`(.*)(.{${RADIX_CST.HASH_SIZE * 2}})$`),
-                                    '$1 $2',
-                                ))
-                        : hexa([...e[1]])),
-            );
-        }
-        return list;*
-
-         */
-    }
-
     async write(key: Uint8Array, value: Uint8Array, nodeHash: Uint8Array | null, depth: number) {
         if (depth == RADIX_CST.HASH_SIZE * 2) {
             return value;
@@ -148,7 +110,7 @@ export class RadixTree {
             let msk = (node[0] << 8) | node[1];
             const nibble = (key[depth >> 1] >> (4 * (depth & 1))) & 0xf;
             let update = 0;
-            let hashList: Uint8Array[] = [];
+            let hashList: (Uint8Array | null)[] = [];
 
             if (msk) {
                 // this is already a standard node: get the list of hashes of child nodes and update the node
@@ -180,7 +142,7 @@ export class RadixTree {
                 hashList[nibble] = await this.write(key, value, hashList[nibble], depth + 1);
 
                 const nHash = hashList.reduce((p, c) =>
-                        c === null ? p : p + 1,
+                    c === null ? p : p + 1,
                     0
                 );
 
@@ -194,7 +156,11 @@ export class RadixTree {
 
                 for (let i = 0; i < 16; i++) {
                     if (msk & (1 << i)) {
-                        node.set(hashList[i], ptr);
+                        const childNode = hashList[i];
+                        if (childNode === null) {
+                            throw new Error(`inconsistent hashList[]`);
+                        }
+                        node.set(childNode, ptr);
                         ptr += RADIX_CST.HASH_SIZE;
                     }
                 }
@@ -245,9 +211,14 @@ export class RadixTree {
             const hashList = RadixUtils.getHashList(msk, node);
             const nibble = (key[depth >> 1] >> (4 * (depth & 1))) & 0xf;
 
-            return msk & (1 << nibble)
-                ? await this.read(key, hashList[nibble], depth + 1, proof)
-                : null;
+            if (msk & (1 << nibble)) {
+                const childNode = hashList[nibble];
+                if (childNode === null) {
+                    throw new Error(`inconsistent hashList[]`);
+                }
+                return await this.read(key, childNode, depth + 1, proof);
+            }
+            return null;
         }
 
         if (RadixUtils.keyDifference(depth, key, node)) {

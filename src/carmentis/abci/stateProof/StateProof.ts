@@ -4,8 +4,8 @@ import { PersistentMerkleTree } from "../persistentMerkleTree/PersistentMerkleTr
 import { RadixTree } from "../radixTree/RadixTree";
 import { NodeCrypto } from '../crypto/NodeCrypto';
 import {
-    MicroblockProof,
-    AccountProof,
+    MicroblockProofObject,
+    AccountProofObject,
     BlockchainUtils,
     Utils,
 } from "@cmts-dev/carmentis-sdk-core";
@@ -13,7 +13,7 @@ import {
 export class StateProof {
     constructor(private readonly db: DbInterface) {}
 
-    async createMicroblockProof(microblockHash: Uint8Array): Promise<MicroblockProof> {
+    async createMicroblockProof(microblockHash: Uint8Array): Promise<MicroblockProofObject> {
         // get the current chain height and application hashes
         const { chainHeight, applicationHashes } = await this.getChainState();
 
@@ -57,7 +57,7 @@ export class StateProof {
             throw new Error(`State proof failure: VB state hash from VB radix does not match the computed value`);
         }
 
-        const proof: MicroblockProof = {
+        const proof: MicroblockProofObject = {
             block: {
                 height: chainHeight,
                 ...applicationHashes,
@@ -76,7 +76,7 @@ export class StateProof {
         return proof;
     }
 
-    async createAccountProof(accountHash: Uint8Array): Promise<AccountProof> {
+    async createAccountProof(accountHash: Uint8Array): Promise<AccountProofObject> {
         // get the current chain height and application hashes
         const { chainHeight, applicationHashes } = await this.getChainState();
 
@@ -102,7 +102,7 @@ export class StateProof {
             throw new Error(`State proof failure: token state hash from token radix does not match the computed value`);
         }
 
-        const proof: AccountProof = {
+        const proof: AccountProofObject = {
             block: {
                 height: chainHeight,
                 ...applicationHashes,
