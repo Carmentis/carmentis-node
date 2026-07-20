@@ -58,6 +58,11 @@ export class GlobalState extends AbstractProvider {
         return this.newDayTimestamp;
     }
 
+    async getChainId() {
+        // we cannot easily get our own chain ID (but this method is currently not used)
+        return "";
+    }
+
     async getAccountHashFromPublicKey(publicKey: PublicSignatureKey): Promise<Hash> {
         const accountHashInBytes =
             await this.cachedAccountManager.loadAccountByPublicKey(publicKey);

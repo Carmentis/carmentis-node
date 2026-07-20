@@ -1,3 +1,31 @@
+## [1.6.25](https://github.com/Carmentis/carmentis-node/compare/v1.6.24...v1.6.25) (2026-07-09)
+
+
+### Bug Fixes
+
+* updated to last SDK ([425c51e](https://github.com/Carmentis/carmentis-node/commit/425c51ed7047a055d1f5bb52631037f47de5c8c4))
+
+## [1.6.24](https://github.com/Carmentis/carmentis-node/compare/v1.6.23...v1.6.24) (2026-07-09)
+
+
+### Bug Fixes
+
+* SDK 1.4.1, renamed some proof objects, minor fix in RadixTree, added dummy getChainId() in GlobalState ([fe29ae7](https://github.com/Carmentis/carmentis-node/commit/fe29ae7fa8388744cc4912426d0d1821d8872869))
+
+## [1.6.23](https://github.com/Carmentis/carmentis-node/compare/v1.6.22...v1.6.23) (2026-06-30)
+
+
+### Bug Fixes
+
+* upgrade dependencies (@cmts-dev/carmentis-sdk-core, @napi-rs/wasm-runtime, @tybys/wasm-util, nanoid, postcss) for bug fixes and improvements ([d1ac5a5](https://github.com/Carmentis/carmentis-node/commit/d1ac5a5e9decdde374781618e8314208cb00b4fc))
+
+## [1.6.22](https://github.com/Carmentis/carmentis-node/compare/v1.6.21...v1.6.22) (2026-06-27)
+
+
+### Bug Fixes
+
+* added a limit and the support of firstHistoryHash in getAccountUpdates() ([65519e0](https://github.com/Carmentis/carmentis-node/commit/65519e0d535f5e5aa1489208d0862d0c39fc7574))
+
 ## [1.6.21](https://github.com/Carmentis/carmentis-node/compare/v1.6.20...v1.6.21) (2026-06-24)
 
 

@@ -272,8 +272,9 @@ export class AccountManager {
     async getHistoryRange(
         fromHistoryHash: Uint8Array,
         toHistoryHash: Uint8Array,
+        maxHistoryEntries: number,
     ): Promise<AccountHistory> {
-        return await this.accountHistoryHandler.getHistoryRange(fromHistoryHash, toHistoryHash);
+        return await this.accountHistoryHandler.getHistoryRange(fromHistoryHash, toHistoryHash, maxHistoryEntries);
     }
 
     private async addHistoryEntry(
