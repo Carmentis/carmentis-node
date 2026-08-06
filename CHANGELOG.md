@@ -1,3 +1,289 @@
+## [1.6.25](https://github.com/Carmentis/carmentis-node/compare/v1.6.24...v1.6.25) (2026-07-09)
+
+
+### Bug Fixes
+
+* updated to last SDK ([425c51e](https://github.com/Carmentis/carmentis-node/commit/425c51ed7047a055d1f5bb52631037f47de5c8c4))
+
+## [1.6.24](https://github.com/Carmentis/carmentis-node/compare/v1.6.23...v1.6.24) (2026-07-09)
+
+
+### Bug Fixes
+
+* SDK 1.4.1, renamed some proof objects, minor fix in RadixTree, added dummy getChainId() in GlobalState ([fe29ae7](https://github.com/Carmentis/carmentis-node/commit/fe29ae7fa8388744cc4912426d0d1821d8872869))
+
+## [1.6.23](https://github.com/Carmentis/carmentis-node/compare/v1.6.22...v1.6.23) (2026-06-30)
+
+
+### Bug Fixes
+
+* upgrade dependencies (@cmts-dev/carmentis-sdk-core, @napi-rs/wasm-runtime, @tybys/wasm-util, nanoid, postcss) for bug fixes and improvements ([d1ac5a5](https://github.com/Carmentis/carmentis-node/commit/d1ac5a5e9decdde374781618e8314208cb00b4fc))
+
+## [1.6.22](https://github.com/Carmentis/carmentis-node/compare/v1.6.21...v1.6.22) (2026-06-27)
+
+
+### Bug Fixes
+
+* added a limit and the support of firstHistoryHash in getAccountUpdates() ([65519e0](https://github.com/Carmentis/carmentis-node/commit/65519e0d535f5e5aa1489208d0862d0c39fc7574))
+
+## [1.6.21](https://github.com/Carmentis/carmentis-node/compare/v1.6.20...v1.6.21) (2026-06-24)
+
+
+### Bug Fixes
+
+* upgrade @inquirer/prompts and related dependencies, add private key prompts and validation to GenesisRunoffTransactionsBuilder ([7882915](https://github.com/Carmentis/carmentis-node/commit/788291566678fd817354001a55a866678c7bae6a))
+
+## [1.6.20](https://github.com/Carmentis/carmentis-node/compare/v1.6.19...v1.6.20) (2026-06-23)
+
+
+### Bug Fixes
+
+* snapshotInProgress changed from boolean to number ([4703d69](https://github.com/Carmentis/carmentis-node/commit/4703d69ca6e04fa681ab5031ada27793723d3c3a))
+
+## [1.6.19](https://github.com/Carmentis/carmentis-node/compare/v1.6.18...v1.6.19) (2026-06-23)
+
+
+### Bug Fixes
+
+* adapt the max microblocks per block calculation now taking the min of protocol and config levels. ([40861a3](https://github.com/Carmentis/carmentis-node/commit/40861a3f6a4d8fc66cddefc4b8fc08d19e5e6c70))
+* addition of consensus params update with app version set to the globally defined APP_VERSION constant ([e7628c3](https://github.com/Carmentis/carmentis-node/commit/e7628c3b8092589c459a1e56ded5ac48385c37e0))
+
+## [1.6.18](https://github.com/Carmentis/carmentis-node/compare/v1.6.17...v1.6.18) (2026-06-22)
+
+
+### Bug Fixes
+
+* remove cmts user (because not tested yet) ([b6766ab](https://github.com/Carmentis/carmentis-node/commit/b6766aba32ec0a755ade5f27820e2403bc8903fc))
+
+## [1.6.17](https://github.com/Carmentis/carmentis-node/compare/v1.6.16...v1.6.17) (2026-06-22)
+
+
+### Bug Fixes
+
+* addition of loggers to make logging modular ([c276d5d](https://github.com/Carmentis/carmentis-node/commit/c276d5d5960bbcbfacd2d8d13939cbbb025e7b8e))
+
+## [1.6.16](https://github.com/Carmentis/carmentis-node/compare/v1.6.15...v1.6.16) (2026-06-19)
+
+
+### Bug Fixes
+
+* SDK update ([ff715de](https://github.com/Carmentis/carmentis-node/commit/ff715de0a848b7a3ab88215b6b67b064c90fee50))
+
+## [1.6.15](https://github.com/Carmentis/carmentis-node/compare/v1.6.14...v1.6.15) (2026-06-18)
+
+
+### Bug Fixes
+
+* fixed node restart bug (invalid appHash returned by Info) ([ca2c0a0](https://github.com/Carmentis/carmentis-node/commit/ca2c0a0bbba3ab255802e550b39cbd0336f8c9eb))
+
+## [1.6.14](https://github.com/Carmentis/carmentis-node/compare/v1.6.13...v1.6.14) (2026-06-17)
+
+
+### Bug Fixes
+
+* simplified & more robust processing of validator set updates ([43aad33](https://github.com/Carmentis/carmentis-node/commit/43aad335cd306a6870d7e2cd06904d5130dc6b2e))
+
+## [1.6.13](https://github.com/Carmentis/carmentis-node/compare/v1.6.12...v1.6.13) (2026-06-17)
+
+
+### Bug Fixes
+
+* handle edge cases for zero and single validator scenarios in FeesDispatcher ([b5081a3](https://github.com/Carmentis/carmentis-node/commit/b5081a33735f149104ddf57a36739005b8ca0c67))
+
+## [1.6.12](https://github.com/Carmentis/carmentis-node/compare/v1.6.11...v1.6.12) (2026-06-15)
+
+
+### Bug Fixes
+
+* snapshots no longer block execution ([04d792c](https://github.com/Carmentis/carmentis-node/commit/04d792c33b2935685c31714a9892ecffa929cd54))
+
+## [1.6.11](https://github.com/Carmentis/carmentis-node/compare/v1.6.10...v1.6.11) (2026-06-15)
+
+
+### Bug Fixes
+
+* fixed bugs ([61a2755](https://github.com/Carmentis/carmentis-node/commit/61a2755d52d7bf5f5b4b1c0f49bccf6c852f8ad2))
+
+## [1.6.10](https://github.com/Carmentis/carmentis-node/compare/v1.6.9...v1.6.10) (2026-06-13)
+
+
+### Bug Fixes
+
+* updated release-docker.yml ([0106c94](https://github.com/Carmentis/carmentis-node/commit/0106c94bdc3843b63e9f1a914e9eb2cb5f7f4bc8))
+
+## [1.6.9](https://github.com/Carmentis/carmentis-node/compare/v1.6.8...v1.6.9) (2026-06-13)
+
+
+### Bug Fixes
+
+* up-to-date chain references ([ab32236](https://github.com/Carmentis/carmentis-node/commit/ab32236b1355fed9c6b9aefc03290678222d9309))
+
+## [1.6.8](https://github.com/Carmentis/carmentis-node/compare/v1.6.7...v1.6.8) (2026-06-11)
+
+
+### Bug Fixes
+
+* add error logs for protocol-level limit violations on microblocks and block size ([32be9e9](https://github.com/Carmentis/carmentis-node/commit/32be9e9a7dd4022781cd95443c41bca260287df4))
+
+## [1.6.7](https://github.com/Carmentis/carmentis-node/compare/v1.6.6...v1.6.7) (2026-06-11)
+
+
+### Bug Fixes
+
+* enforce protocol-level limits on microblocks and block size during proposal processing ([9fd0926](https://github.com/Carmentis/carmentis-node/commit/9fd092655757c09e2835d5f97a3674429a23ca74))
+
+## [1.6.6](https://github.com/Carmentis/carmentis-node/compare/v1.6.5...v1.6.6) (2026-06-11)
+
+
+### Bug Fixes
+
+* missing building step before proceeding to release ([887e1b0](https://github.com/Carmentis/carmentis-node/commit/887e1b0ce14b548d6ca6e666fc7099ce81577eb3))
+* missing directory specification when running the install ([442f94f](https://github.com/Carmentis/carmentis-node/commit/442f94f17e977238114684760f75207eaeb32c51))
+
+## [1.6.5](https://github.com/Carmentis/carmentis-node/compare/v1.6.4...v1.6.5) (2026-06-11)
+
+
+### Bug Fixes
+
+* bump to version 1.2.21 of @cmts-dev/carmentis-sdk-core ([08a949d](https://github.com/Carmentis/carmentis-node/commit/08a949d7f56e20a90f8b28bbbf5f1cdff66c0d64))
+
+## [1.6.4](https://github.com/Carmentis/carmentis-node/compare/v1.6.3...v1.6.4) (2026-06-11)
+
+
+### Bug Fixes
+
+* removed VB index tables, updated the way to store the protocol VB id ([3db16d7](https://github.com/Carmentis/carmentis-node/commit/3db16d78c4b4a303e6aa054bac054e87aca98dab))
+
+## [1.6.3](https://github.com/Carmentis/carmentis-node/compare/v1.6.2...v1.6.3) (2026-06-10)
+
+
+### Bug Fixes
+
+* fixed pnpm-lock ([dc7bef3](https://github.com/Carmentis/carmentis-node/commit/dc7bef3a197ba5b85b0016433b1b62b9908b9340))
+
+## [1.6.2](https://github.com/Carmentis/carmentis-node/compare/v1.6.1...v1.6.2) (2026-06-10)
+
+
+### Bug Fixes
+
+* fixed critical and some high findings from Claude's report ([906e992](https://github.com/Carmentis/carmentis-node/commit/906e99247cffd322e898bb145dc22e637a05e172))
+
+## [1.6.1](https://github.com/Carmentis/carmentis-node/compare/v1.6.0...v1.6.1) (2026-06-10)
+
+
+### Bug Fixes
+
+* added StateProof to handle MB and account proofs ([49e43fa](https://github.com/Carmentis/carmentis-node/commit/49e43fa3773597a1e1d63ef27de110026f461d90))
+
+# [1.6.0](https://github.com/Carmentis/carmentis-node/compare/v1.5.2...v1.6.0) (2026-06-09)
+
+
+### Bug Fixes
+
+* move microblock parsing logic to limit memory usage ([75043f9](https://github.com/Carmentis/carmentis-node/commit/75043f9532533dc5c1dc7667b1d8fc686d13e966))
+
+
+### Features
+
+* add @faker-js/faker and implement PrepareProposal test with transaction data generation ([369d7f2](https://github.com/Carmentis/carmentis-node/commit/369d7f2feff8cdbe582b2fe1894eecb60431fda7))
+
+## [1.5.2](https://github.com/Carmentis/carmentis-node/compare/v1.5.1...v1.5.2) (2026-06-08)
+
+
+### Bug Fixes
+
+* now using the new Merkle tree to serve microblocks by height ([34f33d6](https://github.com/Carmentis/carmentis-node/commit/34f33d6226a62409f83dce1ba05d78a0e91f7346))
+
+## [1.5.1](https://github.com/Carmentis/carmentis-node/compare/v1.5.0...v1.5.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* fixed check of transfer+fees, added PersistentMerkleTree ([6d5e0b2](https://github.com/Carmentis/carmentis-node/commit/6d5e0b280869a3c181da70d9bbd6510833d10b65))
+
+# [1.5.0](https://github.com/Carmentis/carmentis-node/compare/v1.4.0...v1.5.0) (2026-06-03)
+
+
+### Features
+
+* improve token transfer log with payer balance details ([f6bcf67](https://github.com/Carmentis/carmentis-node/commit/f6bcf67e989520a0ac82df73ae0296df94621542))
+
+# [1.4.0](https://github.com/Carmentis/carmentis-node/compare/v1.3.1...v1.4.0) (2026-06-02)
+
+
+### Bug Fixes
+
+* addition of fallback at 50 for max microblocks per block ([728f436](https://github.com/Carmentis/carmentis-node/commit/728f436cfdb98d11fbb8b8e90f4f39ac4c4d8ede))
+* missing dependancies in the build ([99f395b](https://github.com/Carmentis/carmentis-node/commit/99f395bc3ef6a131da06a03a52d9e1ffc55a0b41))
+* upgrade @cmts-dev/carmentis-sdk-core to 1.2.12 ([b265508](https://github.com/Carmentis/carmentis-node/commit/b26550866bea232391e1be6ea5701ada445a3ace))
+* upgrade @cmts-dev/carmentis-sdk-core to 1.2.12 ([9093e66](https://github.com/Carmentis/carmentis-node/commit/9093e665f33046a52b91a9ecefd8c4d8c0d3c1c7))
+
+
+### Features
+
+* addition of max microblocks per block config ([16f765c](https://github.com/Carmentis/carmentis-node/commit/16f765ce35f1afbd9125b275c533c8cea52dd925))
+
+## [1.3.1](https://github.com/Carmentis/carmentis-node/compare/v1.3.0...v1.3.1) (2026-06-02)
+
+
+### Bug Fixes
+
+* addition of fallback at 50 for max microblocks per block ([f2125fe](https://github.com/Carmentis/carmentis-node/commit/f2125fe53583dbad90da9f17226729461cb6fca6))
+
+# [1.3.0](https://github.com/Carmentis/carmentis-node/compare/v1.2.13...v1.3.0) (2026-06-02)
+
+
+### Bug Fixes
+
+* missing dependancies in the build ([c4faddf](https://github.com/Carmentis/carmentis-node/commit/c4faddfbf38e1699c76028280a35a5a2c5c5b502))
+
+
+### Features
+
+* addition of max microblocks per block config ([f35289e](https://github.com/Carmentis/carmentis-node/commit/f35289ec1584e72eec981034bc1676b233c3f8ca))
+
+## [1.2.13](https://github.com/Carmentis/carmentis-node/compare/v1.2.12...v1.2.13) (2026-05-27)
+
+
+### Bug Fixes
+
+* upgrade `@cmts-dev/carmentis-sdk-core` to v1.2.9 in `package.json` and `pnpm-lock.yaml` ([491e03f](https://github.com/Carmentis/carmentis-node/commit/491e03f72f6958b82e7c4088ccaed66f6cfdc652))
+
+## [1.2.12](https://github.com/Carmentis/carmentis-node/compare/v1.2.11...v1.2.12) (2026-05-27)
+
+
+### Bug Fixes
+
+* upgrade `@cmts-dev/carmentis-sdk-core` to v1.2.7 in `package.json` and `pnpm-lock.yaml` ([77b25d5](https://github.com/Carmentis/carmentis-node/commit/77b25d564533cfd0557471ac8b43cee700b1e620))
+
+## [1.2.11](https://github.com/Carmentis/carmentis-node/compare/v1.2.10...v1.2.11) (2026-05-25)
+
+
+### Bug Fixes
+
+* Dockerfile broken due to the build not producing main binary ([24d8109](https://github.com/Carmentis/carmentis-node/commit/24d8109ee71d7be9438354e0b9ae3e5b0d8b1dc2))
+
+## [1.2.10](https://github.com/Carmentis/carmentis-node/compare/v1.2.9...v1.2.10) (2026-05-21)
+
+
+### Bug Fixes
+
+* docker build due to min publication age and approve-builds for pnpm ([aa2de5b](https://github.com/Carmentis/carmentis-node/commit/aa2de5b4692afcce3d0675668442f30ef8269786))
+
+## [1.2.9](https://github.com/Carmentis/carmentis-node/compare/v1.2.8...v1.2.9) (2026-05-21)
+
+
+### Bug Fixes
+
+* Dockerfile ([8995e69](https://github.com/Carmentis/carmentis-node/commit/8995e6987933d270d2c3778b15e2c73d628eca29))
+
+## [1.2.8](https://github.com/Carmentis/carmentis-node/compare/v1.2.7...v1.2.8) (2026-05-21)
+
+
+### Bug Fixes
+
+* dummy ([7e3eb8f](https://github.com/Carmentis/carmentis-node/commit/7e3eb8fc84cf30fff079a83d8015fee8a4b0413a))
+
 ## [1.2.7](https://github.com/Carmentis/carmentis-node/compare/v1.2.6...v1.2.7) (2026-03-04)
 
 
