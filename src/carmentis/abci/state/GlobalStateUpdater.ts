@@ -339,7 +339,7 @@ export class GlobalStateUpdater {
         await globalState.storeMicroblockHashInMerkleTree(virtualBlockchain, microblock);
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
-            virtualBlockchain.getExpirationDay(),
+            await virtualBlockchain.getExpirationDay(),
             virtualBlockchain,
             microblock,
             transaction,
@@ -462,7 +462,7 @@ export class GlobalStateUpdater {
         }
 
         // the expiration day is a timestamp in seconds
-        const expirationDay = virtualBlockchain.getExpirationDay();
+        const expirationDay = await virtualBlockchain.getExpirationDay();
         if (expirationDay !== 0) {
             const virtualBlockchainType = virtualBlockchain.getType();
             if (virtualBlockchainType !== VirtualBlockchainType.APP_LEDGER_VIRTUAL_BLOCKCHAIN) {
@@ -561,7 +561,7 @@ export class GlobalStateUpdater {
         await globalState.storeMicroblockHashInMerkleTree(virtualBlockchain, microblock);
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
-            virtualBlockchain.getExpirationDay(),
+            await virtualBlockchain.getExpirationDay(),
             virtualBlockchain,
             microblock,
             transaction,
