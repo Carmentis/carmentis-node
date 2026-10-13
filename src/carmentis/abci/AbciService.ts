@@ -1288,7 +1288,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
             // checking gas consistency
             this.microblockCheckerLogger.debug('Checking gas consistency...');
-            await checker.checkGasOrFail();
+            await checker.checkGasOrFail(referenceTimestamp);
 
             const vb = checker.getVirtualBlockchain();
             return { checked: true, vb: vb };

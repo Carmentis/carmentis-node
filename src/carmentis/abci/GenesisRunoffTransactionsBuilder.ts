@@ -377,7 +377,10 @@ export class GenesisRunoffTransactionsBuilder {
                 amount: 0,
             }
         ])
-        await mb.seal(sourceAccountPrivateKey);
+        await mb.seal(sourceAccountPrivateKey, {
+            // we have to set the fees payer account to match the seller account
+            feesPayerAccount: sourceAccountHash,
+        });
         const { microblockData, microblockHash } =
             mb.serialize();
 
