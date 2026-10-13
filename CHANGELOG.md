@@ -1,3 +1,11 @@
+## [1.6.26](https://github.com/Carmentis/carmentis-node/compare/v1.6.25...v1.6.26) (2026-10-13)
+
+
+### Bug Fixes
+
+* improve protocol VB handling, enforce fees payer consistency checks, and add fees payer to microblock sealing ([89f320b](https://github.com/Carmentis/carmentis-node/commit/89f320b9a7ed0f818547f64d57171b9bfce37d5e))
+* upgrade dependencies for `@cmts-dev/carmentis-sdk-core` ([5aeff02](https://github.com/Carmentis/carmentis-node/commit/5aeff0285c432154b233765352eaae6442ec78ac))
+
 ## [1.6.25](https://github.com/Carmentis/carmentis-node/compare/v1.6.24...v1.6.25) (2026-07-09)
 
 
