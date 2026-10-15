@@ -1,3 +1,10 @@
+## [1.6.27](https://github.com/Carmentis/carmentis-node/compare/v1.6.26...v1.6.27) (2026-10-15)
+
+
+### Bug Fixes
+
+* fixed referenceTimestamp in checkTx, upgraded to sdk 1.9.2 ([6f4bbf8](https://github.com/Carmentis/carmentis-node/commit/6f4bbf8535e9c8fe448537a93be26bec1953d40e))
+
 ## [1.6.26](https://github.com/Carmentis/carmentis-node/compare/v1.6.25...v1.6.26) (2026-10-13)
 
 
