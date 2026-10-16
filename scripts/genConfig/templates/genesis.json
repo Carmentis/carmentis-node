@@ -1,6 +1,6 @@
 {
   "genesis_time": "2024-09-25T13:04:00.462373845Z",
-  "chain_id": "themis",
+  "chain_id": "cmts:localnet",
   "initial_height": "2",
   "consensus_params": {
     "block": {
