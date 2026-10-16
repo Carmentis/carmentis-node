@@ -1,3 +1,10 @@
+## [1.6.28](https://github.com/Carmentis/carmentis-node/compare/v1.6.27...v1.6.28) (2026-10-16)
+
+
+### Bug Fixes
+
+* upgrade dependencies (@cmts-dev/carmentis-sdk-core, @napi-rs/wasm-runtime, @tybys/wasm-util, nanoid, postcss, lightningcss) and update lock files for improvements and bug fixes ([553eedf](https://github.com/Carmentis/carmentis-node/commit/553eedfcbb3425bf38919ce02ad623c77f9b8991))
+
 ## [1.6.27](https://github.com/Carmentis/carmentis-node/compare/v1.6.26...v1.6.27) (2026-10-15)
 
 
