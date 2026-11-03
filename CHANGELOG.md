@@ -1,3 +1,10 @@
+## [1.6.29](https://github.com/Carmentis/carmentis-node/compare/v1.6.28...v1.6.29) (2026-11-03)
+
+
+### Bug Fixes
+
+* upgrade dependencies (@cmts-dev/carmentis-sdk-core, eslint, [@nestjs](https://github.com/nestjs), semantic-release, [@typescript-eslint](https://github.com/typescript-eslint)), update pnpm lockfile for enhancements and compatibility ([3921400](https://github.com/Carmentis/carmentis-node/commit/39214008297a6600225d181649aa2dd67fccd33e))
+
 ## [1.6.28](https://github.com/Carmentis/carmentis-node/compare/v1.6.27...v1.6.28) (2026-10-16)
 
 
