@@ -52,8 +52,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Install semantic-release
-        run: npm install --no-save semantic-release @semantic-release/git @semantic-release/github @semantic-release/changelog @semantic-release/commit-analyzer @semantic-release/release-notes-generator
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
 
       - name: Run semantic-release
         id: semantic

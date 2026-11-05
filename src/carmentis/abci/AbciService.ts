@@ -518,8 +518,8 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
      */
     async CheckTx(
         request: RequestCheckTx,
-        referenceTimestamp = Utils.getTimestampInSeconds(),
     ): Promise<ResponseCheckTx> {
+        const referenceTimestamp = Utils.getTimestampInSeconds();
         const perfMeasure = this.perf.start('CheckTx');
         this.checkTxLogger.info(
             `CheckTx: tx_bytes=${request.tx.length}, request_type=${request.type}`,
@@ -536,6 +536,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         try {
             const serializedMicroblock = request.tx;
             const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
+            console.log(parsedMicroblock.toString());
             const hexMicroblockHash = parsedMicroblock.getHash().encode();
 
             // perform early rejection of the microblock
@@ -1288,7 +1289,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
             // checking gas consistency
             this.microblockCheckerLogger.debug('Checking gas consistency...');
-            await checker.checkGasOrFail();
+            await checker.checkGasOrFail(referenceTimestamp);
 
             const vb = checker.getVirtualBlockchain();
             return { checked: true, vb: vb };

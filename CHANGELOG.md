@@ -1,3 +1,32 @@
+## [1.6.29](https://github.com/Carmentis/carmentis-node/compare/v1.6.28...v1.6.29) (2026-11-03)
+
+
+### Bug Fixes
+
+* upgrade dependencies (@cmts-dev/carmentis-sdk-core, eslint, [@nestjs](https://github.com/nestjs), semantic-release, [@typescript-eslint](https://github.com/typescript-eslint)), update pnpm lockfile for enhancements and compatibility ([3921400](https://github.com/Carmentis/carmentis-node/commit/39214008297a6600225d181649aa2dd67fccd33e))
+
+## [1.6.28](https://github.com/Carmentis/carmentis-node/compare/v1.6.27...v1.6.28) (2026-10-16)
+
+
+### Bug Fixes
+
+* upgrade dependencies (@cmts-dev/carmentis-sdk-core, @napi-rs/wasm-runtime, @tybys/wasm-util, nanoid, postcss, lightningcss) and update lock files for improvements and bug fixes ([553eedf](https://github.com/Carmentis/carmentis-node/commit/553eedfcbb3425bf38919ce02ad623c77f9b8991))
+
+## [1.6.27](https://github.com/Carmentis/carmentis-node/compare/v1.6.26...v1.6.27) (2026-10-15)
+
+
+### Bug Fixes
+
+* fixed referenceTimestamp in checkTx, upgraded to sdk 1.9.2 ([6f4bbf8](https://github.com/Carmentis/carmentis-node/commit/6f4bbf8535e9c8fe448537a93be26bec1953d40e))
+
+## [1.6.26](https://github.com/Carmentis/carmentis-node/compare/v1.6.25...v1.6.26) (2026-10-13)
+
+
+### Bug Fixes
+
+* improve protocol VB handling, enforce fees payer consistency checks, and add fees payer to microblock sealing ([89f320b](https://github.com/Carmentis/carmentis-node/commit/89f320b9a7ed0f818547f64d57171b9bfce37d5e))
+* upgrade dependencies for `@cmts-dev/carmentis-sdk-core` ([5aeff02](https://github.com/Carmentis/carmentis-node/commit/5aeff0285c432154b233765352eaae6442ec78ac))
+
 ## [1.6.25](https://github.com/Carmentis/carmentis-node/compare/v1.6.24...v1.6.25) (2026-07-09)
 
 

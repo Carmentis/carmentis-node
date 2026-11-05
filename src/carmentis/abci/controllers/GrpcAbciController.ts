@@ -80,9 +80,9 @@ export class GrpcAbciController {
     }
 
     @GrpcMethod('ABCI', 'CheckTx')
-    async CheckTx(request: RequestCheckTx, referenceTimestamp = Utils.getTimestampInSeconds()): Promise<ResponseCheckTx> {
+    async CheckTx(request: RequestCheckTx): Promise<ResponseCheckTx> {
         this.logger.debug('Called CheckTx');
-        return await this.abciService.CheckTx(request, referenceTimestamp);
+        return await this.abciService.CheckTx(request);
     }
 
     @GrpcMethod('ABCI', 'ApplySnapshotChunk')

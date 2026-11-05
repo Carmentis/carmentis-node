@@ -339,7 +339,7 @@ export class GlobalStateUpdater {
         await globalState.storeMicroblockHashInMerkleTree(virtualBlockchain, microblock);
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
-            virtualBlockchain.getExpirationDay(),
+            await virtualBlockchain.getExpirationDay(),
             virtualBlockchain,
             microblock,
             transaction,
@@ -424,10 +424,9 @@ export class GlobalStateUpdater {
         if (isDeclaringNewProtocolVb) {
             const isProtocolVbAlreadyDefined = await globalState.isProtocolVbDefined();
             if (isProtocolVbAlreadyDefined) {
-                this.logger.warn(
-                    `Skipping microblock ${microblock.getHash().encode()} because it declares a new protocol VB state but there is already one defined.`,
-                );
-                return;
+                throw new Error(
+                    `Microblock ${microblock.getHash().encode()} redeclares a protocol VB`,
+                )
             }
         }
 
@@ -463,7 +462,7 @@ export class GlobalStateUpdater {
         }
 
         // the expiration day is a timestamp in seconds
-        const expirationDay = virtualBlockchain.getExpirationDay();
+        const expirationDay = await virtualBlockchain.getExpirationDay();
         if (expirationDay !== 0) {
             const virtualBlockchainType = virtualBlockchain.getType();
             if (virtualBlockchainType !== VirtualBlockchainType.APP_LEDGER_VIRTUAL_BLOCKCHAIN) {
@@ -504,7 +503,12 @@ export class GlobalStateUpdater {
         }
 
         if (virtualBlockchain instanceof AccountVb) {
-            await this.handleAccountUpdate(globalState, virtualBlockchain, microblock, feesToPayAsAtomics);
+            await this.handleAccountUpdate(
+                globalState,
+                virtualBlockchain,
+                microblock,
+                feesToPayAsAtomics,
+            );
         } else if (virtualBlockchain instanceof ValidatorNodeVb) {
             await this.handleValidatorNodeUpdate(globalState, virtualBlockchain, microblock);
         } else if (virtualBlockchain instanceof ProtocolVb) {
@@ -557,7 +561,7 @@ export class GlobalStateUpdater {
         await globalState.storeMicroblockHashInMerkleTree(virtualBlockchain, microblock);
         await globalState.storeVirtualBlockchainState(virtualBlockchain);
         await globalState.storeMicroblock(
-            virtualBlockchain.getExpirationDay(),
+            await virtualBlockchain.getExpirationDay(),
             virtualBlockchain,
             microblock,
             transaction,
@@ -879,13 +883,21 @@ export class GlobalStateUpdater {
 
             // check account creation
             if (sectionType === SectionType.ACCOUNT_CREATION) {
+                // extract data from the account creation section
+                const { sellerAccount, amount } = section;
+
                 // checking the availability of the public key
                 const accountPublicKey = await accountVb.getPublicKey();
                 await accountManager.checkPublicKeyAvailabilityOrFail(
                     await accountPublicKey.getPublicKeyAsBytes(),
                 );
 
-                const { sellerAccount, amount } = section;
+                // reject if the seller account is not the fees payer account
+                const feesPayerAccountId = microblock.getFeesPayerAccount();
+                if (!Utils.binaryIsEqual(sellerAccount, feesPayerAccountId)) {
+                    throw new Error(`Seller account ${Utils.binaryToHexa(sellerAccount)} is not the fees payer account ${Utils.binaryToHexa(feesPayerAccountId)}`);
+                }
+
                 const createdAccountId = accountVb.getId();
                 this.logger.debug(`Creating account ${Utils.binaryToHexa(createdAccountId)} with ${CMTSToken.createAtomic(amount).toString()} from account ${Utils.binaryToHexa(sellerAccount)}`);
                 await accountManager.tokenTransfer(
