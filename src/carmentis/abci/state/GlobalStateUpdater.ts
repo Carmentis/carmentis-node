@@ -490,9 +490,21 @@ export class GlobalStateUpdater {
         }
 
         // Case 4: The fees payer account is allowed to write on the virtual blockchain
+        // The virtual blockchain received here has ALREADY been updated with the sections of this microblock
+        // (see MicroblockConsistencyChecker). Authorization must never depend on what the microblock itself grants
+        // (e.g. ALLOWED_ADDITIONAL_WRITER), so for existing virtual blockchains we authorize against the
+        // state loaded from the database, which is only updated after all checks (see storeVirtualBlockchainState below).
+        const isGenesisMicroblock = microblock.getHeight() === 1;
+        let authorizationVb: VirtualBlockchain = virtualBlockchain;
+        if (!isGenesisMicroblock) {
+            authorizationVb = await globalState.loadVirtualBlockchain(Hash.from(virtualBlockchain.getId()));
+            if (authorizationVb.getType() !== virtualBlockchain.getType()) {
+                throw new Error(`Virtual blockchain type mismatch while checking write permission`);
+            }
+        }
         const isAllowedToWrite = await this.isAccountIdAllowedToWriteOnVirtualBlockchain(
             feesPayerAccountId,
-            virtualBlockchain,
+            authorizationVb,
             microblock,
             globalState
         );
@@ -694,7 +706,18 @@ export class GlobalStateUpdater {
             }
         }
 
-        // Case 4 (default) - The virtual blockchain decides
+        // Case 4 - Creation of an application ledger
+        // The creator must be the owner of the application. The list of additional writers is deliberately ignored
+        // here: for a genesis microblock it is declared by the very microblock being authorized.
+        if (
+            vb.getType() === VirtualBlockchainType.APP_LEDGER_VIRTUAL_BLOCKCHAIN &&
+            mb.getHeight() === 1
+        ) {
+            const ownerId = await vb.getVirtualBlockchainOwnerId();
+            return Utils.binaryIsEqual(ownerId.toBytes(), accountId);
+        }
+
+        // Case 5 (default) - The virtual blockchain decides (on its state before this microblock, except for genesis)
         return vb.isAccountIdAllowedToWrite(Hash.from(accountId))
     }
 
@@ -1107,8 +1130,21 @@ export class GlobalStateUpdater {
 
         this.logger.debug(`declaration of node public key ${cometPublicKey} -> address ${Utils.binaryToHexa(cometAddress)}`);
 
-        const existingNode = await database.getValidatorSet(cometAddress);
+        // ensure the node public key is not already in use
+        const validatorNodeKeys = await database.getKeys(LevelDbTable.VALIDATOR_INDEX);
+        for (const key of validatorNodeKeys) {
+            const nodeVb = await globalState.loadValidatorNodeVirtualBlockchain(Hash.from(key));
+            const { cometbftPublicKey: alreadyUsedCometbftPublicKey } =
+                await nodeVb.getCometbftPublicKeyDeclaration();
+            if (alreadyUsedCometbftPublicKey === cometPublicKey) {
+                throw new Error(
+                    `Attempt do declare a node public key that is already in use: ${cometPublicKey}, address = ${Utils.binaryToHexa(cometAddress)}`,
+                );
+            }
+        }
 
+        // additional check
+        const existingNode = await database.getValidatorSet(cometAddress);
         if (existingNode !== undefined) {
             throw new Error(`Attempt do declare a node public key that is already in use: ${cometPublicKey}, address = ${Utils.binaryToHexa(cometAddress)}`);
         }

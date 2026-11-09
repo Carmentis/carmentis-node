@@ -609,6 +609,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     this.logger.debug(message);
                 }
 
+                const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+                const cometParameters: GlobalStateUpdateCometParameters = {
+                    blockHeight: Number.MAX_SAFE_INTEGER,
+                    blockTimestamp: Utils.getTimestampInSeconds(),
+                    blockMisbehaviors: [],
+                };
+                await globalStateUpdater.updateGlobalStateOnMicroblock(
+                    workingState,
+                    vb,
+                    parsedMicroblock,
+                    cometParameters,
+                    serializedMicroblock,
+                );
+
                 this.checkTxLogger.info(`Microblock ${hexMicroblockHash} accepted`);
                 return {
                     code: CheckTxResponseCode.OK,
