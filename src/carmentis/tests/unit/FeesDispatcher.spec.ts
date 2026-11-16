@@ -1,4 +1,4 @@
-import { FeesDispatcher } from './FeesDispatcher';
+import { FeesDispatcher } from '../../abci/accounts/FeesDispatcher';
 import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 describe("fees dispatch", () => {

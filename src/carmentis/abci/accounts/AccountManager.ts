@@ -90,6 +90,22 @@ export class AccountManager {
         return this.accountRadix.getRootHash();
     }
 
+    private modifiedAccountsSavepoint: Set<string> | null = null;
+
+    createSavepoint() {
+        this.modifiedAccountsSavepoint = this.modifiedAccounts.snapshot();
+    }
+
+    releaseSavepoint() {
+        this.modifiedAccountsSavepoint = null;
+    }
+
+    rollback() {
+        if (this.modifiedAccountsSavepoint === null) throw new Error(`no savepoint to roll back to`);
+        this.modifiedAccounts.restore(this.modifiedAccountsSavepoint);
+        this.modifiedAccountsSavepoint = null;
+    }
+
     clearModifiedAccounts() {
         this.modifiedAccounts.clear();
     }

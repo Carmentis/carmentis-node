@@ -265,6 +265,29 @@ export class GlobalState extends AbstractProvider {
         this.getAccountManager().clearModifiedAccounts();
     }
 
+    /**
+     * Opens a savepoint on all the buffered state (database cache, storage buffer, modified accounts).
+     */
+    createSavepoint() {
+        this.cachedDb.createSavepoint();
+        this.cachedStorage.createSavepoint();
+        this.cachedAccountManager.createSavepoint();
+    }
+
+    /** Keeps the modifications made since the savepoint. */
+    releaseSavepoint() {
+        this.cachedDb.releaseSavepoint();
+        this.cachedStorage.releaseSavepoint();
+        this.cachedAccountManager.releaseSavepoint();
+    }
+
+    /** Undoes all the modifications made since the savepoint. */
+    rollbackToSavepoint() {
+        this.cachedDb.rollback();
+        this.cachedStorage.rollback();
+        this.cachedAccountManager.rollback();
+    }
+
     async commit() {
         await this.cachedStorage.flush();
         await this.cachedDb.commit();

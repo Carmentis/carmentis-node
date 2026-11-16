@@ -410,7 +410,40 @@ export class GlobalStateUpdater {
         // we currently have nothing to do with the protocol virtual blockchain state,
     }
 
+    /**
+     * Applies the microblock to the state. If it is rejected (an error is thrown), every modification
+     * made to the state while processing it is rolled back before the error is rethrown.
+     */
     async updateGlobalStateOnMicroblock(
+        globalState: GlobalState,
+        virtualBlockchain: VirtualBlockchain,
+        microblock: Microblock,
+        cometParameters: GlobalStateUpdateCometParameters,
+        transaction: Uint8Array,
+    ) {
+        globalState.createSavepoint();
+        const statistics = {
+            newObjectCounts: [...this.newObjectCounts],
+            acceptedMicroblockCount: this.processedAndAcceptedMicroblocks.length,
+            totalFees: this.totalFees,
+            blockSizeInBytes: this.blockSizeInBytes,
+            blockSectionCount: this.blockSectionCount,
+        };
+        try {
+            await this.applyMicroblockToState(globalState, virtualBlockchain, microblock, cometParameters, transaction);
+        } catch (error) {
+            globalState.rollbackToSavepoint();
+            this.newObjectCounts = statistics.newObjectCounts;
+            this.processedAndAcceptedMicroblocks.length = statistics.acceptedMicroblockCount;
+            this.totalFees = statistics.totalFees;
+            this.blockSizeInBytes = statistics.blockSizeInBytes;
+            this.blockSectionCount = statistics.blockSectionCount;
+            throw error;
+        }
+        globalState.releaseSavepoint();
+    }
+
+    private async applyMicroblockToState(
         globalState: GlobalState,
         virtualBlockchain: VirtualBlockchain,
         microblock: Microblock,

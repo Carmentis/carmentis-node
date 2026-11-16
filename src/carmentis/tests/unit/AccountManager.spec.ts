@@ -1,5 +1,5 @@
-import { AccountManager, Transfer } from '../abci/accounts/AccountManager';
-import { createTempLevel } from "../abci/database/TempLevel";
+import { AccountManager, Transfer } from '../../abci/accounts/AccountManager';
+import { createTempLevel } from "../../abci/database/TempLevel";
 import {
     CMTSToken,
     PublicSignatureKey,
@@ -79,8 +79,9 @@ describe('AccountManager', () => {
             const randomBalance = CMTSToken.createCMTS(
                 Number.parseInt((Math.random() * 100).toString())
             )
+            // the accounts do not have any state yet: funding them is an account sale (as in an ACCOUNT_CREATION section)
             const transfer: Transfer = {
-                type: ECO.BK_SENT_PAYMENT,
+                type: ECO.BK_SALE,
                 payerAccount: issuerAccountId,
                 payeeAccount: accountId,
                 amountAsAtomics: randomBalance.getAmountAsAtomic(),

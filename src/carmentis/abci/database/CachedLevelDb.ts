@@ -12,6 +12,10 @@ export class CachedLevelDb extends AbstractLevelDb {
     private readonly cachedDeletedEntriesByTableId: Map<number, Set<string>>;
     private static logger = getLogger(['node', 'db', CachedLevelDb.name]);
 
+    // Undo journal: when a savepoint is open, holds for each touched (table, key) the state it had
+    // before the first modification following the savepoint.
+    private journal: Map<number, Map<string, { insertedValue: Uint8Array | undefined; wasDeleted: boolean }>> | null = null;
+
     constructor(db: LevelDb) {
         super(CachedLevelDb.logger);
         this.db = db;
@@ -24,7 +28,55 @@ export class CachedLevelDb extends AbstractLevelDb {
         }
     }
 
+    /**
+     * Opens a savepoint: every subsequent modification of the cache can be undone with rollback().
+     */
+    createSavepoint() {
+        if (this.journal !== null) throw new Error(`a savepoint is already open on the cached database`);
+        this.journal = new Map();
+    }
+
+    /**
+     * Discards the undo journal and keeps the modifications made since the savepoint.
+     */
+    releaseSavepoint() {
+        this.journal = null;
+    }
+
+    /**
+     * Undoes every modification made since the savepoint and closes it.
+     */
+    rollback() {
+        if (this.journal === null) throw new Error(`no savepoint to roll back to`);
+        for (const [tableId, entries] of this.journal) {
+            const { cachedInsertions, cachedDeletions } = this.getCachedDataByTableIdOrFail(tableId);
+            for (const [keyStr, previous] of entries) {
+                if (previous.insertedValue === undefined) cachedInsertions.delete(keyStr);
+                else cachedInsertions.set(keyStr, previous.insertedValue);
+                if (previous.wasDeleted) cachedDeletions.add(keyStr);
+                else cachedDeletions.delete(keyStr);
+            }
+        }
+        this.journal = null;
+    }
+
+    private recordUndo(tableId: number, keyStr: string) {
+        if (this.journal === null) return;
+        let tableJournal = this.journal.get(tableId);
+        if (tableJournal === undefined) {
+            tableJournal = new Map();
+            this.journal.set(tableId, tableJournal);
+        }
+        if (tableJournal.has(keyStr)) return; // keep the oldest pre-image
+        const { cachedInsertions, cachedDeletions } = this.getCachedDataByTableIdOrFail(tableId);
+        tableJournal.set(keyStr, {
+            insertedValue: cachedInsertions.get(keyStr),
+            wasDeleted: cachedDeletions.has(keyStr),
+        });
+    }
+
     resetCache() {
+        this.journal = null;
         this.logger.debug(`Clearing cache tables`);
         for (const [tableName, tableId] of Object.entries(LevelDbTable)) {
             this.cachedUpdatedByTableId.get(tableId)?.clear();
@@ -87,6 +139,7 @@ export class CachedLevelDb extends AbstractLevelDb {
 
         // add in the insertions and remove from deletions
         const keyStr = CachedLevelDb.encodeKey(key);
+        this.recordUndo(tableId, keyStr);
         cachedDeletions.delete(keyStr);
         cachedInsertions.set(keyStr, data);
         return true;
@@ -137,6 +190,7 @@ export class CachedLevelDb extends AbstractLevelDb {
     async del(tableId: number, key: Uint8Array) {
         const { cachedInsertions, cachedDeletions } = this.getCachedDataByTableIdOrFail(tableId);
         const keyStr = CachedLevelDb.encodeKey(key);
+        this.recordUndo(tableId, keyStr);
         cachedInsertions.delete(keyStr);
         cachedDeletions.add(keyStr);
         return true;
