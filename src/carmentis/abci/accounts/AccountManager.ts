@@ -147,14 +147,14 @@ export class AccountManager {
      * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
      */
     async escrowSettlement(
-        account: Uint8Array,
+        emitterAccount: Uint8Array,
         escrowIdentifier: Uint8Array,
         confirmed: boolean,
         timestamp: number,
         chainReference: ChainReference,
     ) {
         await this.accountEscrowHandler.escrowSettlement(
-            account,
+            emitterAccount,
             escrowIdentifier,
             confirmed,
             timestamp,

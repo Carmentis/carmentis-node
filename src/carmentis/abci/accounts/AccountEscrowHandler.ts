@@ -27,7 +27,7 @@ export class AccountEscrowHandler {
      * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
      */
     async escrowSettlement(
-        account: Uint8Array,
+        emitterAccount: Uint8Array,
         escrowIdentifier: Uint8Array,
         confirmed: boolean,
         timestamp: number,
@@ -40,7 +40,7 @@ export class AccountEscrowHandler {
             throw new Error(`rejected escrow settlement: unknown or out-of-date escrow identifier`);
         }
         // make sure that the caller is the agent
-        if (!Utils.binaryIsEqual(account, escrow.agentAccount)) {
+        if (!Utils.binaryIsEqual(emitterAccount, escrow.agentAccount)) {
             throw new Error(`rejected escrow settlement: caller is not the agent`);
         }
 
@@ -72,7 +72,7 @@ export class AccountEscrowHandler {
             );
         }
 
-        // remove the escrow from the DB
+        // in both cases, remove the escrow from the DB
         await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
     }
 

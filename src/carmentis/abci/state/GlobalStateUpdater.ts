@@ -119,17 +119,23 @@ export class GlobalStateUpdater {
         // if this is the first block of the day, apply daily updates
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
-            try {
-                globalState.setNewDayTimestamp(currentBlockDayTs);
-                await this.updateVestingLocks(globalState, cometParameters);
-                await this.updateEscrowLocks(globalState, cometParameters);
-                await this.applyNodeStakingUnlocks(globalState, cometParameters);
-                await this.applyNodeSlashing(globalState, cometParameters);
-                await this.purgeDataFileTable(globalState, cometParameters);
-            }
-            catch (error) {
-                this.logger.error(`daily updates failed with the following error:`);
-                this.logger.error(String(error));
+
+            globalState.setNewDayTimestamp(currentBlockDayTs);
+            const dailyTasks = [
+                this.updateVestingLocks,
+                this.updateEscrowLocks,
+                this.applyNodeStakingUnlocks,
+                this.applyNodeSlashing,
+                this.purgeDataFileTable,
+            ];
+            for (const task of dailyTasks) {
+                try {
+                    await task(globalState, cometParameters);
+                }
+                catch (error) {
+                    this.logger.error(`daily update failed with the following error:`);
+                    this.logger.error(String(error));
+                }
             }
         }
     }
@@ -225,7 +231,13 @@ export class GlobalStateUpdater {
 
         for(const accountHash of accountsWithVestingLocksIdentifiers) {
             this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(accountHash)}`);
-            await accountManager.applyLinearVesting(accountHash, currentBlockDayTs);
+            try {
+                await accountManager.applyLinearVesting(accountHash, currentBlockDayTs);
+            }
+            catch (err) {
+                this.logger.error(`linear vesting updater failed for account ${accountHash}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -240,11 +252,17 @@ export class GlobalStateUpdater {
         const escrowIdentifiers = await database.getKeys(LevelDbTable.ESCROWS);
 
         for(const id of escrowIdentifiers) {
-            await accountManager.updateExpiredEscrow(
-                id,
-                currentBlockDayTs,
-                blockHeight,
-            );
+            try {
+                await accountManager.updateExpiredEscrow(
+                    id,
+                    currentBlockDayTs,
+                    blockHeight,
+                );
+            }
+            catch (err) {
+                this.logger.error(`escrow update failed - identifier = ${id}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -258,7 +276,13 @@ export class GlobalStateUpdater {
         const accountManager = globalState.getAccountManager();
 
         for(const accountHash of accountsWithStakingLocksIdentifiers) {
-            await accountManager.applyNodeStakingUnlocks(accountHash, currentBlockDayTs);
+            try {
+                await accountManager.applyNodeStakingUnlocks(accountHash, currentBlockDayTs);
+            }
+            catch (err) {
+                this.logger.error(`node staking unlock failed for account ${accountHash}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -272,7 +296,13 @@ export class GlobalStateUpdater {
         const accountManager = globalState.getAccountManager();
 
         for(const accountHash of accountsWithStakingLocksIdentifiers) {
-            await accountManager.applyNodeSlashing(accountHash, currentBlockDayTs);
+            try {
+                await accountManager.applyNodeSlashing(accountHash, currentBlockDayTs);
+            }
+            catch (err) {
+                this.logger.error(`node slashing failed for account ${accountHash}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -694,31 +724,9 @@ export class GlobalStateUpdater {
             if (containsAccountCreationSection && isFirstBlock) return true;
 
             // Case 2 - Escrow settlement
-            // Only the agent is allowed to sign.
-            // NB: If there's a ACCOUNT_ESCROW_SETTLEMENT section, the microblock may only contain that section and
-            // the signature. This is enforced by AccountMicroblockStructureChecker.
-            const isSettlingEscrow = mb.hasSection(SectionType.ACCOUNT_ESCROW_SETTLEMENT);
-            if (isSettlingEscrow) {
-                const escrowSettlementSection =
-                    mb.getSection((section) =>
-                        section.type === SectionType.ACCOUNT_ESCROW_SETTLEMENT
-                    ) as AccountEscrowSettlementSection;
-                const escrowIdentifier = escrowSettlementSection.escrowIdentifier;
-                const accountManager = globalState.getAccountManager();
-                const ownerAccountId = vb.getId();
-                const account = await accountManager.loadAccountInformation(ownerAccountId);
-                const escrowLock = account.state.locks.find((lock) =>
-                    lock.type == LockType.Escrow &&
-                    Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier)
-                );
-                if (escrowLock === undefined) {
-                    // no one is authorized to sign the settlement of a non-existing escrow
-                    return false;
-                }
-                const escrowParameters = escrowLock.parameters as EscrowParameters;
-                const isAgentAccount = Utils.binaryIsEqual(escrowParameters.transferAuthorizerAccountId, accountId);
-                return isAgentAccount;
-            }
+            // This case is deprecated. Agents are now supposed to write the ACCOUNT_ESCROW_SETTLEMENT on their own VB.
+            // NB: If there's a ACCOUNT_ESCROW_SETTLEMENT section, the microblock may only contain that section and the
+            // signature. This is enforced by AccountMicroblockStructureChecker.
         }
 
         // Case 3 - Validator node approval update and slashing cancellation
