@@ -130,7 +130,7 @@ export class GlobalStateUpdater {
             ];
             for (const task of dailyTasks) {
                 try {
-                    await task(globalState, cometParameters);
+                    await task.call(this, globalState, cometParameters);
                 }
                 catch (error) {
                     this.logger.error(`daily update failed with the following error:`);
@@ -1056,7 +1056,7 @@ export class GlobalStateUpdater {
                         feesAsAtomics,
                         escrowParameters: {
                             escrowIdentifier,
-                            fundEmitterAccountId: account,
+                            fundEmitterAccountId: accountVb.getId(),
                             transferAuthorizerAccountId: agentAccount,
                             startTimestamp: microblock.getTimestamp(),
                             durationDays

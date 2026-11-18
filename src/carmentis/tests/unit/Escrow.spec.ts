@@ -4,12 +4,13 @@
 // Escrow model:
 //  - the PAYER sends an ACCOUNT_ESCROW_TRANSFER from its own account VB; the funds are locked on the PAYEE;
 //  - the AGENT (a third account) settles with an ACCOUNT_ESCROW_SETTLEMENT section, in a microblock that is
-//    appended to the PAYEE's account VB (where the lock lives), signed and paid by the AGENT;
+//    appended to the AGENT'S OWN account VB, signed and paid by the AGENT (the lock is found through the ESCROWS
+//    record, so the VB of the payee is never written);
 //  - if nobody settles before the end of the duration, the daily update refunds the payer automatically.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import {
-    CMTSToken, Hash, ProtocolInternalState, SectionType, VirtualBlockchainType,
+    BalanceAvailability, CMTSToken, Hash, ProtocolInternalState, Utils, SectionType, VirtualBlockchainType,
 } from '@cmts-dev/carmentis-sdk-core';
 import {
     TestNode, TestAccount, createTestNode, createIssuer, buildAccountCreation, buildOnAccount, buildTransfers,
@@ -50,11 +51,14 @@ async function setup(durationDays = 10) {
     const result = await applyMicroblock(node, lockTx);
     expect(result.error).toBeUndefined();
 
-    // microblock settling the escrow: appended to the payee's VB, paid and signed by the agent
-    const settle = (confirmed: boolean, opts: { signer?: TestAccount } = {}) =>
-        buildOnAccount(node, payee.id, [{
+    // microblock settling the escrow: appended to the VB of `onVb` (default: the signer's own VB), paid and signed
+    // by `signer` (default: the agent)
+    const settle = (confirmed: boolean, opts: { signer?: TestAccount, onVb?: TestAccount } = {}) => {
+        const signer = opts.signer ?? agent;
+        return buildOnAccount(node, (opts.onVb ?? signer).id, [{
             type: SectionType.ACCOUNT_ESCROW_SETTLEMENT, escrowIdentifier, confirmed,
-        }], opts.signer ?? agent, { feesPayer: (opts.signer ?? agent).id });
+        }], signer, { feesPayer: signer.id });
+    };
 
     return { issuer, payer, payee, agent, escrowIdentifier, settle };
 }
@@ -72,7 +76,49 @@ describe('Escrow - creation', () => {
     });
 });
 
+describe('Escrow - lock parameters', () => {
+    it('records the payer (not the payee) as the fund emitter of the lock', async () => {
+        const { payer, payee, agent } = await setup();
+        const state = await node.state.getCachedDatabase().getAccountStateByAccountId(payee.id);
+        const lock = new BalanceAvailability(state!.balance, state!.locks).getEscrowLocks()[0];
+        expect(Utils.binaryIsEqual(lock.parameters.fundEmitterAccountId, payer.id)).toBe(true);
+        expect(Utils.binaryIsEqual(lock.parameters.transferAuthorizerAccountId, agent.id)).toBe(true);
+    });
+});
+
 describe('Escrow - settlement by the agent (through the microblock pipeline)', () => {
+    it('the agent is neither payer nor payee: it settles from its own VB and the payee VB is untouched', async () => {
+        const { payee, settle } = await setup();
+        const payeeVb = await node.state.loadAccountVirtualBlockchain(Hash.from(payee.id));
+        const heightBefore = payeeVb.getHeight();
+        expect((await applyMicroblock(node, await settle(true))).accepted).toBe(true);
+        const after = await node.state.loadAccountVirtualBlockchain(Hash.from(payee.id));
+        expect(after.getHeight()).toBe(heightBefore);
+    });
+
+    it('rejects a settlement written by the agent on the payee VB, then accepts it on the agent VB', async () => {
+        const { payee, settle } = await setup();
+        expect((await applyMicroblock(node, await settle(true, { onVb: payee }))).accepted).toBe(false);
+        expect(await balanceOf(node, payee.id)).toBe(CMTS(11));
+        expect((await applyMicroblock(node, await settle(true))).accepted).toBe(true);
+    });
+
+    it('a payee that is also the agent settles from its own VB', async () => {
+        const issuer = await createIssuer(node);
+        const payer = await createAccount(issuer, CMTS(100));
+        const payee = await createAccount(issuer, CMTS(5));
+        const escrowIdentifier = new Uint8Array(randomBytes(32));
+        const lockTx = await buildOnAccount(node, payer.id, [{
+            type: SectionType.ACCOUNT_ESCROW_TRANSFER, account: payee.id, amount: CMTS(10), escrowIdentifier,
+            agentAccount: payee.id, durationDays: 10, publicReference: '', privateReference: '',
+        }], payer);
+        expect((await applyMicroblock(node, lockTx)).accepted).toBe(true);
+        const tx = await buildOnAccount(node, payee.id, [{
+            type: SectionType.ACCOUNT_ESCROW_SETTLEMENT, escrowIdentifier, confirmed: true,
+        }], payee);
+        expect((await applyMicroblock(node, tx)).accepted).toBe(true);
+    });
+
     it('confirmed settlement by the agent is accepted and releases the funds to the payee', async () => {
         const { payer, payee, settle } = await setup();
         const payerBefore = await balanceOf(node, payer.id);

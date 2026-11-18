@@ -15,7 +15,7 @@ import {
 } from './helpers/testState';
 import { randomBytes } from 'node:crypto';
 import {
-    CMTSToken, ECO, Economics, Hash, Microblock, Provider, ProtocolInternalState, Secp256k1PrivateSignatureKey, SectionType, Utils,
+    BalanceAvailability, CMTSToken, ECO, Economics, Hash, Microblock, Provider, ProtocolInternalState, Secp256k1PrivateSignatureKey, SectionType, Utils,
     VirtualBlockchainType, ChainReferenceType,
 } from '@cmts-dev/carmentis-sdk-core';
 import { CachedLevelDb } from '../../abci/database/CachedLevelDb';
@@ -174,6 +174,46 @@ describe('Escrow (F-02, F-22)', () => {
                 type: ECO.BK_SENT_PAYMENT, payerAccount: payee, payeeAccount: other, amountAsAtomics: CMTS(4), feesAsAtomics: 0,
             }, ref(), T0 + 20 * DAY)).rejects.toThrow();
         }
+    });
+
+    // When the refund fails, the whole step must be rolled back: lock still on the payee and ESCROWS row kept,
+    // so that the escrow is retried the next day instead of being half-processed.
+    async function corruptedEscrow() {
+        const am = node.state.getAccountManager();
+        const payer = await rawAccount(CMTS(10));
+        const payee = await rawAccount(0);
+        const agent = await rawAccount(0);
+        const escrowIdentifier = new Uint8Array(randomBytes(32));
+        await am.tokenTransfer({
+            type: ECO.BK_SENT_ESCROW, payerAccount: payer, payeeAccount: payee, amountAsAtomics: CMTS(4), feesAsAtomics: 0,
+            escrowParameters: {
+                escrowIdentifier, fundEmitterAccountId: payer, transferAuthorizerAccountId: agent,
+                startTimestamp: T0, durationDays: 10,
+            },
+        }, ref(), T0);
+        await node.state.getCachedDatabase().putEscrow(escrowIdentifier, {
+            payerAccount: new Uint8Array(randomBytes(32)), payeeAccount: payee, agentAccount: agent,
+        });
+        return { am, payee, agent, escrowIdentifier };
+    }
+    const locksOf = async (id: Uint8Array) => {
+        const st = await node.state.getCachedDatabase().getAccountStateByAccountId(id);
+        return new BalanceAvailability(st!.balance, st!.locks).getEscrowLocks().length;
+    };
+
+    it('F-02: a failing expiry refund is rolled back (lock and ESCROWS row kept)', async () => {
+        const { am, payee, escrowIdentifier } = await corruptedEscrow();
+        await expect(am.updateExpiredEscrow(escrowIdentifier, T0 + 20 * DAY, 3)).rejects.toThrow();
+        expect(await locksOf(payee)).toBe(1);
+        expect(await node.state.getCachedDatabase().getEscrow(escrowIdentifier)).toBeDefined();
+        expect(await balance(payee)).toBe(CMTS(4));
+    });
+
+    it('F-02: a failing canceled settlement is rolled back (lock and ESCROWS row kept)', async () => {
+        const { am, payee, agent, escrowIdentifier } = await corruptedEscrow();
+        await expect(am.escrowSettlement(agent, escrowIdentifier, false, T0 + DAY, ref())).rejects.toThrow();
+        expect(await locksOf(payee)).toBe(1);
+        expect(await node.state.getCachedDatabase().getEscrow(escrowIdentifier)).toBeDefined();
     });
 
     it('F-22: an absurd escrow duration is rejected', async () => {
