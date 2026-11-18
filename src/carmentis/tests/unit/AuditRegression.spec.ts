@@ -57,8 +57,8 @@ const balance = async (id: Uint8Array) => (await node.state.getAccountManager().
 /** the daily steps of GlobalStateUpdater.updateGlobalStateOnBlock concerning staking, in the same order */
 async function stakingDailyJob(id: Uint8Array, timestamp: number) {
     const am = node.state.getAccountManager();
-    await am.applyNodeStakingUnlocks(id, timestamp);
     await am.applyNodeSlashing(id, timestamp);
+    await am.applyNodeStakingUnlocks(id, timestamp);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -122,6 +122,47 @@ describe('Staking and slashing (F-06, F-07, F-10, F-23, F-31)', () => {
         await am.applyNodeSlashing(acc, T0 + 31 * DAY);
 
         expect(await balance(acc)).toBeLessThan(min);
+    });
+
+    it('F-07: the slash is bounded by the lock at application time, whatever the order of the daily steps', async () => {
+        const min = protocol().getMinimumNodeStakingAmountInAtomics();
+        for (const slashFirst of [true, false]) {
+            const am = node.state.getAccountManager();
+            const acc = await rawAccount(min * 2);
+            await am.stake(acc, min * 2, NODE_TYPE, nodeId, protocol());
+            await am.planUnstake(acc, min, NODE_TYPE, nodeId, T0, protocol());
+            await am.setSlashing(acc, nodeId, T0 + 30 * DAY);
+            const day = T0 + 31 * DAY;
+            if (slashFirst) { await am.applyNodeSlashing(acc, day); await am.applyNodeStakingUnlocks(acc, day); }
+            else { await am.applyNodeStakingUnlocks(acc, day); await am.applyNodeSlashing(acc, day); }
+            expect(await stakeInfo(acc)).toBe(0);
+            expect(await balance(acc)).toBe(0);
+        }
+    });
+
+    it('F-10: the unlock does not release tokens covered by a pending slashing', async () => {
+        const min = protocol().getMinimumNodeStakingAmountInAtomics();
+        const am = node.state.getAccountManager();
+        const acc = await rawAccount(min);
+        await am.stake(acc, min, NODE_TYPE, nodeId, protocol());
+        await am.planUnstake(acc, min, NODE_TYPE, nodeId, T0, protocol());
+        await am.setSlashing(acc, nodeId, T0 + 31 * DAY);
+        await am.applyNodeStakingUnlocks(acc, T0 + 30 * DAY); // unlock due, slashing not yet
+        expect(await stakeInfo(acc)).toBe(min);
+        await stakingDailyJob(acc, T0 + 31 * DAY);
+        expect(await balance(acc)).toBe(0);
+    });
+
+    it('unlocks without pending slashing are unchanged (partial unstake executed once)', async () => {
+        const min = protocol().getMinimumNodeStakingAmountInAtomics();
+        const am = node.state.getAccountManager();
+        const acc = await rawAccount(min * 2);
+        await am.stake(acc, min * 2, NODE_TYPE, nodeId, protocol());
+        await am.planUnstake(acc, min, NODE_TYPE, nodeId, T0, protocol());
+        await am.applyNodeStakingUnlocks(acc, T0 + 29 * DAY);
+        expect(await stakeInfo(acc)).toBe(min * 2);
+        await am.applyNodeStakingUnlocks(acc, T0 + 31 * DAY);
+        expect(await stakeInfo(acc)).toBe(min);
     });
 
     it('F-31: slashed tokens are credited to the burnt account (conservation of the supply)', async () => {

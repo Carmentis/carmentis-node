@@ -124,8 +124,9 @@ export class GlobalStateUpdater {
             const dailyTasks = [
                 this.updateVestingLocks,
                 this.updateEscrowLocks,
-                this.applyNodeStakingUnlocks,
+                // slashing runs before the unlocks so that a pending unlock cannot release slashable tokens (F-10)
                 this.applyNodeSlashing,
+                this.applyNodeStakingUnlocks,
                 this.purgeDataFileTable,
             ];
             for (const task of dailyTasks) {
@@ -172,7 +173,7 @@ export class GlobalStateUpdater {
             const approved = nodeVb.getInternalState().getLastKnownApprovalStatus();
             // an unapproved node has no voting power whatever its stake: skip the organization and account loads
             const stakingAmount = approved ? await this.getValidatorNodeStakingAmount(globalState, nodeVb) : 0;
-            const votingPower = approved ? Math.floor(CMTSToken.createAtomic(stakingAmount).getAmountAsCMTS()) : 0;
+            const votingPower = approved ? Math.max(0, Math.floor(CMTSToken.createAtomic(stakingAmount).getAmountAsCMTS())) : 0;
             const pubKeyDeclaration = await nodeVb.getCometbftPublicKeyDeclaration();
             const b64 = EncoderFactory.bytesToBase64Encoder();
             const publicKeyBytes = b64.decode(pubKeyDeclaration.cometbftPublicKey);
