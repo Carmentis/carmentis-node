@@ -9,6 +9,7 @@ import { ApplicationStateHashes } from '../types/valibot/ApplicationStateHashes'
 import {
     AbstractProvider,
     BlockchainUtils,
+    EncoderFactory,
     Hash,
     Microblock,
     MicroblockBody,
@@ -23,6 +24,7 @@ import { NodeCrypto } from '../crypto/NodeCrypto';
 import { ChallengeManager } from '../challenge/ChallengeManager';
 import { Performance } from '../Performance';
 import { LevelDbTable } from '../database/LevelDbTable';
+import { CometBFTPublicKeyConverter } from '../CometBFTPublicKeyConverter';
 import { PersistentMerkleTree } from '../persistentMerkleTree/PersistentMerkleTree';
 
 export class GlobalState extends AbstractProvider {
@@ -92,8 +94,76 @@ export class GlobalState extends AbstractProvider {
         await this.cachedDb.putChainInformation(chainInformation);
     }
 
+    /**
+     * Registers a validator node VB in VALIDATOR_INDEX, the set scanned at every block to build the validator set
+     * update. Only governance-approved nodes are expected here (see validatorNodeApprovalCallback).
+     */
     async storeNodeVirtualBlockchainIndex(identifier: Uint8Array) {
         await this.cachedDb.putRaw(LevelDbTable.VALIDATOR_INDEX, identifier, new Uint8Array(0));
+    }
+
+    async removeNodeVirtualBlockchainIndex(identifier: Uint8Array) {
+        await this.cachedDb.del(LevelDbTable.VALIDATOR_INDEX, identifier);
+    }
+
+    /**
+     * Returns the id of the validator node VB that declared the given Comet address, if any.
+     */
+    async getCometKeyOwner(cometAddress: Uint8Array): Promise<Uint8Array | undefined> {
+        return await this.cachedDb.getRaw(LevelDbTable.COMET_KEY_INDEX, cometAddress);
+    }
+
+    async storeCometKeyOwner(cometAddress: Uint8Array, validatorNodeId: Uint8Array) {
+        await this.cachedDb.putRaw(LevelDbTable.COMET_KEY_INDEX, cometAddress, validatorNodeId);
+    }
+
+    /**
+     * One-time, idempotent migration of databases created before VALIDATOR_INDEX only listed approved nodes and
+     * before COMET_KEY_INDEX existed. It must be called on a database without pending (cached) changes: at startup
+     * and after a snapshot has been restored.
+     *
+     * For every node of VALIDATOR_INDEX:
+     * - its Comet key is registered in COMET_KEY_INDEX (the duplicate-key check no longer scans the nodes);
+     * - it is dropped from VALIDATOR_INDEX unless it is currently approved or still has a non-null voting power on
+     *   the Comet side (a revoked node stays until Comet has been told its power is 0).
+     * Neither table is part of the application hash and dropped nodes would never have produced a validator set
+     * update, so this has no consensus impact and nodes may migrate at different times.
+     */
+    async migrateValidatorIndexes(): Promise<void> {
+        const markerKey = new TextEncoder().encode('MIGRATION_V1');
+        if ((await this.db.getRaw(LevelDbTable.COMET_KEY_INDEX, markerKey)) !== undefined) return;
+
+        const keys = await this.db.getKeys(LevelDbTable.VALIDATOR_INDEX);
+        this.logger.info(`Migrating validator indexes: ${keys.length} validator node(s) to examine`);
+        const b64 = EncoderFactory.bytesToBase64Encoder();
+        let dropped = 0;
+        for (const key of keys) {
+            try {
+                const nodeVb = await this.loadValidatorNodeVirtualBlockchain(Hash.from(key));
+                const declaration = await nodeVb.getCometbftPublicKeyDeclaration();
+                const address = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(
+                    b64.decode(declaration.cometbftPublicKey),
+                );
+
+                // the oldest node keeps the key if (abnormally) several nodes share it: iteration order is by hash,
+                // and the legacy duplicate check already forbade such a case
+                if ((await this.db.getRaw(LevelDbTable.COMET_KEY_INDEX, address)) === undefined) {
+                    await this.db.putRaw(LevelDbTable.COMET_KEY_INDEX, address, key);
+                }
+
+                const approved = nodeVb.getInternalState().getLastKnownApprovalStatus();
+                const cometRecord = await this.db.getValidatorSet(address);
+                if (!approved && (cometRecord === undefined || cometRecord.votingPower === 0)) {
+                    await this.db.del(LevelDbTable.VALIDATOR_INDEX, key);
+                    dropped++;
+                }
+            } catch (error) {
+                // conservative: keep the entry, it will be handled by buildValidatorSetUpdate as before
+                this.logger.warn(`Validator index migration: unable to examine node ${Utils.binaryToHexa(key)}: ${String(error)}`);
+            }
+        }
+        await this.db.putRaw(LevelDbTable.COMET_KEY_INDEX, markerKey, new Uint8Array([1]));
+        this.logger.info(`Validator index migration done: ${dropped} node(s) dropped from VALIDATOR_INDEX`);
     }
 
     async getProtocolState(): Promise<ProtocolInternalState> {

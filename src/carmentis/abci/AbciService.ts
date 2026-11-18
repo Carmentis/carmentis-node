@@ -195,6 +195,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.snapshot = new SnapshotsManager(this.db, snapshotPath, snapshotChunkSize);
         this.state = new GlobalState(this.db, this.storage);
 
+        // bring databases created by a previous version up to date (idempotent, no-op once done)
+        await this.state.migrateValidatorIndexes();
+
         this.abciQueryHandler = new ABCIQueryHandler(
             this.state,
             this.db,
@@ -1227,6 +1230,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             request.chunk,
             isLast,
         );
+        if (isLast) {
+            // the restored database may come from a node running a previous version
+            await this.getGlobalState().migrateValidatorIndexes();
+        }
         const result = ResponseApplySnapshotChunk_Result.ACCEPT;
         //const result = ResponseApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 

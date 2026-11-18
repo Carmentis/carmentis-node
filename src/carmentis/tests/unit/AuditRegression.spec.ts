@@ -19,6 +19,8 @@ import {
     VirtualBlockchainType, ChainReferenceType,
 } from '@cmts-dev/carmentis-sdk-core';
 import { CachedLevelDb } from '../../abci/database/CachedLevelDb';
+import { LevelDbTable } from '../../abci/database/LevelDbTable';
+import { CometBFTPublicKeyConverter } from '../../abci/CometBFTPublicKeyConverter';
 import { Transfer } from '../../abci/accounts/AccountManager';
 
 const CMTS = (n: number) => CMTSToken.createCMTS(n).getAmountAsAtomic();
@@ -346,6 +348,43 @@ describe('Validator nodes (F-01, F-12)', () => {
 
         const squat = await buildValidatorNode(squatter, squatterOrg, k);
         expect((await applyMicroblock(node, squat.serialized)).accepted).toBe(false);
+    });
+
+    it('unapproved validator nodes are not indexed, whatever their number (no per-block scan cost)', async () => {
+        const { victim, victimOrg } = await setup();
+        for (let i = 0; i < 5; i++) {
+            const { serialized } = await buildValidatorNode(victim, victimOrg, key());
+            expect((await applyMicroblock(node, serialized)).accepted).toBe(true);
+        }
+        expect(await node.state.getCachedDatabase().getKeys(LevelDbTable.VALIDATOR_INDEX)).toHaveLength(0);
+        // and the block-level update does not need to load any of them
+        await node.updater.updateGlobalStateOnBlock(node.state, cometParameters(3, T0 + 1));
+        expect(node.updater.getCometValidatorSetUpdates()).toHaveLength(0);
+    });
+
+    it('migration: a legacy database gets its COMET_KEY_INDEX and drops unapproved nodes from VALIDATOR_INDEX', async () => {
+        const { victim, squatter, victimOrg, squatterOrg } = await setup();
+        const k = key();
+        const first = await buildValidatorNode(victim, victimOrg, k);
+        expect((await applyMicroblock(node, first.serialized)).accepted).toBe(true);
+        await node.state.commit();
+
+        // simulate the state left by the previous version: node indexed at creation, no COMET_KEY_INDEX
+        const address = CometBFTPublicKeyConverter.convertRawPublicKeyIntoAddress(k);
+        await node.db.putRaw(LevelDbTable.VALIDATOR_INDEX, first.id, new Uint8Array(0));
+        await node.db.del(LevelDbTable.COMET_KEY_INDEX, address);
+
+        // before the migration the key is not reserved, which is why the migration is needed
+        expect(await node.state.getCometKeyOwner(address)).toBeUndefined();
+
+        await node.state.migrateValidatorIndexes();
+        expect(await node.state.getCometKeyOwner(address)).toEqual(first.id);
+        expect(await node.db.getKeys(LevelDbTable.VALIDATOR_INDEX)).toHaveLength(0);
+
+        // the duplicate-key protection works again, and the migration is idempotent
+        const squat = await buildValidatorNode(squatter, squatterOrg, k);
+        expect((await applyMicroblock(node, squat.serialized)).accepted).toBe(false);
+        await node.state.migrateValidatorIndexes();
     });
 
     it('F-12: a malformed CometBFT key (wrong length) is rejected at declaration', async () => {
