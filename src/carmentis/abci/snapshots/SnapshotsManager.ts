@@ -18,7 +18,7 @@ import { LevelDbTable } from '../database/LevelDbTable';
 
 type DbIterator = ReturnType<LevelDb['getDbIterator']>
 
-const FORMAT = 1;
+const FORMAT = 2;
 const DB_BATCH_SIZE = 1000;
 const SNAPSHOT_PREFIX = 'snapshot-';
 const CHUNKS_SUFFIX = '-chunks.bin';
