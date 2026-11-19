@@ -1125,6 +1125,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // if this is the first block of the day, delete expired data files
         const newDayTimestamp = state.getNewDayTimestamp();
         if (newDayTimestamp !== 0) {
+            this.commitLogger.info(`Starting storage cleaner`);
             const storage = this.getStorage();
             const storageCleaner = new StorageCleaner(snapshot, storage);
             await storageCleaner.removeExpiredDataFiles(newDayTimestamp);

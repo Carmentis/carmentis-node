@@ -245,7 +245,7 @@ export class CachedStorage implements IStorage {
         this.clear();
     }
 
-    getFilePath(fileIdentifier: FileIdentifier) {
+    getFilePath(fileIdentifier: FileIdentifier): string {
         return this.storage.getFilePath(fileIdentifier);
     }
 

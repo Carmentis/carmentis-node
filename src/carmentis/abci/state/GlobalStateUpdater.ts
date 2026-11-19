@@ -120,7 +120,9 @@ export class GlobalStateUpdater {
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
 
+            // save the timestamp in state.newDayTimestamp so that StorageCleaner is triggered
             globalState.setNewDayTimestamp(currentBlockDayTs);
+
             const dailyTasks = [
                 this.updateVestingLocks,
                 this.updateEscrowLocks,
