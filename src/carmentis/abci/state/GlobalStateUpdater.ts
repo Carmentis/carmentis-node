@@ -119,17 +119,26 @@ export class GlobalStateUpdater {
         // if this is the first block of the day, apply daily updates
         if (currentBlockDayTs != previousBlockDayTs) {
             this.logger.info('First block of the day: applying daily updates');
-            try {
-                globalState.setNewDayTimestamp(currentBlockDayTs);
-                await this.updateVestingLocks(globalState, cometParameters);
-                await this.updateEscrowLocks(globalState, cometParameters);
-                await this.applyNodeStakingUnlocks(globalState, cometParameters);
-                await this.applyNodeSlashing(globalState, cometParameters);
-                await this.purgeDataFileTable(globalState, cometParameters);
-            }
-            catch (error) {
-                this.logger.error(`daily updates failed with the following error:`);
-                this.logger.error(String(error));
+
+            // save the timestamp in state.newDayTimestamp so that StorageCleaner is triggered
+            globalState.setNewDayTimestamp(currentBlockDayTs);
+
+            const dailyTasks = [
+                this.updateVestingLocks,
+                this.updateEscrowLocks,
+                // slashing runs before the unlocks so that a pending unlock cannot release slashable tokens (F-10)
+                this.applyNodeSlashing,
+                this.applyNodeStakingUnlocks,
+                this.purgeDataFileTable,
+            ];
+            for (const task of dailyTasks) {
+                try {
+                    await task.call(this, globalState, cometParameters);
+                }
+                catch (error) {
+                    this.logger.error(`daily update failed with the following error:`);
+                    this.logger.error(String(error));
+                }
             }
         }
     }
@@ -141,18 +150,20 @@ export class GlobalStateUpdater {
     private async buildValidatorSetUpdate(globalState: GlobalState) {
         const database = globalState.getCachedDatabase();
 
-        // Get the list of voting powers currently declared on the Comet side.
-        const cometList: ValidatorSet[] = [];
+        // Get the list of voting powers currently declared on the Comet side, indexed by key.
+        const cometRecords = new Map<string, ValidatorSet>();
         const validatorSetKeys = await database.getKeys(LevelDbTable.VALIDATOR_SET);
         for (const key of validatorSetKeys) {
             const record = await database.getValidatorSet(key);
             if (record === undefined) {
                 throw new Error(`failed to load record from VALIDATOR_SET`);
             }
-            cometList.push(record);
+            cometRecords.set(this.getValidatorSetKeyId(record), record);
         }
 
         // Get the list of validator nodes, from the ABCI perspective.
+        // VALIDATOR_INDEX only contains the nodes approved by the governance at some point (see
+        // validatorNodeApprovalCallback), so its size is not controlled by arbitrary users.
         // The key comes from the last VN_COMETBFT_PUBLIC_KEY_DECLARATION section.
         // The voting power is computed according to:
         // - the staking lock for the node (floored amount in CMTS)
@@ -161,10 +172,10 @@ export class GlobalStateUpdater {
         const validatorNodeKeys = await database.getKeys(LevelDbTable.VALIDATOR_INDEX);
         for (const key of validatorNodeKeys) {
             const nodeVb = await globalState.loadValidatorNodeVirtualBlockchain(Hash.from(key));
-            const stakingAmount = await this.getValidatorNodeStakingAmount(globalState, nodeVb);
-            const internalState = nodeVb.getInternalState();
-            const approved = internalState.getLastKnownApprovalStatus();
-            const votingPower = approved ? Math.floor(CMTSToken.createAtomic(stakingAmount).getAmountAsCMTS()) : 0;
+            const approved = nodeVb.getInternalState().getLastKnownApprovalStatus();
+            // an unapproved node has no voting power whatever its stake: skip the organization and account loads
+            const stakingAmount = approved ? await this.getValidatorNodeStakingAmount(globalState, nodeVb) : 0;
+            const votingPower = approved ? Math.max(0, Math.floor(CMTSToken.createAtomic(stakingAmount).getAmountAsCMTS())) : 0;
             const pubKeyDeclaration = await nodeVb.getCometbftPublicKeyDeclaration();
             const b64 = EncoderFactory.bytesToBase64Encoder();
             const publicKeyBytes = b64.decode(pubKeyDeclaration.cometbftPublicKey);
@@ -176,10 +187,11 @@ export class GlobalStateUpdater {
             });
         }
 
-        // Sanity check: there should never be a Comet record that does not exist in the ABCI records.
-        for (const cometRecord of cometList) {
-            const abciRecord = abciList.find((abciRecord) => this.validatorSetsHaveSameKey(cometRecord, abciRecord));
-            if (abciRecord === undefined) {
+        // Sanity check: there should never be a Comet record with a non-zero voting power that does not exist in the
+        // ABCI records. (Records with a null power may legitimately belong to nodes already pruned from the index.)
+        const abciKeyIds = new Set(abciList.map((abciRecord) => this.getValidatorSetKeyId(abciRecord)));
+        for (const [keyId, cometRecord] of cometRecords) {
+            if (cometRecord.votingPower !== 0 && !abciKeyIds.has(keyId)) {
                 throw new Error(`PANIC - A node declared in the Comet validator set is not referenced on the ABCI side`);
             }
         }
@@ -188,7 +200,7 @@ export class GlobalStateUpdater {
         // For each of them, update the VALIDATOR_SET table and push an entry into this.validatorSetUpdates which will
         // eventually be passed to Comet in finalizeBlock.
         for (const abciRecord of abciList) {
-            const cometRecord = cometList.find((cometRecord) => this.validatorSetsHaveSameKey(cometRecord, abciRecord));
+            const cometRecord = cometRecords.get(this.getValidatorSetKeyId(abciRecord));
             const abciVotingPower = abciRecord.votingPower;
             const cometVotingPower = cometRecord?.votingPower ?? 0;
             if (cometVotingPower !== abciVotingPower) {
@@ -204,14 +216,17 @@ export class GlobalStateUpdater {
                 };
                 this.validatorSetUpdates.push(validatorSetUpdateEntry);
             }
+            else if (abciVotingPower === 0) {
+                // Both sides agree on a null power: Comet has been told (or never needed to be told) that this node
+                // is not a validator. It no longer needs to be scanned at each block. It is re-indexed if the
+                // governance approves it again. A node whose power has just changed is never pruned in the same pass.
+                await globalState.removeNodeVirtualBlockchainIndex(abciRecord.validatorNodeHash);
+            }
         }
     }
 
-    private validatorSetsHaveSameKey(cometRecord: ValidatorSet, abciRecord: ValidatorSet): boolean {
-        return (
-            cometRecord.publicKeyType === abciRecord.publicKeyType &&
-            Utils.binaryIsEqual(cometRecord.publicKeyBytes, abciRecord.publicKeyBytes)
-        );
+    private getValidatorSetKeyId(record: ValidatorSet): string {
+        return `${record.publicKeyType}:${Utils.binaryToHexa(record.publicKeyBytes)}`;
     }
 
     /**
@@ -225,7 +240,13 @@ export class GlobalStateUpdater {
 
         for(const accountHash of accountsWithVestingLocksIdentifiers) {
             this.logger.info(`Applying linear vesting for account ${Utils.binaryToHexa(accountHash)}`);
-            await accountManager.applyLinearVesting(accountHash, currentBlockDayTs);
+            try {
+                await accountManager.applyLinearVesting(accountHash, currentBlockDayTs);
+            }
+            catch (err) {
+                this.logger.error(`linear vesting updater failed for account ${accountHash}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -240,11 +261,17 @@ export class GlobalStateUpdater {
         const escrowIdentifiers = await database.getKeys(LevelDbTable.ESCROWS);
 
         for(const id of escrowIdentifiers) {
-            await accountManager.updateExpiredEscrow(
-                id,
-                currentBlockDayTs,
-                blockHeight,
-            );
+            try {
+                await accountManager.updateExpiredEscrow(
+                    id,
+                    currentBlockDayTs,
+                    blockHeight,
+                );
+            }
+            catch (err) {
+                this.logger.error(`escrow update failed - identifier = ${id}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -258,7 +285,13 @@ export class GlobalStateUpdater {
         const accountManager = globalState.getAccountManager();
 
         for(const accountHash of accountsWithStakingLocksIdentifiers) {
-            await accountManager.applyNodeStakingUnlocks(accountHash, currentBlockDayTs);
+            try {
+                await accountManager.applyNodeStakingUnlocks(accountHash, currentBlockDayTs);
+            }
+            catch (err) {
+                this.logger.error(`node staking unlock failed for account ${accountHash}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -272,7 +305,13 @@ export class GlobalStateUpdater {
         const accountManager = globalState.getAccountManager();
 
         for(const accountHash of accountsWithStakingLocksIdentifiers) {
-            await accountManager.applyNodeSlashing(accountHash, currentBlockDayTs);
+            try {
+                await accountManager.applyNodeSlashing(accountHash, currentBlockDayTs);
+            }
+            catch (err) {
+                this.logger.error(`node slashing failed for account ${accountHash}`);
+                this.logger.error(String(err));
+            }
         }
     }
 
@@ -350,10 +389,8 @@ export class GlobalStateUpdater {
             if (vbType === CHAIN.VB_PROTOCOL) {
                 await globalState.storeProtocolVirtualBlockchainIdentifier(vbId);
             }
-            // if this is the genesis microblock of a validator node, save its ID in VALIDATOR_INDEX
-            if (vbType === CHAIN.VB_VALIDATOR_NODE) {
-                await globalState.storeNodeVirtualBlockchainIndex(vbId);
-            }
+            // NB: validator nodes are NOT indexed on creation (creation is permissionless): they are added to
+            // VALIDATOR_INDEX when approved by the governance, see validatorNodeApprovalCallback().
         }
     }
 
@@ -410,7 +447,40 @@ export class GlobalStateUpdater {
         // we currently have nothing to do with the protocol virtual blockchain state,
     }
 
+    /**
+     * Applies the microblock to the state. If it is rejected (an error is thrown), every modification
+     * made to the state while processing it is rolled back before the error is rethrown.
+     */
     async updateGlobalStateOnMicroblock(
+        globalState: GlobalState,
+        virtualBlockchain: VirtualBlockchain,
+        microblock: Microblock,
+        cometParameters: GlobalStateUpdateCometParameters,
+        transaction: Uint8Array,
+    ) {
+        globalState.createSavepoint();
+        const statistics = {
+            newObjectCounts: [...this.newObjectCounts],
+            acceptedMicroblockCount: this.processedAndAcceptedMicroblocks.length,
+            totalFees: this.totalFees,
+            blockSizeInBytes: this.blockSizeInBytes,
+            blockSectionCount: this.blockSectionCount,
+        };
+        try {
+            await this.applyMicroblockToState(globalState, virtualBlockchain, microblock, cometParameters, transaction);
+        } catch (error) {
+            globalState.rollbackToSavepoint();
+            this.newObjectCounts = statistics.newObjectCounts;
+            this.processedAndAcceptedMicroblocks.length = statistics.acceptedMicroblockCount;
+            this.totalFees = statistics.totalFees;
+            this.blockSizeInBytes = statistics.blockSizeInBytes;
+            this.blockSectionCount = statistics.blockSectionCount;
+            throw error;
+        }
+        globalState.releaseSavepoint();
+    }
+
+    private async applyMicroblockToState(
         globalState: GlobalState,
         virtualBlockchain: VirtualBlockchain,
         microblock: Microblock,
@@ -490,9 +560,21 @@ export class GlobalStateUpdater {
         }
 
         // Case 4: The fees payer account is allowed to write on the virtual blockchain
+        // The virtual blockchain received here has ALREADY been updated with the sections of this microblock
+        // (see MicroblockConsistencyChecker). Authorization must never depend on what the microblock itself grants
+        // (e.g. ALLOWED_ADDITIONAL_WRITER), so for existing virtual blockchains we authorize against the
+        // state loaded from the database, which is only updated after all checks (see storeVirtualBlockchainState below).
+        const isGenesisMicroblock = microblock.getHeight() === 1;
+        let authorizationVb: VirtualBlockchain = virtualBlockchain;
+        if (!isGenesisMicroblock) {
+            authorizationVb = await globalState.loadVirtualBlockchain(Hash.from(virtualBlockchain.getId()));
+            if (authorizationVb.getType() !== virtualBlockchain.getType()) {
+                throw new Error(`Virtual blockchain type mismatch while checking write permission`);
+            }
+        }
         const isAllowedToWrite = await this.isAccountIdAllowedToWriteOnVirtualBlockchain(
             feesPayerAccountId,
-            virtualBlockchain,
+            authorizationVb,
             microblock,
             globalState
         );
@@ -566,13 +648,6 @@ export class GlobalStateUpdater {
             microblock,
             transaction,
         );
-
-        if (height === 1) {
-            // if this is the genesis microblock of a validator node, save its ID in VALIDATOR_INDEX
-            if (vbType === CHAIN.VB_VALIDATOR_NODE) {
-                await globalState.storeNodeVirtualBlockchainIndex(vbId);
-            }
-        }
     }
 
     async finalizeBlockApproval(globalState: GlobalState, request: RequestFinalizeBlock) {
@@ -649,31 +724,9 @@ export class GlobalStateUpdater {
             if (containsAccountCreationSection && isFirstBlock) return true;
 
             // Case 2 - Escrow settlement
-            // Only the agent is allowed to sign.
-            // NB: If there's a ACCOUNT_ESCROW_SETTLEMENT section, the microblock may only contain that section and
-            // the signature. This is enforced by AccountMicroblockStructureChecker.
-            const isSettlingEscrow = mb.hasSection(SectionType.ACCOUNT_ESCROW_SETTLEMENT);
-            if (isSettlingEscrow) {
-                const escrowSettlementSection =
-                    mb.getSection((section) =>
-                        section.type === SectionType.ACCOUNT_ESCROW_SETTLEMENT
-                    ) as AccountEscrowSettlementSection;
-                const escrowIdentifier = escrowSettlementSection.escrowIdentifier;
-                const accountManager = globalState.getAccountManager();
-                const ownerAccountId = vb.getId();
-                const account = await accountManager.loadAccountInformation(ownerAccountId);
-                const escrowLock = account.state.locks.find((lock) =>
-                    lock.type == LockType.Escrow &&
-                    Utils.binaryIsEqual(lock.parameters.escrowIdentifier, escrowIdentifier)
-                );
-                if (escrowLock === undefined) {
-                    // no one is authorized to sign the settlement of a non-existing escrow
-                    return false;
-                }
-                const escrowParameters = escrowLock.parameters as EscrowParameters;
-                const isAgentAccount = Utils.binaryIsEqual(escrowParameters.transferAuthorizerAccountId, accountId);
-                return isAgentAccount;
-            }
+            // This case is deprecated. Agents are now supposed to write the ACCOUNT_ESCROW_SETTLEMENT on their own VB.
+            // NB: If there's a ACCOUNT_ESCROW_SETTLEMENT section, the microblock may only contain that section and the
+            // signature. This is enforced by AccountMicroblockStructureChecker.
         }
 
         // Case 3 - Validator node approval update and slashing cancellation
@@ -694,7 +747,18 @@ export class GlobalStateUpdater {
             }
         }
 
-        // Case 4 (default) - The virtual blockchain decides
+        // Case 4 - Creation of an application ledger
+        // The creator must be the owner of the application. The list of additional writers is deliberately ignored
+        // here: for a genesis microblock it is declared by the very microblock being authorized.
+        if (
+            vb.getType() === VirtualBlockchainType.APP_LEDGER_VIRTUAL_BLOCKCHAIN &&
+            mb.getHeight() === 1
+        ) {
+            const ownerId = await vb.getVirtualBlockchainOwnerId();
+            return Utils.binaryIsEqual(ownerId.toBytes(), accountId);
+        }
+
+        // Case 5 (default) - The virtual blockchain decides (on its state before this microblock, except for genesis)
         return vb.isAccountIdAllowedToWrite(Hash.from(accountId))
     }
 
@@ -995,7 +1059,7 @@ export class GlobalStateUpdater {
                         feesAsAtomics,
                         escrowParameters: {
                             escrowIdentifier,
-                            fundEmitterAccountId: account,
+                            fundEmitterAccountId: accountVb.getId(),
                             transferAuthorizerAccountId: agentAccount,
                             startTimestamp: microblock.getTimestamp(),
                             durationDays
@@ -1107,11 +1171,22 @@ export class GlobalStateUpdater {
 
         this.logger.debug(`declaration of node public key ${cometPublicKey} -> address ${Utils.binaryToHexa(cometAddress)}`);
 
-        const existingNode = await database.getValidatorSet(cometAddress);
+        // ensure the node public key is not already in use by another node (O(1) lookup; a node may re-declare its own key)
+        const owner = await globalState.getCometKeyOwner(cometAddress);
+        if (owner !== undefined && !Utils.binaryIsEqual(owner, vb.getId())) {
+            throw new Error(
+                `Attempt do declare a node public key that is already in use: ${cometPublicKey}, address = ${Utils.binaryToHexa(cometAddress)}`,
+            );
+        }
 
+        // additional check
+        const existingNode = await database.getValidatorSet(cometAddress);
         if (existingNode !== undefined) {
             throw new Error(`Attempt do declare a node public key that is already in use: ${cometPublicKey}, address = ${Utils.binaryToHexa(cometAddress)}`);
         }
+
+        // reserve the key for this node (even if the node is not approved yet)
+        await globalState.storeCometKeyOwner(cometAddress, vb.getId());
     }
 
     private async validatorNodeApprovalCallback(
@@ -1119,8 +1194,13 @@ export class GlobalStateUpdater {
         vb: ValidatorNodeVb,
         section: ValidatorNodeVotingPowerUpdateSection,
     ) {
-        // we use to update the validator set here
-        // there's currently no more processing
+        // Only approved nodes are scanned at each block by buildValidatorSetUpdate(). Since only the governance
+        // can approve a node, the size of VALIDATOR_INDEX is not under the control of arbitrary users.
+        // A node whose approval is later revoked stays indexed until Comet has been told its power is 0
+        // (see buildValidatorSetUpdate()), so that it really leaves the validator set.
+        if (section.status) {
+            await globalState.storeNodeVirtualBlockchainIndex(vb.getId());
+        }
     }
 
     private async validatorNodeSlashingCancellationCallback(

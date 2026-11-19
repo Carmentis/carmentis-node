@@ -19,6 +19,7 @@ profiling
 *config.toml
 config*.toml
 !example-config.toml
+carmentis-sdk-core
 
 # windows debug scripts
 *.bat

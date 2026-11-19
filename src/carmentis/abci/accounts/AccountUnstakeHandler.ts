@@ -1,6 +1,7 @@
 import { AccountStateManager } from './AccountStateManager';
 import {
     BalanceAvailability,
+    LockType,
     ProtocolInternalState,
     Utils,
     VirtualBlockchainType,
@@ -75,7 +76,30 @@ export class AccountUnstakeHandler {
             accountState.balance,
             accountState.locks,
         );
-        if(balanceAvailability.applyNodeStakingUnlocks(timestamp) > 0) {
+        // F-10 / F-07: tokens covered by a pending slashing are never released, and an unlock never exceeds
+        // the current lock. Whatever could not be released stays planned and is retried on the next days.
+        let totalUnstaked = 0;
+        for (const lock of balanceAvailability.getNodeStakingLocks()) {
+            if (lock.type !== LockType.NodeStaking) continue;
+            const parameters = lock.parameters;
+            if (parameters.plannedUnlockTimestamp == 0 || timestamp < parameters.plannedUnlockTimestamp) continue;
+            const pendingSlashing = parameters.slashed ? parameters.plannedSlashingAmountInAtomics : 0;
+            const releasable = Math.max(0, lock.lockedAmountInAtomics - pendingSlashing);
+            const released = Math.max(0, Math.min(parameters.plannedUnlockAmountInAtomics, releasable));
+            lock.lockedAmountInAtomics -= released;
+            parameters.plannedUnlockAmountInAtomics -= released;
+            if (parameters.plannedUnlockAmountInAtomics <= 0 || lock.lockedAmountInAtomics <= 0) {
+                parameters.plannedUnlockAmountInAtomics = 0;
+                parameters.plannedUnlockTimestamp = 0;
+            }
+            totalUnstaked += released;
+        }
+        balanceAvailability.setLocks(
+            balanceAvailability.getLocks().filter(
+                (lock) => !(lock.type == LockType.NodeStaking && lock.lockedAmountInAtomics == 0),
+            ),
+        );
+        if (totalUnstaked > 0) {
             accountState.locks = balanceAvailability.getLocks();
             await this.accountStateManager.saveAccountState(accountHash, accountState);
 

@@ -1,8 +1,8 @@
-import { RadixTree } from "./RadixTree";
+import { RadixTree } from "../../abci/radixTree/RadixTree";
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { createTempLevel } from "../database/TempLevel";
-import { LevelDbTable } from "../database/LevelDbTable";
-import { verifyRadixProof, Utils } from "@cmts-dev/carmentis-sdk-core";
+import { createTempLevel } from "../../abci/database/TempLevel";
+import { LevelDbTable } from "../../abci/database/LevelDbTable";
+import { verifyRadixProof, Utils } from '@cmts-dev/carmentis-sdk-core';
 
 let temp: Awaited<ReturnType<typeof createTempLevel>>;
 

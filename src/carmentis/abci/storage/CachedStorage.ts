@@ -182,7 +182,46 @@ export class CachedStorage implements IStorage {
         return true;
     }
 
+    private savepoint: {
+        lengthByFileIdentifier: Map<number, number>;
+        microblockHashes: Set<string>;
+    } | null = null;
+
+    createSavepoint() {
+        const lengthByFileIdentifier = new Map<number, number>();
+        for (const [fileIdentifier, content] of this.contentToBeWritten) {
+            lengthByFileIdentifier.set(fileIdentifier, content.transactionsToWrite.length);
+        }
+        this.savepoint = {
+            lengthByFileIdentifier,
+            microblockHashes: new Set(this.cachedSerializedMicroblockByHash.keys()),
+        };
+    }
+
+    releaseSavepoint() {
+        this.savepoint = null;
+    }
+
+    /**
+     * Removes the microblocks buffered since the savepoint. The matching DB entries are
+     * reverted by the CachedLevelDb savepoint.
+     */
+    rollback() {
+        if (this.savepoint === null) throw new Error(`no savepoint to roll back to`);
+        const { lengthByFileIdentifier, microblockHashes } = this.savepoint;
+        for (const [fileIdentifier, content] of [...this.contentToBeWritten]) {
+            const previousLength = lengthByFileIdentifier.get(fileIdentifier);
+            if (previousLength === undefined) this.contentToBeWritten.delete(fileIdentifier);
+            else content.transactionsToWrite.length = previousLength;
+        }
+        for (const hash of [...this.cachedSerializedMicroblockByHash.keys()]) {
+            if (!microblockHashes.has(hash)) this.cachedSerializedMicroblockByHash.delete(hash);
+        }
+        this.savepoint = null;
+    }
+
     clear() {
+        this.savepoint = null;
         this.contentToBeWritten.clear();
         this.cachedSerializedMicroblockByHash.clear();
     }
@@ -206,7 +245,7 @@ export class CachedStorage implements IStorage {
         this.clear();
     }
 
-    getFilePath(fileIdentifier: FileIdentifier) {
+    getFilePath(fileIdentifier: FileIdentifier): string {
         return this.storage.getFilePath(fileIdentifier);
     }
 

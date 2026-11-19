@@ -2,11 +2,11 @@
 import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
-import { AbciModule } from '../abci/AbciModule';
-import { NodeConfigService } from '../config/services/NodeConfigService';
-import { GrpcAbciController } from '../abci/controllers/GrpcAbciController';
-import { CheckTxResponseCode } from '../abci/CheckTxResponseCode';
-import { NodeConfig } from '../config/types/NodeConfig';
+import { AbciModule } from '../../abci/AbciModule';
+import { NodeConfigService } from '../../config/services/NodeConfigService';
+import { GrpcAbciController } from '../../abci/controllers/GrpcAbciController';
+import { CheckTxResponseCode } from '../../abci/CheckTxResponseCode';
+import { NodeConfig } from '../../config/types/NodeConfig';
 import { mkdtempSync, readFileSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -16,7 +16,7 @@ import {
     CometBFTNodeConfigService,
     Genesis,
     TendermintPublicKey,
-} from '../abci/CometBFTNodeConfigService';
+} from '../../abci/CometBFTNodeConfigService';
 import { configure, getConsoleSink } from '@logtape/logtape';
 import {
     EncoderFactory,
@@ -43,8 +43,8 @@ import {
     BlockchainUtils,
     FeesCalculationFormulaFactory,
     NetworkProvider, ProviderFactory,
-} from '@cmts-dev/carmentis-sdk-core';
-import { CheckTxType } from '../../proto/tendermint/abci/types';
+} from '../carmentis-sdk-core/src/carmentis-sdk-core';
+import { CheckTxType } from '../../../proto/tendermint/abci/types';
 import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 import { undefined } from 'valibot';
 

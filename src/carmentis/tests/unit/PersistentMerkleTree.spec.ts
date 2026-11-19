@@ -1,6 +1,6 @@
-import { PersistentMerkleTree } from "./PersistentMerkleTree";
+import { PersistentMerkleTree } from "../../abci/persistentMerkleTree/PersistentMerkleTree";
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { createTempLevel } from "../database/TempLevel";
+import { createTempLevel } from "../../abci/database/TempLevel";
 
 let temp: Awaited<ReturnType<typeof createTempLevel>>;
 
@@ -28,8 +28,6 @@ describe('PersistentMerkleTree', () => {
                 await tree.addLeaf(n, leaf);
             }
             for (let n = 0; n < size; n++) {
-                console.log("tree.addLeaf", tree.addLeaf);
-                console.log("tree.getProof", tree.getProof);
                 const proof = await tree.getProof(n, size);
                 const verified = PersistentMerkleTree.verifyProof(proof);
                 expect(verified).toBe(true);

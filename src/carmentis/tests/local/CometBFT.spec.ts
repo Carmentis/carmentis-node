@@ -5,7 +5,7 @@ import {
     ProviderFactory,
     Secp256k1PrivateSignatureKey,
     SectionType,
-} from '@cmts-dev/carmentis-sdk-core';
+} from '../carmentis-sdk-core/src/carmentis-sdk-core';
 import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 describe('CometBFT', () => {
