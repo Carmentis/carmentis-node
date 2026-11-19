@@ -1,3 +1,17 @@
+## [1.6.30](https://github.com/Carmentis/carmentis-node/compare/v1.6.29...v1.6.30) (2026-11-19)
+
+
+### Bug Fixes
+
+* F-01, F-04, F-08 ([c3af0db](https://github.com/Carmentis/carmentis-node/commit/c3af0dbb58a8e20a62ed6faa7d289bb2992a6130))
+* F-02 + F-22 ([f1ba57c](https://github.com/Carmentis/carmentis-node/commit/f1ba57c3f74be01830323d264c06dd37f8cfb5c7))
+* **F-04:** enforce encoded proposal response size budget ([c0ef2fe](https://github.com/Carmentis/carmentis-node/commit/c0ef2fed76c40c53ab1725c28287e1b0f1a8c4f1))
+* F-07, F-10 and F-23 ([a79b5ef](https://github.com/Carmentis/carmentis-node/commit/a79b5ef8419484325c8a3462305dfd4159c6e4a6))
+* F-17 ([f200156](https://github.com/Carmentis/carmentis-node/commit/f200156799040c589cca8694a4980c87c1d99f3e))
+* F-20 ([405d76c](https://github.com/Carmentis/carmentis-node/commit/405d76cbf077c35fb1926b37a0fa991f6ced0905))
+* removed escrow settlement on payee VB; put a separate try/catch on each daily task and on each sub-task ([c599ded](https://github.com/Carmentis/carmentis-node/commit/c599dedf6d207da20fb2d1c862741411f77faae5))
+* update SDK core for unstacking cleaning after execution ([5712bc2](https://github.com/Carmentis/carmentis-node/commit/5712bc2df91616f70dc19ff3ce063035bf67fa60))
+
 ## [1.6.29](https://github.com/Carmentis/carmentis-node/compare/v1.6.28...v1.6.29) (2026-11-03)
 
 
