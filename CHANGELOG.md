@@ -1,3 +1,10 @@
+## [1.6.31](https://github.com/Carmentis/carmentis-node/compare/v1.6.30...v1.6.31) (2026-11-19)
+
+
+### Bug Fixes
+
+* updated the snapshot format version ([410582f](https://github.com/Carmentis/carmentis-node/commit/410582f2a61475b2806bbd512659d45c5ba8cb8a))
+
 ## [1.6.30](https://github.com/Carmentis/carmentis-node/compare/v1.6.29...v1.6.30) (2026-11-19)
 
 
