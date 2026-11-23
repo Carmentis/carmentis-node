@@ -346,13 +346,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async initChainAsNode(request: RequestInitChain) {
-        const genesisSnapshot = await this.searchGenesisSnapshotChunksFromGenesisNode();
-        await this.loadReceivedGenesisSnapshotChunks(genesisSnapshot);
-        await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
-            genesisSnapshot,
-        );
-        const { appHash } = await this.getGlobalState().getApplicationStateHashes();
-        return appHash;
+        let currentSnapshotFormat = this.getSnapshot().getFormat();
+        try {
+            this.getSnapshot().setFormat(1);
+            const genesisSnapshot = await this.searchGenesisSnapshotChunksFromGenesisNode();
+            await this.loadReceivedGenesisSnapshotChunks(genesisSnapshot);
+            await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
+                genesisSnapshot,
+            );
+            const { appHash } = await this.getGlobalState().getApplicationStateHashes();
+            return appHash;
+        }
+        finally {
+            this.getSnapshot().setFormat(currentSnapshotFormat);
+        }
     }
 
     private async loadReceivedGenesisSnapshotChunks(genesisSnapshotChunks: Uint8Array[]) {
@@ -533,14 +540,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.debug(
             `Size of transaction: ${request.tx.length} bytes / request type: ${request.type} (${typeof request.type})`,
         );
-
-         */
+        */
 
         // we first attempt to parse the microblock
         try {
             const serializedMicroblock = request.tx;
             const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
             console.log(parsedMicroblock.toString());
+            const canonical = parsedMicroblock.serialize().microblockData;
+            if (!Utils.binaryIsEqual(new Uint8Array(canonical), serializedMicroblock)) {
+                throw new Error('non-canonical microblock encoding');
+            }
             const hexMicroblockHash = parsedMicroblock.getHash().encode();
 
             // perform early rejection of the microblock
