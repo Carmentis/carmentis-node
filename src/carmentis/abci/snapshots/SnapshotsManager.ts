@@ -18,7 +18,7 @@ import { LevelDbTable } from '../database/LevelDbTable';
 
 type DbIterator = ReturnType<LevelDb['getDbIterator']>
 
-const FORMAT = 2;
+const FORMAT = 3;
 const DB_BATCH_SIZE = 1000;
 const SNAPSHOT_PREFIX = 'snapshot-';
 const CHUNKS_SUFFIX = '-chunks.bin';
@@ -32,6 +32,7 @@ export class SnapshotsManager {
     private readonly path: string;
     private readonly chunkSize: number;
     private readonly logger = getLogger(['node', 'snapshots', SnapshotsManager.name]);
+    private format: number;
     private snapshotInProgress: number;
 
     constructor(db: LevelDb, path: string, chunkSize: number) {
@@ -39,6 +40,22 @@ export class SnapshotsManager {
         this.path = path;
         this.chunkSize = chunkSize;
         this.snapshotInProgress = 0;
+        this.format = FORMAT;
+    }
+
+    getFormat() {
+        return this.format;
+    }
+
+    setFormat(format: number) {
+        this.format = format;
+    }
+
+    private getConfiguration() {
+        return {
+            bytesPerKeyLength: 2,
+            bytesPerValueLength: this.format >= 3 ? 3 : 2,
+        }
     }
 
     /**
@@ -314,6 +331,7 @@ export class SnapshotsManager {
      */
     private async createDbFile(dbIterator: DbIterator) {
         this.logger.info("Creating DB file")
+        const { bytesPerKeyLength, bytesPerValueLength } = this.getConfiguration();
         const chainInfoTableId = Utils.numberToHexa(LevelDbTable.CHAIN_INFORMATION, 2);
         const chainInfoTableChar0 = chainInfoTableId.charCodeAt(0);
         const chainInfoTableChar1 = chainInfoTableId.charCodeAt(1);
@@ -332,12 +350,18 @@ export class SnapshotsManager {
         let size = 0;
 
         for await (const [key, value] of dbIterator) {
-            await handle.write(new Uint8Array(Utils.intToByteArray(key.length, 2)));
+            if (key.length >= 256 ** bytesPerKeyLength) {
+                throw new Error(`key is too long: cannot store it on ${bytesPerKeyLength} bytes`)
+            }
+            await handle.write(new Uint8Array(Utils.intToByteArray(key.length, bytesPerKeyLength)));
             await handle.write(key);
-            await handle.write(new Uint8Array(Utils.intToByteArray(value.length, 2)));
+            if (value.length >= 256 ** bytesPerValueLength) {
+                throw new Error(`value is too long: cannot store it on ${bytesPerValueLength} bytes`)
+            }
+            await handle.write(new Uint8Array(Utils.intToByteArray(value.length, bytesPerValueLength)));
             await handle.write(value);
 
-            size += key.length + value.length + 4;
+            size += key.length + value.length + bytesPerKeyLength + bytesPerValueLength;
 
             // if this is the DB_CHAIN_INFORMATION record, collect the height
             if (key[1] == chainInfoTableChar0 && key[2] == chainInfoTableChar1) {
@@ -382,6 +406,7 @@ export class SnapshotsManager {
      * Imports a database dump file.
      */
     private async importDbFile(height: number) {
+        const { bytesPerKeyLength, bytesPerValueLength } = this.getConfiguration();
         const dbFilePath = path.join(this.path, this.getFilePrefix(height) + DB_SUFFIX);
         this.logger.info(`Importing db file ${dbFilePath}`);
         const handle = await open(dbFilePath, 'r');
@@ -398,8 +423,8 @@ export class SnapshotsManager {
         await this.db.clear();
 
         for (let batchSize = 0; ; batchSize++) {
-            rd = await handle.read(sizeBuffer, 0, 2, fileOffset);
-            fileOffset += 2;
+            rd = await handle.read(sizeBuffer, 0, bytesPerKeyLength, fileOffset);
+            fileOffset += bytesPerKeyLength;
 
             if (!rd.bytesRead || batchSize == DB_BATCH_SIZE) {
                 batchIndex++;
@@ -428,8 +453,8 @@ export class SnapshotsManager {
                 throw new Error(`Encountered end of file while reading key from DB file`);
             }
 
-            rd = await handle.read(sizeBuffer, 0, 2, fileOffset);
-            fileOffset += 2;
+            rd = await handle.read(sizeBuffer, 0, bytesPerValueLength, fileOffset);
+            fileOffset += bytesPerValueLength;
 
             size = Utils.byteArrayToInt([...sizeBuffer]);
             const valueBuffer = new Uint8Array(size);

@@ -1,3 +1,11 @@
+## [1.6.32](https://github.com/Carmentis/carmentis-node/compare/v1.6.31...v1.6.32) (2026-11-23)
+
+
+### Bug Fixes
+
+* reject non-canonical MB in checkTx; allow larger DB values in snapshots ([edffbcd](https://github.com/Carmentis/carmentis-node/commit/edffbcd1026c295d6d7338bc2e571b577685739f))
+* updated pnpm-lock.yaml ([8f0838a](https://github.com/Carmentis/carmentis-node/commit/8f0838a4fa285d73801161fd5e3a4be4b44858f0))
+
 ## [1.6.31](https://github.com/Carmentis/carmentis-node/compare/v1.6.30...v1.6.31) (2026-11-19)
 
 
