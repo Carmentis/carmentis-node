@@ -1,3 +1,10 @@
+## [1.6.33](https://github.com/Carmentis/carmentis-node/compare/v1.6.32...v1.6.33) (2026-11-24)
+
+
+### Bug Fixes
+
+* update SDK core version ([ab94c5c](https://github.com/Carmentis/carmentis-node/commit/ab94c5c14d00b2d8c45c2509c71a77845d6b0e22))
+
 ## [1.6.32](https://github.com/Carmentis/carmentis-node/compare/v1.6.31...v1.6.32) (2026-11-23)
 
 
