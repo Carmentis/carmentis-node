@@ -1,3 +1,10 @@
+## [1.6.34](https://github.com/Carmentis/carmentis-node/compare/v1.6.33...v1.6.34) (2026-11-24)
+
+
+### Bug Fixes
+
+* fixed a bug in ABCIQueryHandler.getRawBlockContent ([dc6db3a](https://github.com/Carmentis/carmentis-node/commit/dc6db3ab7c57130209df8f63158e7cde571ef83a))
+
 ## [1.6.33](https://github.com/Carmentis/carmentis-node/compare/v1.6.32...v1.6.33) (2026-11-24)
 
 
