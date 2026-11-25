@@ -1,3 +1,46 @@
+## [1.6.34](https://github.com/Carmentis/carmentis-node/compare/v1.6.33...v1.6.34) (2026-11-24)
+
+
+### Bug Fixes
+
+* fixed a bug in ABCIQueryHandler.getRawBlockContent ([dc6db3a](https://github.com/Carmentis/carmentis-node/commit/dc6db3ab7c57130209df8f63158e7cde571ef83a))
+
+## [1.6.33](https://github.com/Carmentis/carmentis-node/compare/v1.6.32...v1.6.33) (2026-11-24)
+
+
+### Bug Fixes
+
+* update SDK core version ([ab94c5c](https://github.com/Carmentis/carmentis-node/commit/ab94c5c14d00b2d8c45c2509c71a77845d6b0e22))
+
+## [1.6.32](https://github.com/Carmentis/carmentis-node/compare/v1.6.31...v1.6.32) (2026-11-23)
+
+
+### Bug Fixes
+
+* reject non-canonical MB in checkTx; allow larger DB values in snapshots ([edffbcd](https://github.com/Carmentis/carmentis-node/commit/edffbcd1026c295d6d7338bc2e571b577685739f))
+* updated pnpm-lock.yaml ([8f0838a](https://github.com/Carmentis/carmentis-node/commit/8f0838a4fa285d73801161fd5e3a4be4b44858f0))
+
+## [1.6.31](https://github.com/Carmentis/carmentis-node/compare/v1.6.30...v1.6.31) (2026-11-19)
+
+
+### Bug Fixes
+
+* updated the snapshot format version ([410582f](https://github.com/Carmentis/carmentis-node/commit/410582f2a61475b2806bbd512659d45c5ba8cb8a))
+
+## [1.6.30](https://github.com/Carmentis/carmentis-node/compare/v1.6.29...v1.6.30) (2026-11-19)
+
+
+### Bug Fixes
+
+* F-01, F-04, F-08 ([c3af0db](https://github.com/Carmentis/carmentis-node/commit/c3af0dbb58a8e20a62ed6faa7d289bb2992a6130))
+* F-02 + F-22 ([f1ba57c](https://github.com/Carmentis/carmentis-node/commit/f1ba57c3f74be01830323d264c06dd37f8cfb5c7))
+* **F-04:** enforce encoded proposal response size budget ([c0ef2fe](https://github.com/Carmentis/carmentis-node/commit/c0ef2fed76c40c53ab1725c28287e1b0f1a8c4f1))
+* F-07, F-10 and F-23 ([a79b5ef](https://github.com/Carmentis/carmentis-node/commit/a79b5ef8419484325c8a3462305dfd4159c6e4a6))
+* F-17 ([f200156](https://github.com/Carmentis/carmentis-node/commit/f200156799040c589cca8694a4980c87c1d99f3e))
+* F-20 ([405d76c](https://github.com/Carmentis/carmentis-node/commit/405d76cbf077c35fb1926b37a0fa991f6ced0905))
+* removed escrow settlement on payee VB; put a separate try/catch on each daily task and on each sub-task ([c599ded](https://github.com/Carmentis/carmentis-node/commit/c599dedf6d207da20fb2d1c862741411f77faae5))
+* update SDK core for unstacking cleaning after execution ([5712bc2](https://github.com/Carmentis/carmentis-node/commit/5712bc2df91616f70dc19ff3ce063035bf67fa60))
+
 ## [1.6.29](https://github.com/Carmentis/carmentis-node/compare/v1.6.28...v1.6.29) (2026-11-03)
 
 

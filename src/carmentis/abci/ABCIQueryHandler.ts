@@ -226,7 +226,7 @@ export class ABCIQueryHandler {
             );
             if (serializedMicroblock !== null) {
                 if (currentPartSize + serializedMicroblock.length > MAX_RAW_BLOCK_PART_SIZE) {
-                    parts.push(currentPart);
+                    parts.push([...currentPart]);
                     currentPart.length = 0;
                     currentPartSize = 0;
                 }

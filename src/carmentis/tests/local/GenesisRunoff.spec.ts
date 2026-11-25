@@ -1,4 +1,4 @@
-import { GenesisRunoff } from './GenesisRunoff';
+import { GenesisRunoff } from '../../abci/GenesisRunoff';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import {describe, it, expect, afterEach} from 'vitest'

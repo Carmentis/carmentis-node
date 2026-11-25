@@ -15,7 +15,10 @@ export async function createTempLevel() {
     return {
         cachedDb,
         async cleanup() {
-            await rm(dir, {recursive: true, force: true})
+            // the database must be closed before its directory is removed, otherwise rm may race with
+            // LevelDB writing its files (ENOTEMPTY)
+            await level.close();
+            await rm(dir, {recursive: true, force: true, maxRetries: 5, retryDelay: 50})
         }
     }
 }

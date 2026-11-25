@@ -26,7 +26,11 @@ export class Storage implements IStorage {
      * - the range 0xFF000100 - 0xFFFFFFFF is currently not used
      */
     static getFileIdentifier(expirationDay: number, hash: Uint8Array): FileIdentifier {
-        return expirationDay || (0xff000000 | hash[0]) >>> 0;
+        return (
+            expirationDay
+            ? Utils.dateToDay(new Date(expirationDay * 1000))
+            : (0xff000000 | hash[0]) >>> 0
+        );
     }
 
     private db: DbInterface;
@@ -42,7 +46,7 @@ export class Storage implements IStorage {
     async getFilesWithExpirationDayBefore(dayTimestamp: number) {
         const rootEntries = await readdir(this.path, { withFileTypes: true });
         const dirRegex = /^\d{4}$/;
-        const fileRegex = /^(\d{4})(\d{2})(\d{2})$/;
+        const fileRegex = /^(\d{4})(\d{2})(\d{2})\.bin$/;
         const list: string[] = [];
 
         for (const rootEntry of rootEntries) {
@@ -248,9 +252,9 @@ export class Storage implements IStorage {
      * - either [this.path]/[ENDLESS_DIRECTORY_NAME]/NN.bin for files with endless storage
      * - or [this.path]/YYYY/YYYYMMDD.bin for files with an expiration day
      */
-    getFilePath(fileIdentifier: FileIdentifier) {
-        let directory;
-        let filename;
+    getFilePath(fileIdentifier: FileIdentifier): string {
+        let directory: string;
+        let filename: string;
 
         const hasExpirationDay = fileIdentifier < 0xff000000;
         if (hasExpirationDay) {

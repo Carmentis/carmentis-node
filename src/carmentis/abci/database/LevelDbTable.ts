@@ -19,6 +19,8 @@ export const LevelDbTable: Record<string, number> = {
     MERKLE_NODE: 0x11,
     GENESIS_SEED: 0x12,
     VALIDATOR_INDEX: 0x13,
+    // Comet address -> id of the validator node VB that declared this key (O(1) duplicate-key check)
+    COMET_KEY_INDEX: 0x14,
 }
 
 const encoder = new TextEncoder();

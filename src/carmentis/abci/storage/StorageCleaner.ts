@@ -33,7 +33,7 @@ export class StorageCleaner {
         this.logger.debug(`found ${fileList.length} data file(s) to delete`);
 
         for (const file of fileList) {
-            this.logger.info(`Deleting ${file} expired data file`);
+            this.logger.info(`Deleting expired data file: '${file}'`);
             await rm(file);
         }
     }

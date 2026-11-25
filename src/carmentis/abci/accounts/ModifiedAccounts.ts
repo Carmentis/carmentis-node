@@ -11,6 +11,15 @@ export class ModifiedAccounts {
         this.accounts.add(Utils.binaryToHexa(accountHash));
     }
 
+    snapshot(): Set<string> {
+        return new Set(this.accounts);
+    }
+
+    restore(snapshot: Set<string>) {
+        this.accounts.clear();
+        for (const account of snapshot) this.accounts.add(account);
+    }
+
     clear() {
         this.accounts.clear();
     }

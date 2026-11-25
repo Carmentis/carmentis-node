@@ -97,7 +97,7 @@ async function bootstrap() {
             loggers: logConfig.loggers || [],
         });
     } else {
-        logger.log("No logs configuration found, using default log config")
+        logger.log('No logs configuration found, using default log config');
         const defaultOtelUrl = 'http://localhost:4318/v1/logs';
         await configure<string, string>({
             sinks: {
@@ -108,14 +108,18 @@ async function bootstrap() {
                         url: defaultOtelUrl,
                     },
                     objectRenderer: 'json',
-                })
+                }),
             },
             loggers: [
-                { category: '@cmts-dev/carmentis-sdk', lowestLevel: 'debug', sinks: ['console', 'otel'] },
+                {
+                    category: '@cmts-dev/carmentis-sdk',
+                    lowestLevel: 'debug',
+                    sinks: ['console', 'otel'],
+                },
                 { category: ['node'], lowestLevel: 'debug', sinks: ['console', 'otel'] },
                 { category: ['node', 'perf'], lowestLevel: 'debug', sinks: ['otel'] },
             ],
-        })
+        });
     }
 
     // define the port used by GRPC to communicate with CometBFT
@@ -126,11 +130,14 @@ async function bootstrap() {
     logger.log(`GRPC listening at ${grpcPort}`);
 
     const grpcUrl = `0.0.0.0:${grpcPort}`;
+    const GRPC_MAX_MESSAGE_LENGTH = 32 * 1024 * 1024; // 32 MiB
     const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
         transport: Transport.GRPC,
         options: {
             //package: 'cometbft.abci.v1',
             //protoPath: 'cometbft/abci/v1/service.proto',
+            maxReceiveMessageLength: GRPC_MAX_MESSAGE_LENGTH,
+            maxSendMessageLength: GRPC_MAX_MESSAGE_LENGTH,
             package: 'tendermint.abci',
             protoPath: join(__dirname, '../proto/tendermint/abci/types.proto'),
             loader: {

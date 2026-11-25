@@ -1,4 +1,4 @@
-import { LevelDbTable } from './LevelDbTable';
+import { LevelDbTable } from '../../abci/database/LevelDbTable';
 import {describe, it, expect, beforeAll, afterAll} from 'vitest'
 
 describe('', () => {

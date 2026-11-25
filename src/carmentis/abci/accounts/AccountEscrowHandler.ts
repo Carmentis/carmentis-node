@@ -2,6 +2,7 @@ import { AccountStateManager } from './AccountStateManager';
 import { LevelDbTable } from '../database/LevelDbTable';
 import { Transfer } from './AccountManager';
 import {
+    AccountState,
     BalanceAvailability,
     ECO,
     ChainReference,
@@ -27,7 +28,7 @@ export class AccountEscrowHandler {
      * Processes the settlement of an escrow by the agent. It may be either confirmed or canceled.
      */
     async escrowSettlement(
-        account: Uint8Array,
+        emitterAccount: Uint8Array,
         escrowIdentifier: Uint8Array,
         confirmed: boolean,
         timestamp: number,
@@ -40,7 +41,7 @@ export class AccountEscrowHandler {
             throw new Error(`rejected escrow settlement: unknown or out-of-date escrow identifier`);
         }
         // make sure that the caller is the agent
-        if (!Utils.binaryIsEqual(account, escrow.agentAccount)) {
+        if (!Utils.binaryIsEqual(emitterAccount, escrow.agentAccount)) {
             throw new Error(`rejected escrow settlement: caller is not the agent`);
         }
 
@@ -51,6 +52,7 @@ export class AccountEscrowHandler {
             payeeAccountState.balance,
             payeeAccountState.locks,
         );
+        const previousPayeeState = structuredClone(payeeAccountState);
         const amountAsAtomics = balanceAvailability.removeEscrowLock(escrowIdentifier);
         payeeAccountState.locks = balanceAvailability.getLocks();
         await this.accountStateManager.saveAccountState(escrow.payeeAccount, payeeAccountState);
@@ -65,14 +67,13 @@ export class AccountEscrowHandler {
                 feesAsAtomics: 0,
             };
 
-            await this.accountTokenTransferHandler.tokenTransfer(
-                tokenTransfer,
-                chainReference,
-                timestamp,
+            // if the refund fails, the lock is restored so that the escrow stays consistent with its ESCROWS record
+            await this.transferOrRestorePayeeState(
+                tokenTransfer, chainReference, timestamp, escrow.payeeAccount, previousPayeeState,
             );
         }
 
-        // remove the escrow from the DB
+        // in both cases, remove the escrow from the DB
         await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
     }
 
@@ -104,6 +105,7 @@ export class AccountEscrowHandler {
         if (isEscrowLockExpired) {
             // the escrow has expired: we remove the lock and send the funds back from payee to payer
             this.logger.info(`Escrow has expired: funds are sent back to payer`);
+            const previousPayeeState = structuredClone(accountState);
             const amountAsAtomics = balanceAvailability.removeEscrowLock(lock.parameters.escrowIdentifier);
             accountState.locks = balanceAvailability.getLocks();
             await this.accountStateManager.saveAccountState(escrow.payeeAccount, accountState);
@@ -120,14 +122,32 @@ export class AccountEscrowHandler {
                 height: blockHeight
             };
 
-            await this.accountTokenTransferHandler.tokenTransfer(
-                tokenTransfer,
-                chainReference,
-                timestamp,
+            await this.transferOrRestorePayeeState(
+                tokenTransfer, chainReference, timestamp, escrow.payeeAccount, previousPayeeState,
             );
 
             // remove the escrow from the DB
             await this.db.del(LevelDbTable.ESCROWS, escrowIdentifier);
+        }
+    }
+
+    /**
+     * Executes the refund transfer. The lock has already been removed from the payee state (the funds must be
+     * spendable for the transfer to succeed): if the transfer fails, the previous payee state is restored, so that
+     * the lock and the ESCROWS record are never left inconsistent, and the error is propagated.
+     */
+    private async transferOrRestorePayeeState(
+        transfer: Transfer,
+        chainReference: ChainReference,
+        timestamp: number,
+        payeeAccount: Uint8Array,
+        previousPayeeState: AccountState,
+    ) {
+        try {
+            await this.accountTokenTransferHandler.tokenTransfer(transfer, chainReference, timestamp);
+        } catch (error) {
+            await this.accountStateManager.saveAccountState(payeeAccount, previousPayeeState);
+            throw error;
         }
     }
 }

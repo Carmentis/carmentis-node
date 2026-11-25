@@ -49,6 +49,7 @@ import { GenesisInitialTransactionsBuilder } from './GenesisInitialTransactionsB
 import { Storage } from './storage/Storage';
 import { StorageCleaner } from './storage/StorageCleaner';
 import { Performance } from './Performance';
+import { ProposalSizeBudget } from './ProposalSizeBudget';
 
 import {
     AbciQueryEncoder,
@@ -194,6 +195,9 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         const snapshotChunkSize = this.nodeConfig.getSnapshotChunkSize();
         this.snapshot = new SnapshotsManager(this.db, snapshotPath, snapshotChunkSize);
         this.state = new GlobalState(this.db, this.storage);
+
+        // bring databases created by a previous version up to date (idempotent, no-op once done)
+        await this.state.migrateValidatorIndexes();
 
         this.abciQueryHandler = new ABCIQueryHandler(
             this.state,
@@ -342,13 +346,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
     }
 
     private async initChainAsNode(request: RequestInitChain) {
-        const genesisSnapshot = await this.searchGenesisSnapshotChunksFromGenesisNode();
-        await this.loadReceivedGenesisSnapshotChunks(genesisSnapshot);
-        await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
-            genesisSnapshot,
-        );
-        const { appHash } = await this.getGlobalState().getApplicationStateHashes();
-        return appHash;
+        let currentSnapshotFormat = this.getSnapshot().getFormat();
+        try {
+            this.getSnapshot().setFormat(1);
+            const genesisSnapshot = await this.searchGenesisSnapshotChunksFromGenesisNode();
+            await this.loadReceivedGenesisSnapshotChunks(genesisSnapshot);
+            await this.genesisSnapshotStorage.writeGenesisSnapshotChunksToDiskFromEncodedChunks(
+                genesisSnapshot,
+            );
+            const { appHash } = await this.getGlobalState().getApplicationStateHashes();
+            return appHash;
+        }
+        finally {
+            this.getSnapshot().setFormat(currentSnapshotFormat);
+        }
     }
 
     private async loadReceivedGenesisSnapshotChunks(genesisSnapshotChunks: Uint8Array[]) {
@@ -529,14 +540,17 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         this.logger.debug(
             `Size of transaction: ${request.tx.length} bytes / request type: ${request.type} (${typeof request.type})`,
         );
-
-         */
+        */
 
         // we first attempt to parse the microblock
         try {
             const serializedMicroblock = request.tx;
             const parsedMicroblock = Microblock.loadFromSerializedMicroblock(serializedMicroblock);
             console.log(parsedMicroblock.toString());
+            const canonical = parsedMicroblock.serialize().microblockData;
+            if (!Utils.binaryIsEqual(new Uint8Array(canonical), serializedMicroblock)) {
+                throw new Error('non-canonical microblock encoding');
+            }
             const hexMicroblockHash = parsedMicroblock.getHash().encode();
 
             // perform early rejection of the microblock
@@ -608,6 +622,20 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     const message = `${(sectionLabel + ' ').padEnd(36, '.')} ${sectionLengthInBytes} byte(s)`;
                     this.logger.debug(message);
                 }
+
+                const globalStateUpdater = GlobalStateUpdaterFactory.createGlobalStateUpdater();
+                const cometParameters: GlobalStateUpdateCometParameters = {
+                    blockHeight: Number.MAX_SAFE_INTEGER,
+                    blockTimestamp: Utils.getTimestampInSeconds(),
+                    blockMisbehaviors: [],
+                };
+                await globalStateUpdater.updateGlobalStateOnMicroblock(
+                    workingState,
+                    vb,
+                    parsedMicroblock,
+                    cometParameters,
+                    serializedMicroblock,
+                );
 
                 this.checkTxLogger.info(`Microblock ${hexMicroblockHash} accepted`);
                 return {
@@ -778,6 +806,11 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
 
         let currentBlockSizeInBytes = 0;
 
+        // The encoded size of the response must fit both max_tx_bytes and the receive limit of the CometBFT gRPC
+        // client: CometBFT panics if either is exceeded. Unlike the raw block size below, this accounts for the
+        // protobuf framing of each transaction. This is a local proposer constraint, not checked in ProcessProposal.
+        const responseSizeBudget = new ProposalSizeBudget(maxTxBytes);
+
         await globalStateUpdater.updateGlobalStateOnBlock(workingState, cometParameters);
         for (const entry of sortedMicroblocks) {
             // recover the parsed microblock
@@ -797,6 +830,15 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             if ( currentBlockSizeInBytes + tx.length > maxBlockSize ) {
                 this.prepareProposalLogger.info(
                     `Block size limit reached. Stopping proposal creation with ${proposedTxs.length} transactions.`,
+                );
+                break;
+            }
+
+            // we break the proposal creation early if this transaction would make the encoded response exceed
+            // max_tx_bytes or the transport limit.
+            if (!responseSizeBudget.canFit(tx.length)) {
+                this.prepareProposalLogger.info(
+                    `Encoded response size limit reached (${responseSizeBudget.getEncodedSizeInBytes()} / ${responseSizeBudget.getMaxEncodedSizeInBytes()} bytes). Stopping proposal creation with ${proposedTxs.length} transactions.`,
                 );
                 break;
             }
@@ -825,6 +867,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
                     // the transaction is valid and respects the block, accept it in the block
                     proposedTxs.push(tx);
                     currentBlockSizeInBytes += tx.length;
+                    responseSizeBudget.add(tx.length);
                 } else {
                     // we rejected, the microblock goes back to the mempool
                     this.prepareProposalLogger.info(
@@ -1092,6 +1135,7 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
         // if this is the first block of the day, delete expired data files
         const newDayTimestamp = state.getNewDayTimestamp();
         if (newDayTimestamp !== 0) {
+            this.commitLogger.info(`Starting storage cleaner`);
             const storage = this.getStorage();
             const storageCleaner = new StorageCleaner(snapshot, storage);
             await storageCleaner.removeExpiredDataFiles(newDayTimestamp);
@@ -1213,6 +1257,10 @@ export class AbciService implements OnModuleInit, AbciHandlerInterface {
             request.chunk,
             isLast,
         );
+        if (isLast) {
+            // the restored database may come from a node running a previous version
+            await this.getGlobalState().migrateValidatorIndexes();
+        }
         const result = ResponseApplySnapshotChunk_Result.ACCEPT;
         //const result = ResponseApplySnapshotChunkResult.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT;
 

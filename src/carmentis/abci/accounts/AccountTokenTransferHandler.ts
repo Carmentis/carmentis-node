@@ -14,6 +14,8 @@ import { AccountHistoryHandler } from './AccountHistoryHandler';
 import { DbInterface } from '../database/DbInterface';
 import { ErrorMessages } from './ErrorMessages';
 
+const MAX_ESCROW_DURATION_DAYS = 3660;
+
 export class AccountTokenTransferHandler {
     private logger = getLogger(['node', 'accounts', 'token']);
 
@@ -225,6 +227,13 @@ export class AccountTokenTransferHandler {
                 if (escrow !== undefined) {
                     throw new Error(
                         'The escrow identifier must be unique. An escrow this this identifier already exists.',
+                    );
+                }
+
+                // the duration must be valid
+                if (escrowParameters.durationDays < 0 || escrowParameters.durationDays > MAX_ESCROW_DURATION_DAYS) {
+                    throw new Error(
+                        `The 'durationDays' parameter of the escrow is invalid.`,
                     );
                 }
 
